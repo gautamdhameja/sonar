@@ -1,8 +1,11 @@
 # Dependencies
 node_modules/
+src-tauri/target/
+src-tauri/gen/
 
 # Build output
 dist/
+dist-ui/
 build/
 coverage/
 *.tsbuildinfo

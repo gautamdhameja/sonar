@@ -165,6 +165,8 @@ export function loadConfig(env: Env = process.env): SonarConfig {
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
         "http://127.0.0.1:3111",
+        "http://tauri.localhost",
+        "tauri://localhost",
       ]),
     },
     chat: {

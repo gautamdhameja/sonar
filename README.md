@@ -11,6 +11,7 @@ Current V1 capabilities:
 - Persist onboarding sessions, messages, source files, and rolling conversation summaries in SQLite.
 - Route queries through exact lookup, grep-like lexical search, hybrid retrieval, graph expansion, and onboarding-specific ranking.
 - Return source lists and citation verification diagnostics with generated answers.
+- Run as a Tauri desktop app that starts Sonar's local support services and API automatically.
 
 Sonar is intended to produce strong source-grounded first drafts. It is not yet a replacement for human-reviewed technical, security, or compliance documentation.
 
@@ -26,13 +27,25 @@ Sonar is intended to produce strong source-grounded first drafts. It is not yet 
 
 ## Setup
 
-Prerequisites:
+Sonar has two supported run modes:
+
+- **Desktop mode** for normal V1 use. The app starts retrieval and embedding services through Docker, lets the user configure generation from the UI, and supports both GitHub URLs and local folders.
+- **API mode** for development and automation. You start the API and dependencies yourself and use environment variables.
+
+API mode prerequisites:
 
 - Node.js 22 or newer
 - Meilisearch reachable at `SONAR_MEILI_HOST`
 - Qdrant reachable at `SONAR_QDRANT_HOST:SONAR_QDRANT_PORT`
-- Ollama for embeddings with `SONAR_OLLAMA_EMBEDDING_MODEL` pulled locally
-- A llama-server, vLLM, or other OpenAI-compatible chat endpoint at `SONAR_CHAT_BASE_URL`
+- Ollama reachable at `SONAR_OLLAMA_BASE_URL` with `SONAR_OLLAMA_EMBEDDING_MODEL` available
+- A llama-server, vLLM, OpenAI, or other OpenAI-compatible generation endpoint at `SONAR_CHAT_BASE_URL`
+
+The bundled Compose file can start the retrieval and embedding dependencies for API mode too:
+
+```bash
+docker compose -f docker-compose.sonar.yml up -d meilisearch qdrant ollama
+docker compose -f docker-compose.sonar.yml exec ollama ollama pull nomic-embed-text
+```
 
 ```bash
 npm install
@@ -40,14 +53,88 @@ npm run build
 npm start
 ```
 
-Useful environment variables:
+## Desktop App
+
+The V1 desktop app is the primary user experience. It starts Meilisearch, Qdrant, and Ollama embeddings through Docker Compose, starts the Sonar API locally, then lets the user analyze either a GitHub repository URL or an already-cloned local repository.
+
+Desktop prerequisites:
+
+- Docker Desktop or a compatible `docker compose` installation
+- A local OpenAI-compatible chat model server, for example llama-server or vLLM, or a cloud-hosted OpenAI-compatible endpoint. The desktop app checks `SONAR_CHAT_BASE_URL`, then `http://localhost:8080/v1`, then `http://localhost:8000/v1`.
+- Git installed locally if you want Sonar to clone GitHub repositories for you.
+- Rust toolchain for development builds
+
+Desktop first-run flow:
+
+1. Open Sonar.
+2. In **Model Settings**, choose a generation endpoint:
+   - Local model server: `http://localhost:8080/v1` or another OpenAI-compatible local URL.
+   - Cloud model endpoint: for example `https://api.openai.com/v1`.
+3. Enter the model name and API key. Use `not-needed` for local servers with no auth.
+4. Keep the default embedding model, `nomic-embed-text`, unless you know the replacement vector size is compatible with `SONAR_QDRANT_VECTOR_SIZE`.
+5. Click **Save and restart API**.
+6. Paste a GitHub repository URL or select a local folder, then click **Analyze repository**.
+7. Generate the onboarding brief and ask follow-up questions.
+
+Desktop-managed Docker services:
+
+- Meilisearch on `http://localhost:7700` for BM25/keyword search.
+- Qdrant on `localhost:6333` for vector search.
+- Ollama on `http://localhost:11434` for embeddings. Sonar pulls the configured embedding model from the desktop app, defaulting to `nomic-embed-text`.
+
+If compatible services are already running on those ports, Sonar uses them instead of starting duplicate containers.
+
+Generation model configuration is done inside the desktop UI. Users can set:
+
+- Generation API endpoint, such as `http://localhost:8080/v1` or `https://api.openai.com/v1`.
+- Model name.
+- API key, using `not-needed` for local servers that do not require one.
+- Embedding model used by the Dockerized Ollama service.
+
+These settings are stored locally under Sonar's data directory and applied by restarting Sonar's managed local API from the desktop app.
+
+The generated desktop config is stored at:
+
+```text
+~/.sonar/desktop-config.json
+```
+
+Do not commit this file. It may contain API keys.
+
+Desktop repository options:
+
+- Paste a GitHub repository URL such as `https://github.com/excalidraw/excalidraw` and click Analyze. Sonar clones it into `~/.sonar/repositories` and indexes that local cache.
+- Select an existing local repository with the native folder picker and click Analyze.
+
+Run the desktop app in development:
 
 ```bash
-SONAR_CHAT_BASE_URL=http://localhost:8000/v1
+npm install
+npm run desktop:dev
+```
+
+Build a packaged desktop app:
+
+```bash
+npm run desktop:build
+```
+
+On macOS this creates `src-tauri/target/release/bundle/macos/Sonar.app`. `npm run desktop:bundle` also attempts installer bundles such as a DMG.
+
+The desktop-managed API sets `SONAR_ALLOW_ANY_REPO_ROOT=true` because repository selection happens through the local native app. Do not use that setting for a browser-accessible API server.
+
+Implementation plan and remaining launch tasks live in [`docs/desktop-v1-implementation-plan.md`](docs/desktop-v1-implementation-plan.md).
+
+Useful environment variables:
+
+Most desktop users should not need these. They are primarily for API mode, tests, and development. Desktop model settings are configured from the UI and stored in `~/.sonar/desktop-config.json`.
+
+```bash
+SONAR_CHAT_BASE_URL=http://localhost:8080/v1
 SONAR_CHAT_MODEL=Qwen/Qwen3.5-9B
 SONAR_CHAT_API_KEY=not-needed
 SONAR_API_HOST=127.0.0.1
-SONAR_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3111
+SONAR_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3111,http://tauri.localhost,tauri://localhost
 SONAR_API_TOKEN=
 SONAR_EMBEDDING_PROVIDER=ollama
 SONAR_OLLAMA_BASE_URL=http://localhost:11434
@@ -78,10 +165,21 @@ curl http://localhost:3001/health/dependencies
 
 ## Typical V1 Flow
 
-1. Start Meilisearch, Qdrant, Ollama embeddings, and the local chat model.
-2. Start Sonar.
-3. Index a local repository.
-4. Generate an onboarding brief.
+Desktop flow:
+
+1. Start the desktop app.
+2. Configure the generation endpoint in **Model Settings**.
+3. Paste a GitHub repository URL or select an existing local repository.
+4. Click **Analyze repository**.
+5. Generate a first-week onboarding brief.
+6. Ask follow-up questions in the same session.
+
+API flow:
+
+1. Start Meilisearch, Qdrant, and Ollama embeddings, using Docker Compose or your own services.
+2. Start Sonar API mode.
+3. Ensure a generation endpoint is reachable at `SONAR_CHAT_BASE_URL`.
+4. Index a local repository.
 5. Create a persisted onboarding session.
 6. Ask follow-up questions in that session.
 
@@ -134,10 +232,25 @@ curl --json '{
 npm run dev
 ```
 
+Start local retrieval and embedding dependencies:
+
+```bash
+docker compose -f docker-compose.sonar.yml up -d meilisearch qdrant ollama
+docker compose -f docker-compose.sonar.yml exec ollama ollama pull nomic-embed-text
+```
+
 Run the fast local checks:
 
 ```bash
 npm run check
+```
+
+Desktop checks:
+
+```bash
+npm run typecheck:ui
+npm run build:ui
+cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
 Integration-style scripts that require external services are kept separate from `npm run check`.
