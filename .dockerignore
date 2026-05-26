@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-ui
+src-tauri/target
+src-tauri/gen
+.git
+.sonar
+*.db
+*.sqlite
+*.log
+.env
+.env.*
+!.env.example

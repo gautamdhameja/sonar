@@ -7,7 +7,6 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronRight,
-  CircleDot,
   FolderOpen,
   GitBranch,
   HardDrive,
@@ -21,6 +20,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  StopCircle,
 } from "lucide-react";
 import { askFollowup, apiBaseUrl, createOnboardingSession, indexProject, listProjects } from "./api";
 import type {
@@ -28,6 +28,7 @@ import type {
   DesktopModelConfig,
   FollowupResponse,
   OnboardingSessionResponse,
+  PreparedRepository,
   Project,
   ServiceSnapshot,
   ServiceState,
@@ -37,7 +38,19 @@ import "./styles.css";
 
 const defaultQuestion =
   "How does the main product workflow work at a product level, and what should I ask engineering about it?";
+const dockerModelRunnerConfig: DesktopModelConfig = {
+  chatBaseUrl: "http://localhost:12434/engines/llama.cpp/v1",
+  chatModel: "hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL",
+  chatApiKey: "not-needed",
+  embeddingModel: "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M",
+};
 type RepositorySource = "github" | "local";
+type ActiveTaskKind = "bootstrap" | "settings" | "analyze" | "brief" | "followup";
+
+interface ActiveTask {
+  kind: ActiveTaskKind;
+  label: string;
+}
 
 declare global {
   interface Window {
@@ -114,14 +127,16 @@ async function cloneGithubRepository(repository: string): Promise<ClonedReposito
   return invoke<ClonedRepository>("clone_github_repository", { repository });
 }
 
+async function prepareRepositoryForIndexing(repoPath: string, projectName: string): Promise<PreparedRepository> {
+  if (!isTauriRuntime()) {
+    return { localPath: repoPath, indexedPath: repoPath, copiedToDocker: false };
+  }
+  return invoke<PreparedRepository>("prepare_repository_for_indexing", { repoPath, projectName });
+}
+
 async function loadModelConfig(): Promise<DesktopModelConfig> {
   if (!isTauriRuntime()) {
-    return {
-      chatBaseUrl: "http://localhost:8080/v1",
-      chatModel: "Qwen/Qwen3.5-9B",
-      chatApiKey: "not-needed",
-      embeddingModel: "nomic-embed-text",
-    };
+    return dockerModelRunnerConfig;
   }
   return invoke<DesktopModelConfig>("get_model_config");
 }
@@ -180,14 +195,14 @@ function App() {
   const [session, setSession] = useState<OnboardingSessionResponse | null>(null);
   const [followups, setFollowups] = useState<FollowupResponse[]>([]);
   const [question, setQuestion] = useState(defaultQuestion);
-  const [busy, setBusy] = useState<string | null>("Starting local services");
-  const [error, setError] = useState<string | null>(null);
-  const [modelConfig, setModelConfig] = useState<DesktopModelConfig>({
-    chatBaseUrl: "http://localhost:8080/v1",
-    chatModel: "Qwen/Qwen3.5-9B",
-    chatApiKey: "not-needed",
-    embeddingModel: "nomic-embed-text",
+  const [activeTask, setActiveTask] = useState<ActiveTask | null>({
+    kind: "bootstrap",
+    label: "Starting local services",
   });
+  const [analysisStopRequested, setAnalysisStopRequested] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [modelConfig, setModelConfig] = useState<DesktopModelConfig>(dockerModelRunnerConfig);
+  const analysisAbortController = React.useRef<AbortController | null>(null);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -212,7 +227,7 @@ function App() {
 
   async function bootstrap() {
     setError(null);
-    setBusy("Starting local services");
+    setActiveTask({ kind: "bootstrap", label: "Starting local services" });
     try {
       const result = await serviceCommand("bootstrap_services");
       setSnapshot(result);
@@ -226,7 +241,7 @@ function App() {
       setError(err instanceof Error ? err.message : String(err));
       await refreshServices().catch(() => undefined);
     } finally {
-      setBusy(null);
+      setActiveTask(null);
     }
   }
 
@@ -237,14 +252,14 @@ function App() {
 
   async function handleSaveModelConfig() {
     setError(null);
-    setBusy("Applying model settings");
+    setActiveTask({ kind: "settings", label: "Applying model settings" });
     try {
       const result = await saveModelConfig(modelConfig);
       setSnapshot(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setBusy(null);
+      setActiveTask(null);
     }
   }
 
@@ -257,37 +272,70 @@ function App() {
   }
 
   async function handleAnalyze() {
+    if (activeTask?.kind === "analyze") return;
+
     setError(null);
     setSession(null);
     setFollowups([]);
+    setAnalysisStopRequested(false);
+    const controller = new AbortController();
+    analysisAbortController.current = controller;
+
+    const stopIfRequested = () => {
+      if (controller.signal.aborted) {
+        throw new DOMException("Analysis stopped", "AbortError");
+      }
+    };
+
     try {
       let pathToIndex = repoPath;
       let nameToIndex = projectName || "Local Project";
 
       if (repositorySource === "github") {
-        setBusy("Cloning GitHub repository");
+        setActiveTask({ kind: "analyze", label: "Cloning GitHub repository" });
         const cloned = await cloneGithubRepository(githubRepository);
+        stopIfRequested();
         pathToIndex = cloned.localPath;
         nameToIndex = projectName || `${cloned.owner}/${cloned.repo}`;
         setRepoPath(cloned.localPath);
         setProjectName(nameToIndex);
       }
 
-      setBusy("Indexing repository");
-      const indexed = await indexProject(pathToIndex, nameToIndex);
+      setActiveTask({ kind: "analyze", label: "Preparing selected repository" });
+      const prepared = await prepareRepositoryForIndexing(pathToIndex, nameToIndex);
+      stopIfRequested();
+      pathToIndex = prepared.indexedPath;
+
+      setActiveTask({ kind: "analyze", label: "Indexing repository" });
+      const indexed = await indexProject(pathToIndex, nameToIndex, controller.signal);
+      stopIfRequested();
       await refreshProjects();
       setSelectedProjectId(indexed.projectId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (err instanceof Error && err.name === "AbortError") {
+        setError("Analysis stopped. Any partial index data was discarded.");
+      } else {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setBusy(null);
+      if (analysisAbortController.current === controller) {
+        analysisAbortController.current = null;
+      }
+      setAnalysisStopRequested(false);
+      setActiveTask(null);
     }
+  }
+
+  function handleStopAnalysis() {
+    analysisAbortController.current?.abort();
+    setAnalysisStopRequested(true);
+    setActiveTask({ kind: "analyze", label: "Stopping analysis after the current step" });
   }
 
   async function handleCreateOnboarding() {
     if (!selectedProjectId) return;
     setError(null);
-    setBusy("Generating onboarding brief");
+    setActiveTask({ kind: "brief", label: "Generating onboarding brief" });
     try {
       const result = await createOnboardingSession(selectedProjectId);
       setSession(result);
@@ -295,34 +343,35 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setBusy(null);
+      setActiveTask(null);
     }
   }
 
   async function handleFollowup() {
     if (!selectedProjectId || !session || !question.trim()) return;
     setError(null);
-    setBusy("Answering follow-up");
+    setActiveTask({ kind: "followup", label: "Answering follow-up" });
     try {
       const result = await askFollowup(selectedProjectId, session.session.id, question);
       setFollowups((current) => [...current, result]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setBusy(null);
+      setActiveTask(null);
     }
   }
 
   const latestSources = followups.at(-1)?.sources ?? session?.brief.sources ?? [];
   const citation = followups.at(-1)?.citationVerification ?? session?.brief.citationVerification;
   const canAnalyze = repositorySource === "github" ? githubRepository.trim().length > 0 : repoPath.trim().length > 0;
+  const isAnalyzing = activeTask?.kind === "analyze";
 
   return (
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand-block">
           <div className="brand-mark">
-            <CircleDot size={18} />
+            <span />
           </div>
           <div>
             <h1>Sonar</h1>
@@ -407,7 +456,7 @@ function App() {
             <button
               className="primary"
               onClick={() => void handleCreateOnboarding()}
-              disabled={!selectedProjectId || busy !== null}
+              disabled={!selectedProjectId || activeTask?.kind === "brief"}
               type="button"
             >
               <Sparkles size={16} />
@@ -423,10 +472,21 @@ function App() {
           </div>
         )}
 
-        {busy && (
+        {activeTask && (
           <div className="busy-bar">
             <Loader2 className="spin" size={18} />
-            <span>{busy}</span>
+            <span>{activeTask.label}</span>
+            {isAnalyzing && (
+              <button
+                className="stop-button"
+                onClick={handleStopAnalysis}
+                disabled={analysisStopRequested}
+                type="button"
+              >
+                <StopCircle size={16} />
+                Stop analysis
+              </button>
+            )}
           </div>
         )}
 
@@ -498,11 +558,11 @@ function App() {
             <button
               className="primary wide"
               onClick={() => void handleAnalyze()}
-              disabled={!canAnalyze || busy !== null}
+              disabled={!canAnalyze || isAnalyzing}
               type="button"
             >
-              <Play size={16} />
-              Analyze repository
+              {isAnalyzing ? <Loader2 className="spin" size={16} /> : <Play size={16} />}
+              {isAnalyzing ? "Analyzing repository" : "Analyze repository"}
             </button>
           </section>
 
@@ -525,7 +585,7 @@ function App() {
             <button
               className="primary wide"
               onClick={() => void handleCreateOnboarding()}
-              disabled={!selectedProjectId || busy !== null}
+              disabled={!selectedProjectId || activeTask?.kind === "brief"}
               type="button"
             >
               <Sparkles size={16} />
@@ -548,7 +608,7 @@ function App() {
               <input
                 value={modelConfig.chatBaseUrl}
                 onChange={(event) => setModelConfig((current) => ({ ...current, chatBaseUrl: event.target.value }))}
-                placeholder="http://localhost:8080/v1 or https://api.openai.com/v1"
+                placeholder="http://localhost:12434/engines/llama.cpp/v1 or https://api.openai.com/v1"
               />
             </label>
             <label className="field">
@@ -573,7 +633,7 @@ function App() {
               <input
                 value={modelConfig.embeddingModel}
                 onChange={(event) => setModelConfig((current) => ({ ...current, embeddingModel: event.target.value }))}
-                placeholder="nomic-embed-text"
+                placeholder="hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M"
               />
             </label>
           </div>
@@ -583,15 +643,13 @@ function App() {
               onClick={() =>
                 setModelConfig((current) => ({
                   ...current,
-                  chatBaseUrl: "http://localhost:8080/v1",
-                  chatModel: "Qwen/Qwen3.5-9B",
-                  chatApiKey: "not-needed",
+                  ...dockerModelRunnerConfig,
                 }))
               }
               type="button"
             >
               <Server size={16} />
-              Local 8080
+              Docker local
             </button>
             <button
               className="secondary"
@@ -611,7 +669,7 @@ function App() {
             <button
               className="primary"
               onClick={() => void handleSaveModelConfig()}
-              disabled={busy !== null}
+              disabled={activeTask?.kind === "settings"}
               type="button"
             >
               <Save size={16} />
@@ -664,7 +722,7 @@ function App() {
             <button
               className="primary"
               onClick={() => void handleFollowup()}
-              disabled={!session || busy !== null}
+              disabled={!session || activeTask?.kind === "followup"}
               type="button"
             >
               Ask

@@ -23,6 +23,12 @@ export interface ClonedRepository {
   updatedExisting: boolean;
 }
 
+export interface PreparedRepository {
+  localPath: string;
+  indexedPath: string;
+  copiedToDocker: boolean;
+}
+
 export interface DesktopModelConfig {
   chatBaseUrl: string;
   chatModel: string;

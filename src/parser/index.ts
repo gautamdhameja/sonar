@@ -7,6 +7,7 @@ import { parseMarkdown } from "./markdown-parser";
 import { ensureFileModuleUnits } from "./file-units";
 import { CodeUnit } from "./types";
 import { logger } from "../utils/logger";
+import { throwIfAborted } from "../utils/abort";
 
 export { CodeUnit, CodeUnitKind } from "./types";
 
@@ -14,13 +15,15 @@ const TS_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 const PY_EXTENSIONS = new Set([".py"]);
 const DOC_EXTENSIONS = new Set([".md", ".mdx"]);
 
-export async function parseRepository(repoRoot: string): Promise<CodeUnit[]> {
+export async function parseRepository(repoRoot: string, signal?: AbortSignal): Promise<CodeUnit[]> {
+  throwIfAborted(signal);
   const walkedFiles = await walkRepository(repoRoot);
   const allUnits: CodeUnit[] = [];
 
   let vendoredFileCount = 0;
 
   for (let i = 0; i < walkedFiles.length; i++) {
+    throwIfAborted(signal);
     const { relativePath: filePath, isVendored } = walkedFiles[i];
     logger.info(`Parsing file ${i + 1} of ${walkedFiles.length}: ${filePath}${isVendored ? " [vendored]" : ""}`);
 
@@ -29,6 +32,7 @@ export async function parseRepository(repoRoot: string): Promise<CodeUnit[]> {
     try {
       const fullPath = path.resolve(repoRoot, filePath);
       const source = await fs.readFile(fullPath, "utf-8");
+      throwIfAborted(signal);
       const ext = path.extname(filePath);
 
       let units: CodeUnit[];

@@ -1,6 +1,10 @@
 import path from "path";
 
-export type EmbeddingProvider = "ollama";
+export type EmbeddingProvider = "ollama" | "openai";
+
+export const DEFAULT_CHAT_BASE_URL = "http://localhost:12434/engines/llama.cpp/v1";
+export const DEFAULT_CHAT_MODEL = "hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL";
+export const DEFAULT_EMBEDDING_MODEL = "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
 
 export interface SonarConfig {
   api: {
@@ -18,6 +22,9 @@ export interface SonarConfig {
   };
   embedding: {
     provider: EmbeddingProvider;
+    baseUrl: string;
+    model: string;
+    apiKey: string;
   };
   ollama: {
     baseUrl: string;
@@ -110,8 +117,8 @@ function getNumber(env: Env, name: string, fallback: number): number {
 
 function getEmbeddingProvider(env: Env): EmbeddingProvider {
   const provider = getString(env, "SONAR_EMBEDDING_PROVIDER", "ollama");
-  if (provider !== "ollama") {
-    throw new Error(`SONAR_EMBEDDING_PROVIDER must be "ollama"; received "${provider}"`);
+  if (provider !== "ollama" && provider !== "openai") {
+    throw new Error(`SONAR_EMBEDDING_PROVIDER must be "ollama" or "openai"; received "${provider}"`);
   }
   return provider;
 }
@@ -152,8 +159,21 @@ function getStringList(env: Env, name: string, fallback: string[]): string[] {
 export function loadConfig(env: Env = process.env): SonarConfig {
   const dataDir = path.resolve(getString(env, "SONAR_DATA_DIR", defaultDataDir(env)));
   const dbPath = path.resolve(getString(env, "SONAR_DB_PATH", path.join(dataDir, "projects.db")));
-  const chatBaseUrl = getUrl(env, "SONAR_CHAT_BASE_URL", "http://localhost:8080/v1");
-  const chatModel = getString(env, "SONAR_CHAT_MODEL", "Qwen/Qwen3.5-9B");
+  const chatBaseUrl = getUrl(env, "SONAR_CHAT_BASE_URL", DEFAULT_CHAT_BASE_URL);
+  const chatModel = getString(env, "SONAR_CHAT_MODEL", DEFAULT_CHAT_MODEL);
+  const embeddingProvider = getEmbeddingProvider(env);
+  const ollamaBaseUrl = getUrl(env, "SONAR_OLLAMA_BASE_URL", "http://localhost:11434");
+  const ollamaEmbeddingModel = getString(env, "SONAR_OLLAMA_EMBEDDING_MODEL", "nomic-embed-text");
+  const embeddingBaseUrl = getUrl(
+    env,
+    "SONAR_EMBEDDING_BASE_URL",
+    embeddingProvider === "openai" ? chatBaseUrl : ollamaBaseUrl,
+  );
+  const embeddingModel = getString(
+    env,
+    "SONAR_EMBEDDING_MODEL",
+    embeddingProvider === "openai" ? DEFAULT_EMBEDDING_MODEL : ollamaEmbeddingModel,
+  );
 
   return {
     api: {
@@ -181,11 +201,14 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       model: chatModel,
     },
     embedding: {
-      provider: getEmbeddingProvider(env),
+      provider: embeddingProvider,
+      baseUrl: embeddingBaseUrl,
+      model: embeddingModel,
+      apiKey: getString(env, "SONAR_EMBEDDING_API_KEY", "not-needed"),
     },
     ollama: {
-      baseUrl: getUrl(env, "SONAR_OLLAMA_BASE_URL", "http://localhost:11434"),
-      embeddingModel: getString(env, "SONAR_OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
+      baseUrl: ollamaBaseUrl,
+      embeddingModel: ollamaEmbeddingModel,
     },
     meilisearch: {
       host: getUrl(env, "SONAR_MEILI_HOST", "http://localhost:7700"),

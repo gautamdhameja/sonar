@@ -15,6 +15,7 @@ import { toErrorResponse } from "./errors";
 import { buildDirectoryGraphResponse, buildFileGraphResponse } from "./graph-response";
 import { indexProject, ProjectIndexContext } from "./project-indexer";
 import { optionalStringList, optionalTrimmedString, requiredTrimmedString } from "./request-validation";
+import { isOperationAborted } from "../utils/abort";
 import { logger } from "../utils/logger";
 
 const stores = new Map<string, CodeUnitStore>();
@@ -128,6 +129,12 @@ export async function startServer(port: number): Promise<RunningServer> {
   // --- Project endpoints ---
 
   app.post("/projects/index", async (req: Request, res: Response) => {
+    const controller = new AbortController();
+    req.on("aborted", () => controller.abort());
+    res.on("close", () => {
+      if (!res.writableEnded) controller.abort();
+    });
+
     try {
       const { repoRoot: root, name } = req.body ?? {};
       if (!root || typeof root !== "string") {
@@ -135,9 +142,15 @@ export async function startServer(port: number): Promise<RunningServer> {
         return;
       }
       const summarize = req.query.summarize === "true" || req.body?.summarize === true;
-      const result = await indexProject(root, name, summarize, indexContext);
+      const result = await indexProject(root, name, summarize, indexContext, controller.signal);
       res.json({ success: true, ...result });
     } catch (err) {
+      if (isOperationAborted(err)) {
+        if (!res.headersSent && !res.writableEnded) {
+          res.status(499).json({ error: "Indexing cancelled" });
+        }
+        return;
+      }
       const { status, message } = toErrorResponse(err);
       res.status(status).json({ error: message });
     }

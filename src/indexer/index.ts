@@ -4,27 +4,31 @@ import { indexToQdrant } from "./qdrant-indexer";
 import { generateEmbeddings } from "./embedder";
 import { buildContextualEmbeddingTexts } from "./contextual-text";
 import { logger } from "../utils/logger";
+import { throwIfAborted } from "../utils/abort";
 
 export { ScoredResult } from "./types";
 export { searchMeilisearch } from "./meilisearch-indexer";
 export { searchQdrant } from "./qdrant-indexer";
 
-export async function indexRepository(units: CodeUnit[], projectId: string): Promise<void> {
+export async function indexRepository(units: CodeUnit[], projectId: string, signal?: AbortSignal): Promise<void> {
   const totalStart = Date.now();
 
   // Step 1: Meilisearch keyword index
   let start = Date.now();
-  await indexToMeilisearch(units, projectId);
+  throwIfAborted(signal);
+  await indexToMeilisearch(units, projectId, signal);
   logger.info(`Meilisearch indexing: ${((Date.now() - start) / 1000).toFixed(1)}s`);
 
   // Step 2: Generate embeddings
   start = Date.now();
+  throwIfAborted(signal);
   const texts = buildContextualEmbeddingTexts(units);
-  const embeddings = await generateEmbeddings(texts);
+  const embeddings = await generateEmbeddings(texts, signal);
   logger.info(`Embedding generation: ${((Date.now() - start) / 1000).toFixed(1)}s`);
 
   // Step 3: Qdrant vector index
   start = Date.now();
+  throwIfAborted(signal);
   const qdrantData = units.map((unit) => ({
     unitId: unit.id,
     name: unit.name,
@@ -32,7 +36,7 @@ export async function indexRepository(units: CodeUnit[], projectId: string): Pro
     kind: unit.kind,
     isVendored: unit.isVendored,
   }));
-  await indexToQdrant(qdrantData, embeddings, projectId);
+  await indexToQdrant(qdrantData, embeddings, projectId, signal);
   logger.info(`Qdrant indexing: ${((Date.now() - start) / 1000).toFixed(1)}s`);
 
   logger.info(`Indexing complete in ${((Date.now() - totalStart) / 1000).toFixed(1)}s`);

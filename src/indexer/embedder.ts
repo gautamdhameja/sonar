@@ -8,6 +8,7 @@ import {
   writeEmbeddingCache,
 } from "./embedding-cache";
 import { logger } from "../utils/logger";
+import { throwIfAborted } from "../utils/abort";
 
 // nomic-embed-text has 8192 token context. Code averages ~2-3 chars/token,
 // so 4000 chars ≈ 1300-2000 tokens — safe margin for all code types.
@@ -22,8 +23,8 @@ function contentHash(text: string): string {
 function cacheParts(text: string) {
   return {
     provider: CONFIG.embedding.provider,
-    baseUrl: CONFIG.ollama.baseUrl,
-    model: CONFIG.ollama.embeddingModel,
+    baseUrl: CONFIG.embedding.baseUrl,
+    model: CONFIG.embedding.model,
     vectorSize: CONFIG.qdrant.vectorSize,
     contentHash: contentHash(text),
   };
@@ -60,11 +61,19 @@ function averageVectors(vectors: number[][]): number[] {
   return avg;
 }
 
-async function embedSingleChunk(text: string): Promise<number[]> {
+async function embedSingleChunk(text: string, signal?: AbortSignal): Promise<number[]> {
+  if (CONFIG.embedding.provider === "openai") {
+    return embedOpenAiChunk(text, signal);
+  }
+  return embedOllamaChunk(text, signal);
+}
+
+async function embedOllamaChunk(text: string, signal?: AbortSignal): Promise<number[]> {
   const response = await fetch(`${CONFIG.ollama.baseUrl}/api/embed`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: CONFIG.ollama.embeddingModel, input: text }),
+    signal,
   });
 
   if (!response.ok) {
@@ -76,7 +85,32 @@ async function embedSingleChunk(text: string): Promise<number[]> {
   return data.embeddings[0];
 }
 
-export async function generateEmbedding(text: string): Promise<number[]> {
+async function embedOpenAiChunk(text: string, signal?: AbortSignal): Promise<number[]> {
+  const response = await fetch(`${CONFIG.embedding.baseUrl}/embeddings`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${CONFIG.embedding.apiKey}`,
+    },
+    body: JSON.stringify({ model: CONFIG.embedding.model, input: text }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`OpenAI-compatible embedding failed (${response.status}): ${body.slice(0, 200)}`);
+  }
+
+  const data = (await response.json()) as { data?: Array<{ embedding?: number[] }> };
+  const embedding = data.data?.[0]?.embedding;
+  if (!embedding) {
+    throw new Error("OpenAI-compatible embedding response did not include data[0].embedding");
+  }
+  return embedding;
+}
+
+export async function generateEmbedding(text: string, signal?: AbortSignal): Promise<number[]> {
+  throwIfAborted(signal);
   const parts = cacheParts(text);
   const key = buildEmbeddingCacheKey(parts);
   const cached = embeddingCache.get(key);
@@ -92,10 +126,10 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
   let embedding: number[];
   if (chunks.length === 1) {
-    embedding = await embedSingleChunk(chunks[0]);
+    embedding = await embedSingleChunk(chunks[0], signal);
   } else {
     // Embed each chunk and mean-pool the vectors
-    const chunkVectors = await Promise.all(chunks.map(embedSingleChunk));
+    const chunkVectors = await Promise.all(chunks.map((chunk) => embedSingleChunk(chunk, signal)));
     embedding = averageVectors(chunkVectors);
   }
 
@@ -120,20 +154,22 @@ export function getPersistentEmbeddingCacheSize(): number {
   return countPersistentEmbeddingCache();
 }
 
-export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
+export async function generateEmbeddings(texts: string[], signal?: AbortSignal): Promise<number[][]> {
   const batchSize = 10;
   const totalBatches = Math.ceil(texts.length / batchSize);
   const allEmbeddings: number[][] = [];
 
   for (let i = 0; i < totalBatches; i++) {
+    throwIfAborted(signal);
     logger.info(`Generating embeddings: batch ${i + 1} of ${totalBatches}`);
 
     const batch = texts.slice(i * batchSize, (i + 1) * batchSize);
     const embeddings = await Promise.all(
       batch.map(async (text, j) => {
         try {
-          return await generateEmbedding(text);
+          return await generateEmbedding(text, signal);
         } catch (err) {
+          throwIfAborted(signal);
           logger.warn(`Embedding failed for item ${i * batchSize + j}, using zero vector: ${err}`);
           return new Array(CONFIG.qdrant.vectorSize).fill(0);
         }

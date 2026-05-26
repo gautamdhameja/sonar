@@ -26,6 +26,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "category": "DeveloperTool"
+    "category": "DeveloperTool",
+    "icon": [
+      "icons/icon.png"
+    ]
   }
 }

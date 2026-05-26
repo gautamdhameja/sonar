@@ -9,6 +9,10 @@ use std::{
 };
 
 static API_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
+const DEFAULT_CHAT_BASE_URL: &str = "http://localhost:12434/engines/llama.cpp/v1";
+const DEFAULT_CHAT_MODEL: &str = "hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL";
+const DEFAULT_EMBEDDING_MODEL: &str = "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
+const LEGACY_CHAT_MODEL: &str = "Qwen/Qwen3.5-9B";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +50,14 @@ struct ClonedRepository {
     clone_url: String,
     local_path: String,
     updated_existing: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreparedRepository {
+    local_path: String,
+    indexed_path: String,
+    copied_to_docker: bool,
 }
 
 fn api_child() -> &'static Mutex<Option<Child>> {
@@ -93,10 +105,7 @@ fn chat_base_url() -> String {
 }
 
 fn detect_chat_base_url() -> String {
-    for (port, url) in [
-        (8080, "http://localhost:8080/v1"),
-        (8000, "http://localhost:8000/v1"),
-    ] {
+    for (port, url) in [(12434, DEFAULT_CHAT_BASE_URL)] {
         if TcpStream::connect(("127.0.0.1", port))
             .map(|stream| stream.set_nonblocking(true).is_ok())
             .unwrap_or(false)
@@ -105,16 +114,17 @@ fn detect_chat_base_url() -> String {
         }
     }
 
-    "http://localhost:8080/v1".to_string()
+    DEFAULT_CHAT_BASE_URL.to_string()
 }
 
 fn default_desktop_model_config() -> DesktopModelConfig {
     DesktopModelConfig {
         chat_base_url: detect_chat_base_url(),
-        chat_model: env::var("SONAR_CHAT_MODEL").unwrap_or_else(|_| "Qwen/Qwen3.5-9B".to_string()),
+        chat_model: env::var("SONAR_CHAT_MODEL").unwrap_or_else(|_| DEFAULT_CHAT_MODEL.to_string()),
         chat_api_key: env::var("SONAR_CHAT_API_KEY").unwrap_or_else(|_| "not-needed".to_string()),
-        embedding_model: env::var("SONAR_OLLAMA_EMBEDDING_MODEL")
-            .unwrap_or_else(|_| "nomic-embed-text".to_string()),
+        embedding_model: env::var("SONAR_EMBEDDING_MODEL")
+            .or_else(|_| env::var("SONAR_OLLAMA_EMBEDDING_MODEL"))
+            .unwrap_or_else(|_| DEFAULT_EMBEDDING_MODEL.to_string()),
     }
 }
 
@@ -140,7 +150,17 @@ fn desktop_model_config() -> DesktopModelConfig {
     let Ok(contents) = fs::read_to_string(path) else {
         return fallback;
     };
-    serde_json::from_str(&contents).unwrap_or(fallback)
+    let mut stored: DesktopModelConfig =
+        serde_json::from_str(&contents).unwrap_or(fallback.clone());
+    if stored.chat_model == LEGACY_CHAT_MODEL {
+        stored.chat_base_url = fallback.chat_base_url;
+        stored.chat_model = fallback.chat_model;
+        stored.chat_api_key = fallback.chat_api_key;
+        if stored.embedding_model == "nomic-embed-text" {
+            stored.embedding_model = fallback.embedding_model;
+        }
+    }
+    stored
 }
 
 fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), String> {
@@ -297,17 +317,80 @@ fn run_git(args: &[&str], current_dir: Option<&Path>) -> Result<(), String> {
     }
 }
 
+fn run_docker(args: &[String]) -> Result<(), String> {
+    let output = Command::new("docker")
+        .args(args)
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|err| format!("Unable to run docker: {err}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if stderr.is_empty() {
+            Err(format!("docker exited with {}", output.status))
+        } else {
+            Err(stderr)
+        }
+    }
+}
+
+fn docker_api_container_running() -> bool {
+    let output = Command::new("docker")
+        .args(["inspect", "-f", "{{.State.Running}}", "sonar-api-1"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout).trim() == "true"
+        }
+        _ => false,
+    }
+}
+
+fn safe_repository_volume_name(repo_path: &Path, project_name: &str) -> String {
+    let raw = if project_name.trim().is_empty() {
+        repo_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("repository")
+            .to_string()
+    } else {
+        project_name.trim().to_string()
+    };
+
+    let sanitized: String = raw
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let trimmed = sanitized.trim_matches('-');
+    if trimmed.is_empty() {
+        "repository".to_string()
+    } else {
+        trimmed.chars().take(80).collect()
+    }
+}
+
 fn start_docker_services() -> Result<(), String> {
     if !command_exists("docker") {
         return Err("Docker is not installed or not available on PATH".to_string());
     }
 
     let root = repo_root()?;
-    let compose_file = root.join("docker-compose.sonar.yml");
+    let compose_file = root.join("compose.yml");
     let status = Command::new("docker")
         .args(["compose", "-f"])
         .arg(compose_file)
-        .args(["up", "-d", "meilisearch", "qdrant", "ollama"])
+        .args(["up", "-d"])
         .current_dir(root)
         .status()
         .map_err(|err| err.to_string())?;
@@ -320,30 +403,14 @@ fn start_docker_services() -> Result<(), String> {
 }
 
 fn ensure_embedding_model() -> Result<(), String> {
-    if !command_exists("docker") {
-        return Err("Docker is not installed or not available on PATH".to_string());
-    }
-
-    let root = repo_root()?;
-    let compose_file = root.join("docker-compose.sonar.yml");
-    let model = desktop_model_config().embedding_model;
-    let status = Command::new("docker")
-        .args(["compose", "-f"])
-        .arg(compose_file)
-        .args(["exec", "-T", "ollama", "ollama", "pull"])
-        .arg(model)
-        .current_dir(root)
-        .status()
-        .map_err(|err| err.to_string())?;
-
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("docker compose ollama pull exited with {status}"))
-    }
+    Ok(())
 }
 
 fn start_sonar_api() -> Result<(), String> {
+    if TcpStream::connect(("127.0.0.1", 3001)).is_ok() {
+        return Ok(());
+    }
+
     let root = repo_root()?;
     let mut command = if root.join("dist/index.js").exists() {
         let mut command = Command::new("node");
@@ -371,12 +438,15 @@ fn start_sonar_api() -> Result<(), String> {
         .env("SONAR_CHAT_BASE_URL", model_config.chat_base_url)
         .env("SONAR_CHAT_MODEL", model_config.chat_model)
         .env("SONAR_CHAT_API_KEY", model_config.chat_api_key)
-        .env("SONAR_OLLAMA_BASE_URL", "http://localhost:11434")
-        .env("SONAR_OLLAMA_EMBEDDING_MODEL", model_config.embedding_model)
+        .env("SONAR_EMBEDDING_PROVIDER", "openai")
+        .env("SONAR_EMBEDDING_BASE_URL", DEFAULT_CHAT_BASE_URL)
+        .env("SONAR_EMBEDDING_MODEL", model_config.embedding_model)
+        .env("SONAR_EMBEDDING_API_KEY", "not-needed")
         .env("SONAR_MEILI_HOST", "http://localhost:7700")
         .env("SONAR_MEILI_API_KEY", "masterKey")
         .env("SONAR_QDRANT_HOST", "localhost")
-        .env("SONAR_QDRANT_PORT", "6333");
+        .env("SONAR_QDRANT_PORT", "6333")
+        .env("SONAR_QDRANT_VECTOR_SIZE", "768");
 
     let child = command
         .stdin(Stdio::null())
@@ -469,9 +539,58 @@ fn clone_github_repository(repository: String) -> Result<ClonedRepository, Strin
 }
 
 #[tauri::command]
+fn prepare_repository_for_indexing(
+    repo_path: String,
+    project_name: String,
+) -> Result<PreparedRepository, String> {
+    let source = fs::canonicalize(&repo_path)
+        .map_err(|err| format!("Unable to access selected repository: {err}"))?;
+    if !source.is_dir() {
+        return Err("Selected repository path is not a directory.".to_string());
+    }
+
+    if !docker_api_container_running() {
+        return Ok(PreparedRepository {
+            local_path: source.display().to_string(),
+            indexed_path: source.display().to_string(),
+            copied_to_docker: false,
+        });
+    }
+
+    let repo_name = safe_repository_volume_name(&source, &project_name);
+    let target = format!("/workspace/repos/{repo_name}");
+    run_docker(&[
+        "exec".to_string(),
+        "sonar-api-1".to_string(),
+        "rm".to_string(),
+        "-rf".to_string(),
+        target.clone(),
+    ])?;
+    run_docker(&[
+        "exec".to_string(),
+        "sonar-api-1".to_string(),
+        "mkdir".to_string(),
+        "-p".to_string(),
+        target.clone(),
+    ])?;
+
+    let source_contents = source.join(".");
+    run_docker(&[
+        "cp".to_string(),
+        source_contents.display().to_string(),
+        format!("sonar-api-1:{target}"),
+    ])?;
+
+    Ok(PreparedRepository {
+        local_path: source.display().to_string(),
+        indexed_path: target,
+        copied_to_docker: true,
+    })
+}
+
+#[tauri::command]
 async fn service_snapshot() -> ServiceSnapshot {
     let chat = chat_base_url();
-    let chat_models = format!("{}/models", chat.trim_end_matches('/'));
     ServiceSnapshot {
         api_base_url: "http://127.0.0.1:3001".to_string(),
         chat_base_url: chat.clone(),
@@ -486,13 +605,19 @@ async fn service_snapshot() -> ServiceSnapshot {
             .await,
             service("qdrant", "Qdrant", "http://127.0.0.1:6333/readyz", true).await,
             service(
-                "ollama",
-                "Ollama embeddings",
-                "http://127.0.0.1:11434/api/tags",
+                "models",
+                "Docker model services",
+                "http://127.0.0.1:3001/health/dependencies",
                 true,
             )
             .await,
-            service("chat", "Chat model server", &chat_models, false).await,
+            service(
+                "chat",
+                "Chat model server",
+                "http://127.0.0.1:3001/health/dependencies",
+                true,
+            )
+            .await,
         ],
     }
 }
@@ -512,7 +637,7 @@ async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
         || before
             .services
             .iter()
-            .any(|service| service.id == "ollama" && service.state != "ready")
+            .any(|service| service.id == "sonar" && service.state != "ready")
     {
         let _ = start_docker_services();
         tokio::time::sleep(Duration::from_secs(2)).await;
@@ -556,6 +681,7 @@ fn main() {
             service_snapshot,
             bootstrap_services,
             clone_github_repository,
+            prepare_repository_for_indexing,
             get_model_config,
             save_model_config,
         ])

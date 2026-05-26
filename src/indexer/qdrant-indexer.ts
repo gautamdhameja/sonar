@@ -1,6 +1,7 @@
 import { CONFIG } from "../config";
 import { ScoredResult } from "./types";
 import { logger } from "../utils/logger";
+import { throwIfAborted } from "../utils/abort";
 
 function baseUrl(): string {
   return `http://${CONFIG.qdrant.host}:${CONFIG.qdrant.port}`;
@@ -35,13 +36,16 @@ export async function indexToQdrant(
   units: { unitId: string; name: string; filePath: string; kind: string; isVendored: boolean }[],
   embeddings: number[][],
   projectId: string,
+  signal?: AbortSignal,
 ): Promise<void> {
   const collectionName = getCollectionName(projectId);
 
-  await qdrantFetch(`/collections/${collectionName}`, { method: "DELETE" }, true);
+  throwIfAborted(signal);
+  await qdrantFetch(`/collections/${collectionName}`, { method: "DELETE", signal }, true);
 
   await qdrantFetch(`/collections/${collectionName}`, {
     method: "PUT",
+    signal,
     body: JSON.stringify({
       vectors: { size: CONFIG.qdrant.vectorSize, distance: "Cosine" },
     }),
@@ -49,11 +53,13 @@ export async function indexToQdrant(
 
   const batchSize = 100;
   for (let i = 0; i < units.length; i += batchSize) {
+    throwIfAborted(signal);
     const batchUnits = units.slice(i, i + batchSize);
     const batchEmbeddings = embeddings.slice(i, i + batchSize);
 
     await qdrantFetch(`/collections/${collectionName}/points?wait=true`, {
       method: "PUT",
+      signal,
       body: JSON.stringify({
         points: batchUnits.map((unit, j) => ({
           id: i + j,

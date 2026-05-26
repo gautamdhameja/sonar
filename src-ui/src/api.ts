@@ -32,9 +32,11 @@ export async function listProjects(): Promise<Project[]> {
 export async function indexProject(
   repoRoot: string,
   name: string,
+  signal?: AbortSignal,
 ): Promise<{ projectId: string; unitCount: number; timeSeconds: number }> {
   return request("/projects/index", {
     method: "POST",
+    signal,
     body: JSON.stringify({ repoRoot, name, summarize: true }),
   });
 }

@@ -7,6 +7,7 @@ import { parseRepository } from "../parser";
 import { extractDependencyEdges } from "../parser/dependency-resolver";
 import { CodeUnitStore } from "../retriever/unit-store";
 import { generateAndStoreSummary } from "../summary";
+import { throwIfAborted } from "../utils/abort";
 import { HttpError } from "./errors";
 
 export interface ProjectIndexContext {
@@ -20,9 +21,17 @@ async function assertRepoRootAllowed(repoRoot: string): Promise<void> {
   if (CONFIG.security.allowAnyRepoRoot) return;
 
   const actualRoot = await fs.promises.realpath(repoRoot);
-  const allowedRoots = await Promise.all(
-    CONFIG.security.allowedRepoRoots.map(async (root) => fs.promises.realpath(root)),
-  );
+  const allowedRoots = (
+    await Promise.all(
+      CONFIG.security.allowedRepoRoots.map(async (root) => {
+        try {
+          return await fs.promises.realpath(root);
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((root): root is string => root !== null);
 
   const allowed = allowedRoots.some((allowedRoot) => {
     const relative = path.relative(allowedRoot, actualRoot);
@@ -39,7 +48,9 @@ export async function indexProject(
   name: string,
   summarize: boolean,
   context: ProjectIndexContext,
+  signal?: AbortSignal,
 ): Promise<{ projectId: string; unitCount: number; timeSeconds: number }> {
+  throwIfAborted(signal);
   const resolved = path.resolve(repoRoot);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
     throw new Error("repoRoot must be an existing directory");
@@ -68,8 +79,11 @@ export async function indexProject(
   const project = context.repo.createProject(projectName, resolved);
 
   try {
-    const units = await parseRepository(resolved);
-    await indexRepository(units, project.id);
+    throwIfAborted(signal);
+    const units = await parseRepository(resolved, signal);
+    throwIfAborted(signal);
+    await indexRepository(units, project.id, signal);
+    throwIfAborted(signal);
     context.repo.insertCodeUnits(project.id, units);
 
     const edges = extractDependencyEdges(units);
@@ -86,6 +100,7 @@ export async function indexProject(
     context.setCurrentProjectId(project.id);
 
     if (summarize) {
+      throwIfAborted(signal);
       await generateAndStoreSummary(project.id, projectName, units, context.repo);
     }
 
