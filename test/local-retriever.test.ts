@@ -4,7 +4,12 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { CodeUnitStore } from "../src/retriever/unit-store";
-import { localExactSearch, localGrepSearch, localLexicalSearch, localOnboardingSearch } from "../src/retriever/local-retriever";
+import {
+  localExactSearch,
+  localGrepSearch,
+  localLexicalSearch,
+  localOnboardingSearch,
+} from "../src/retriever/local-retriever";
 import { CodeUnit } from "../src/parser/types";
 
 function unit(overrides: Partial<CodeUnit>): CodeUnit {
@@ -58,7 +63,7 @@ test("localLexicalSearch finds config keys and error literals without vectors", 
   ]);
 
   assert.equal(localLexicalSearch("Where is SONAR_CHAT_BASE_URL configured?", store)[0].unitId, "server");
-  assert.equal(localLexicalSearch("\"missing chat endpoint\"", store)[0].unitId, "server");
+  assert.equal(localLexicalSearch('"missing chat endpoint"', store)[0].unitId, "server");
 });
 
 test("localGrepSearch prioritizes exact constants and validation-adjacent files", async () => {
@@ -87,7 +92,10 @@ test("localGrepSearch prioritizes exact constants and validation-adjacent files"
 
   const results = localGrepSearch("Where is LLAMA_SERVER_URL configured and validated?", store);
   assert.deepEqual(new Set(results.slice(0, 2).map((result) => result.unitId)), new Set(["schema", "config"]));
-  assert.equal(results.some((result) => result.unitId === "pipeline"), false);
+  assert.equal(
+    results.some((result) => result.unitId === "pipeline"),
+    false,
+  );
 });
 
 test("localGrepSearch handles quoted error strings", async () => {
@@ -106,7 +114,7 @@ test("localGrepSearch handles quoted error strings", async () => {
     }),
   ]);
 
-  assert.equal(localGrepSearch("\"llama server returned invalid JSON\"", store)[0].unitId, "client");
+  assert.equal(localGrepSearch('"llama server returned invalid JSON"', store)[0].unitId, "client");
 });
 
 test("localOnboardingSearch prefers docs and production entry points", async () => {
@@ -135,8 +143,10 @@ test("localOnboardingSearch prefers docs and production entry points", async () 
     }),
   ]);
 
-  assert.deepEqual(localOnboardingSearch("Create a sales onboarding overview", store).slice(0, 2).map((r) => r.unitId), [
-    "readme",
-    "main",
-  ]);
+  assert.deepEqual(
+    localOnboardingSearch("Create a sales onboarding overview", store)
+      .slice(0, 2)
+      .map((r) => r.unitId),
+    ["readme", "main"],
+  );
 });

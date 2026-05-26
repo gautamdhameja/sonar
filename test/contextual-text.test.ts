@@ -24,10 +24,7 @@ function unit(id: string, overrides: Partial<CodeUnit> = {}): CodeUnit {
 }
 
 test("buildContextualEmbeddingTexts adds deterministic file and neighbor context", () => {
-  const [text] = buildContextualEmbeddingTexts([
-    unit("getLlamaConfig"),
-    unit("loadLlamaEnv"),
-  ]);
+  const [text] = buildContextualEmbeddingTexts([unit("getLlamaConfig"), unit("loadLlamaEnv")]);
 
   assert.match(text, /File: src\/llama\/config.ts/);
   assert.match(text, /Directory role: local model integration/);

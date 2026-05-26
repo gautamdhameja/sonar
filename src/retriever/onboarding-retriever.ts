@@ -68,13 +68,17 @@ function normalizedUnitText(unit: CodeUnit): string {
     unit.exportedNames.join(" "),
     unit.calledFunctions.join(" "),
     unit.code,
-  ].join("\n").toLowerCase();
+  ]
+    .join("\n")
+    .toLowerCase();
 }
 
 function isPackageBoundary(unit: CodeUnit): boolean {
-  return /(^|\/)(index|main|app|server|client)\.(ts|tsx|js|jsx|py)$/.test(unit.filePath) ||
+  return (
+    /(^|\/)(index|main|app|server|client)\.(ts|tsx|js|jsx|py)$/.test(unit.filePath) ||
     /^packages\/[^/]+\/src\/index\.(ts|tsx|js|jsx|py)$/.test(unit.filePath) ||
-    /^packages\/[^/]+\/index\.(ts|tsx|js|jsx|py)$/.test(unit.filePath);
+    /^packages\/[^/]+\/index\.(ts|tsx|js|jsx|py)$/.test(unit.filePath)
+  );
 }
 
 function unitLengthPenalty(unit: CodeUnit): number {
@@ -96,7 +100,10 @@ function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; re
 
   if (unit.isVendored) return { score: 0, reasons: [] };
   if (isTestFile(unit.filePath)) score -= 30;
-  if (/(^|\/)changelog\.mdx?$/i.test(unit.filePath) && !/\b(changelog|release|version|migration|api change)\b/.test(queryText)) {
+  if (
+    /(^|\/)changelog\.mdx?$/i.test(unit.filePath) &&
+    !/\b(changelog|release|version|migration|api change)\b/.test(queryText)
+  ) {
     score -= 55;
   }
 
@@ -142,18 +149,28 @@ function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; re
       score += 10;
       reasons.push("product onboarding match");
     }
-    if (/\b(localdata|filemanager|portal|backend|sharedialog|export|collab|collaboration|storage|share|sync|socket)\b/.test(`${filePath} ${unit.name}`.toLowerCase())) {
+    if (
+      /\b(localdata|filemanager|portal|backend|sharedialog|export|collab|collaboration|storage|share|sync|socket)\b/.test(
+        `${filePath} ${unit.name}`.toLowerCase(),
+      )
+    ) {
       score += 18;
       reasons.push("first-week workflow owner");
     }
   }
 
-  if (/\b(local|offline|save|persist|restore)\b/.test(queryText) && /\b(local|storage|save|persist|restore|indexeddb|localstorage)\b/.test(text)) {
+  if (
+    /\b(local|offline|save|persist|restore)\b/.test(queryText) &&
+    /\b(local|storage|save|persist|restore|indexeddb|localstorage)\b/.test(text)
+  ) {
     score += 12;
     reasons.push("local persistence evidence");
   }
 
-  if (/\b(collab|collaboration|share|room|privacy|encrypt)\b/.test(queryText) && /\b(collab|socket|room|backend|encrypt|decrypt|share|sync)\b/.test(text)) {
+  if (
+    /\b(collab|collaboration|share|room|privacy|encrypt)\b/.test(queryText) &&
+    /\b(collab|socket|room|backend|encrypt|decrypt|share|sync)\b/.test(text)
+  ) {
     score += 12;
     reasons.push("collaboration/privacy evidence");
   }
@@ -171,7 +188,8 @@ export function onboardingRetrieval(
   const maxPerFile = options.maxPerFile ?? 2;
   const fileCounts = new Map<string, number>();
 
-  const scored = store.getAllUnits()
+  const scored = store
+    .getAllUnits()
     .map((unit) => {
       const { score, reasons } = scoreOnboardingUnit(unit, options.query);
       return { unit, score, reasons };

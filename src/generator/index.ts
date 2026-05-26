@@ -8,10 +8,13 @@ import { ProjectRepo } from "../db/project-repo";
 import { CodeUnit } from "../parser/types";
 import { CONFIG } from "../config";
 import { DEFAULT_PERSONA, Persona } from "../persona/types";
+import { QueryIntent } from "../retriever/query-intent";
 import {
-  QueryIntent,
-} from "../retriever/query-intent";
-import { localExactSearch, localGrepSearch, localLexicalSearch, localOnboardingSearch } from "../retriever/local-retriever";
+  localExactSearch,
+  localGrepSearch,
+  localLexicalSearch,
+  localOnboardingSearch,
+} from "../retriever/local-retriever";
 import { planQuery, QueryPlan } from "../retriever/query-router";
 import { packContext } from "../context/packer";
 import { rerankRetrievedResults, RetrievalDiagnostic } from "../retriever/reranker";
@@ -47,16 +50,18 @@ function mergeRetrievedResults(resultSets: RetrievedUnit[], topK: number): Retri
     }
 
     existing.rrfScore = Math.max(existing.rrfScore, result.rrfScore);
-    existing.keywordRank = existing.keywordRank === null
-      ? result.keywordRank
-      : result.keywordRank === null
-        ? existing.keywordRank
-        : Math.min(existing.keywordRank, result.keywordRank);
-    existing.semanticRank = existing.semanticRank === null
-      ? result.semanticRank
-      : result.semanticRank === null
-        ? existing.semanticRank
-        : Math.min(existing.semanticRank, result.semanticRank);
+    existing.keywordRank =
+      existing.keywordRank === null
+        ? result.keywordRank
+        : result.keywordRank === null
+          ? existing.keywordRank
+          : Math.min(existing.keywordRank, result.keywordRank);
+    existing.semanticRank =
+      existing.semanticRank === null
+        ? result.semanticRank
+        : result.semanticRank === null
+          ? existing.semanticRank
+          : Math.min(existing.semanticRank, result.semanticRank);
     existing.isVendored = existing.isVendored || result.isVendored;
   }
 

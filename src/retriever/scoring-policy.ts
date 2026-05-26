@@ -8,13 +8,9 @@ export interface ScoreReason {
 }
 
 function unitSearchText(unit: CodeUnit): string {
-  return [
-    unit.filePath,
-    unit.name,
-    unit.code,
-    unit.imports.join("\n"),
-    unit.exportedNames.join("\n"),
-  ].join("\n").toLowerCase();
+  return [unit.filePath, unit.name, unit.code, unit.imports.join("\n"), unit.exportedNames.join("\n")]
+    .join("\n")
+    .toLowerCase();
 }
 
 export function kindPriority(kind: CodeUnit["kind"]): number {
@@ -85,16 +81,18 @@ export function queryTermMatchBonus(unit: CodeUnit, terms: string[]): ScoreReaso
 
 export function workflowEvidenceBonus(unit: CodeUnit, query: string, scale: "packer" | "reranker"): ScoreReason {
   const normalized = query.toLowerCase();
-  const asksWorkflow = /\b(how does|workflow|pipeline|flow|process|collect|classify|score|save|persist|candidate)\b/.test(normalized);
+  const asksWorkflow =
+    /\b(how does|workflow|pipeline|flow|process|collect|classify|score|save|persist|candidate)\b/.test(normalized);
   if (!asksWorkflow) return { score: 0, reasons: [] };
 
   const filePath = unit.filePath.toLowerCase();
   const text = `${filePath} ${unit.name} ${unit.code}`.toLowerCase();
   const reasons: string[] = [];
   let score = 0;
-  const weight = scale === "packer"
-    ? { daily: 18, runner: 14, components: 12, stageFile: 14, db: 18, collect: 10, stage: 18, digest: 8 }
-    : { daily: 8, runner: 6, components: 5, stageFile: 4, db: 3, collect: 4, stage: 5, digest: 3 };
+  const weight =
+    scale === "packer"
+      ? { daily: 18, runner: 14, components: 12, stageFile: 14, db: 18, collect: 10, stage: 18, digest: 8 }
+      : { daily: 8, runner: 6, components: 5, stageFile: 4, db: 3, collect: 4, stage: 5, digest: 3 };
 
   if (/src\/daily\/pipeline\.(ts|tsx|js|jsx|py)$/.test(filePath)) {
     score += weight.daily;
@@ -117,7 +115,10 @@ export function workflowEvidenceBonus(unit: CodeUnit, query: string, scale: "pac
     reasons.push("persistence source");
   }
 
-  if (/\b(collect|collection|candidate|source)\b/.test(normalized) && /\b(collect\w*|candidate\w*|source\w*|arxiv|hacker|search\w*)\b/.test(text)) {
+  if (
+    /\b(collect|collection|candidate|source)\b/.test(normalized) &&
+    /\b(collect\w*|candidate\w*|source\w*|arxiv|hacker|search\w*)\b/.test(text)
+  ) {
     score += weight.collect;
     reasons.push("collection stage match");
   }
@@ -129,7 +130,10 @@ export function workflowEvidenceBonus(unit: CodeUnit, query: string, scale: "pac
     score += weight.stage;
     reasons.push("scoring stage match");
   }
-  if (/\b(save|persist|store|db|database|write)\b/.test(normalized) && /\b(save\w*|persist\w*|upsert\w*|insert\w*|db|database|store\w*)\b/.test(text)) {
+  if (
+    /\b(save|persist|store|db|database|write)\b/.test(normalized) &&
+    /\b(save\w*|persist\w*|upsert\w*|insert\w*|db|database|store\w*)\b/.test(text)
+  ) {
     score += weight.stage;
     reasons.push("persistence stage match");
   }

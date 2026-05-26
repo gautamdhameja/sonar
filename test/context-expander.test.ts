@@ -40,8 +40,14 @@ test("expandContext only adds methods from the retrieved class file", async () =
 
   const expanded = expandContext(["client-a"], store);
 
-  assert.equal(expanded.some((item) => item.id === "connect-a"), true);
-  assert.equal(expanded.some((item) => item.id === "connect-b"), false);
+  assert.equal(
+    expanded.some((item) => item.id === "connect-a"),
+    true,
+  );
+  assert.equal(
+    expanded.some((item) => item.id === "connect-b"),
+    false,
+  );
 });
 
 test("expandContext follows terminal member call names", async () => {
@@ -52,5 +58,8 @@ test("expandContext follows terminal member call names", async () => {
 
   const expanded = expandContext(["run"], store);
 
-  assert.equal(expanded.some((item) => item.id === "connect"), true);
+  assert.equal(
+    expanded.some((item) => item.id === "connect"),
+    true,
+  );
 });

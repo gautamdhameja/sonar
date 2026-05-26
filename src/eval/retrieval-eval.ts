@@ -2,7 +2,12 @@ import { CodeUnitStore } from "../retriever/unit-store";
 import { RetrievedUnit } from "../retriever/hybrid-retriever";
 import { QueryIntent } from "../retriever/query-intent";
 import { rerankRetrievedResults } from "../retriever/reranker";
-import { localExactSearch, localGrepSearch, localLexicalSearch, localOnboardingSearch } from "../retriever/local-retriever";
+import {
+  localExactSearch,
+  localGrepSearch,
+  localLexicalSearch,
+  localOnboardingSearch,
+} from "../retriever/local-retriever";
 import { planQuery } from "../retriever/query-router";
 
 export interface RetrievalEvalCase {
@@ -21,21 +26,12 @@ export interface RetrievalEvalResult {
   rankedFiles: string[];
 }
 
-export function evaluateRetrievalCases(
-  cases: RetrievalEvalCase[],
-  store: CodeUnitStore,
-): RetrievalEvalResult[] {
+export function evaluateRetrievalCases(cases: RetrievalEvalCase[], store: CodeUnitStore): RetrievalEvalResult[] {
   return cases.map((evalCase) => {
     const queryPlan = planQuery(evalCase.query);
     const intent = evalCase.intent ?? queryPlan.intent;
     const retrieved = evalCase.retrieved ?? retrieveForEval(evalCase.query, store, evalCase.topK ?? 20);
-    const { diagnostics } = rerankRetrievedResults(
-      evalCase.query,
-      intent,
-      retrieved,
-      store,
-      evalCase.topK ?? 10,
-    );
+    const { diagnostics } = rerankRetrievedResults(evalCase.query, intent, retrieved, store, evalCase.topK ?? 10);
     const rankedFiles = diagnostics.map((item) => item.filePath);
     const rankedSet = new Set(rankedFiles);
     const missingFiles = evalCase.expectedFiles.filter((filePath) => !rankedSet.has(filePath));

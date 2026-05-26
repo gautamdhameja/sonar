@@ -2,10 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { CodeUnit } from "../src/parser/types";
 import { CodeUnitStore } from "../src/retriever/unit-store";
-import {
-  classifyOnboardingFollowup,
-  retrieveOnboardingFollowup,
-} from "../src/retriever/onboarding-followup-retriever";
+import { classifyOnboardingFollowup, retrieveOnboardingFollowup } from "../src/retriever/onboarding-followup-retriever";
 
 function unit(id: string, overrides: Partial<CodeUnit> = {}): CodeUnit {
   return {

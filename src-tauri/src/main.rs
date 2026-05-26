@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    env,
-    fs,
+    env, fs,
     net::TcpStream,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
@@ -79,7 +78,10 @@ fn repo_root() -> Result<PathBuf, String> {
         }
     }
 
-    Err("Unable to locate Sonar project root. Set SONAR_APP_ROOT to the checkout directory.".to_string())
+    Err(
+        "Unable to locate Sonar project root. Set SONAR_APP_ROOT to the checkout directory."
+            .to_string(),
+    )
 }
 
 fn is_sonar_root(path: &Path) -> bool {
@@ -164,7 +166,11 @@ fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), String> 
     }
 
     let normalized = DesktopModelConfig {
-        chat_base_url: config.chat_base_url.trim().trim_end_matches('/').to_string(),
+        chat_base_url: config
+            .chat_base_url
+            .trim()
+            .trim_end_matches('/')
+            .to_string(),
         chat_model: config.chat_model.trim().to_string(),
         chat_api_key: if config.chat_api_key.trim().is_empty() {
             "not-needed".to_string()
@@ -183,7 +189,11 @@ async fn check_url(url: &str) -> Result<(), String> {
         .timeout(Duration::from_secs(2))
         .build()
         .map_err(|err| err.to_string())?;
-    let response = client.get(url).send().await.map_err(|err| err.to_string())?;
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|err| err.to_string())?;
     if response.status().is_success() {
         Ok(())
     } else {
@@ -246,7 +256,10 @@ fn parse_github_repository(input: &str) -> Result<(String, String, String), Stri
     let owner = parts[0].to_string();
     let repo = parts[1].to_string();
     if !is_safe_repo_part(&owner) || !is_safe_repo_part(&repo) {
-        return Err("Repository owner and name can only contain letters, numbers, '.', '_', and '-'.".to_string());
+        return Err(
+            "Repository owner and name can only contain letters, numbers, '.', '_', and '-'."
+                .to_string(),
+        );
     }
 
     let clone_url = format!("https://github.com/{owner}/{repo}.git");
@@ -342,14 +355,17 @@ fn start_sonar_api() -> Result<(), String> {
         command
     };
 
-    let allowed_roots = env::var("SONAR_ALLOWED_REPO_ROOTS")
-        .unwrap_or_else(|_| root.display().to_string());
+    let allowed_roots =
+        env::var("SONAR_ALLOWED_REPO_ROOTS").unwrap_or_else(|_| root.display().to_string());
     let model_config = desktop_model_config();
 
     command
         .current_dir(&root)
         .env("SONAR_API_HOST", "127.0.0.1")
-        .env("SONAR_CORS_ALLOWED_ORIGINS", "http://tauri.localhost,http://127.0.0.1:5173,http://localhost:5173")
+        .env(
+            "SONAR_CORS_ALLOWED_ORIGINS",
+            "http://tauri.localhost,http://127.0.0.1:5173,http://localhost:5173",
+        )
         .env("SONAR_ALLOW_ANY_REPO_ROOT", "true")
         .env("SONAR_ALLOWED_REPO_ROOTS", allowed_roots)
         .env("SONAR_CHAT_BASE_URL", model_config.chat_base_url)
@@ -461,9 +477,21 @@ async fn service_snapshot() -> ServiceSnapshot {
         chat_base_url: chat.clone(),
         services: vec![
             service("sonar", "Sonar API", "http://127.0.0.1:3001/health", true).await,
-            service("meilisearch", "Meilisearch", "http://127.0.0.1:7700/health", true).await,
+            service(
+                "meilisearch",
+                "Meilisearch",
+                "http://127.0.0.1:7700/health",
+                true,
+            )
+            .await,
             service("qdrant", "Qdrant", "http://127.0.0.1:6333/readyz", true).await,
-            service("ollama", "Ollama embeddings", "http://127.0.0.1:11434/api/tags", true).await,
+            service(
+                "ollama",
+                "Ollama embeddings",
+                "http://127.0.0.1:11434/api/tags",
+                true,
+            )
+            .await,
             service("chat", "Chat model server", &chat_models, false).await,
         ],
     }
@@ -473,9 +501,18 @@ async fn service_snapshot() -> ServiceSnapshot {
 async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
     let before = service_snapshot().await;
 
-    if before.services.iter().any(|service| service.id == "meilisearch" && service.state != "ready")
-        || before.services.iter().any(|service| service.id == "qdrant" && service.state != "ready")
-        || before.services.iter().any(|service| service.id == "ollama" && service.state != "ready")
+    if before
+        .services
+        .iter()
+        .any(|service| service.id == "meilisearch" && service.state != "ready")
+        || before
+            .services
+            .iter()
+            .any(|service| service.id == "qdrant" && service.state != "ready")
+        || before
+            .services
+            .iter()
+            .any(|service| service.id == "ollama" && service.state != "ready")
     {
         let _ = start_docker_services();
         tokio::time::sleep(Duration::from_secs(2)).await;
@@ -483,7 +520,11 @@ async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
 
     let _ = ensure_embedding_model();
 
-    if before.services.iter().any(|service| service.id == "sonar" && service.state != "ready") {
+    if before
+        .services
+        .iter()
+        .any(|service| service.id == "sonar" && service.state != "ready")
+    {
         start_sonar_api()?;
     }
 

@@ -4,8 +4,25 @@ export interface QueryTerm {
 }
 
 const STOP_WORDS = new Set([
-  "the", "and", "for", "that", "this", "with", "from", "what", "where", "when",
-  "does", "how", "why", "are", "you", "about", "into", "through", "explain",
+  "the",
+  "and",
+  "for",
+  "that",
+  "this",
+  "with",
+  "from",
+  "what",
+  "where",
+  "when",
+  "does",
+  "how",
+  "why",
+  "are",
+  "you",
+  "about",
+  "into",
+  "through",
+  "explain",
 ]);
 
 export function normalizeQueryText(value: string): string {
@@ -31,8 +48,7 @@ export function extractPaths(query: string): string[] {
 }
 
 export function extractPhrases(query: string): string[] {
-  return Array.from(query.matchAll(/[`'"]([^`'"]{3,})[`'"]/g), (match) => match[1].trim())
-    .filter(Boolean);
+  return Array.from(query.matchAll(/[`'"]([^`'"]{3,})[`'"]/g), (match) => match[1].trim()).filter(Boolean);
 }
 
 export function extractExactNeedles(query: string): string[] {
@@ -42,8 +58,9 @@ export function extractExactNeedles(query: string): string[] {
   const dotted = query.match(/\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+\b/g) ?? [];
   const codeIdentifiers = query.match(/\b[A-Za-z_$][\w$-]{3,}\b/g) ?? [];
 
-  return [...new Set([...quoted, ...paths, ...constants, ...dotted, ...codeIdentifiers])]
-    .filter((needle) => needle.length >= 3);
+  return [...new Set([...quoted, ...paths, ...constants, ...dotted, ...codeIdentifiers])].filter(
+    (needle) => needle.length >= 3,
+  );
 }
 
 export function extractTerms(query: string): QueryTerm[] {

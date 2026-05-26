@@ -6,7 +6,6 @@ export class CodeUnitStore {
   private units: Map<string, CodeUnit> = new Map();
   private byFile: Map<string, CodeUnit[]> = new Map();
   private byName: Map<string, CodeUnit[]> = new Map();
-  private projectId: string | null = null;
 
   private populate(list: CodeUnit[]): void {
     this.units.clear();
@@ -33,7 +32,6 @@ export class CodeUnitStore {
   }
 
   async loadFromDb(projectId: string, repo: ProjectRepo): Promise<void> {
-    this.projectId = projectId;
     const units = repo.getCodeUnitsByProject(projectId);
     this.populate(units);
   }
@@ -45,7 +43,6 @@ export class CodeUnitStore {
   }
 
   async loadFromUnits(units: CodeUnit[]): Promise<void> {
-    this.projectId = null;
     this.populate(units);
   }
 

@@ -65,10 +65,7 @@ export function buildOnboardingBriefPrompt(
   return { system, user: parts.join("\n") };
 }
 
-export function buildCitationRepairPrompt(
-  answer: string,
-  units: CodeUnit[],
-): { system: string; user: string } {
+export function buildCitationRepairPrompt(answer: string, units: CodeUnit[]): { system: string; user: string } {
   const system = [
     "You repair source grounding in an onboarding brief.",
     "Use only the listed sources. Do not add new facts.",
@@ -78,13 +75,7 @@ export function buildCitationRepairPrompt(
   ].join("\n");
 
   const sourceList = units.map((unit) => `- ${sourceKey(unit)} (${unit.kind} ${unit.name})`).join("\n");
-  const user = [
-    "## Valid Sources",
-    sourceList,
-    "",
-    "## Brief To Repair",
-    answer,
-  ].join("\n");
+  const user = ["## Valid Sources", sourceList, "", "## Brief To Repair", answer].join("\n");
 
   return { system, user };
 }

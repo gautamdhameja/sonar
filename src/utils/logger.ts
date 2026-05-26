@@ -12,7 +12,13 @@ let logLevelOverride: LogLevel | null = null;
 function currentLogLevel(): LogLevel {
   if (logLevelOverride) return logLevelOverride;
   const configured = process.env.SONAR_LOG_LEVEL?.toLowerCase();
-  if (configured === "debug" || configured === "info" || configured === "warn" || configured === "error" || configured === "silent") {
+  if (
+    configured === "debug" ||
+    configured === "info" ||
+    configured === "warn" ||
+    configured === "error" ||
+    configured === "silent"
+  ) {
     return configured;
   }
   return "info";

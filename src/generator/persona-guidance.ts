@@ -47,7 +47,7 @@ export function buildPersonaGuidance(persona: Persona): string {
     "",
     "EXPLANATION STYLE:",
     "- Prefer plain language and tie code details to product or workflow meaning.",
-    "- Separate what the code proves from reasonable inferences; mark inferences with \"(inferred)\".",
+    '- Separate what the code proves from reasonable inferences; mark inferences with "(inferred)".',
     "- Do not invent customers, market positioning, security claims, or performance claims unless the supplied context supports them.",
     "- Define unavoidable technical terms in one short phrase the first time they appear.",
   );

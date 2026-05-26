@@ -25,11 +25,7 @@ function unit(id: string, overrides: Partial<CodeUnit> = {}): CodeUnit {
 
 test("packContext prioritizes retrieved and exact symbol matches", () => {
   const packed = packContext(
-    [
-      unit("unrelated"),
-      unit("ProjectRepo", { kind: "class", exportedNames: ["ProjectRepo"] }),
-      unit("helper"),
-    ],
+    [unit("unrelated"), unit("ProjectRepo", { kind: "class", exportedNames: ["ProjectRepo"] }), unit("helper")],
     [{ unitId: "helper", rrfScore: 1, keywordRank: 1, semanticRank: null, isVendored: false }],
     { query: "Explain ProjectRepo", maxTokens: 300 },
   );
@@ -104,7 +100,10 @@ test("packContext demotes tests for broad onboarding queries", () => {
   const packed = packContext(
     [
       unit("test", { filePath: "tests/tools.test.ts", code: "test('tooling', () => true);" }),
-      unit("pipeline", { filePath: "src/framework/pipeline/runner.ts", code: "export async function runPipeline() {}" }),
+      unit("pipeline", {
+        filePath: "src/framework/pipeline/runner.ts",
+        code: "export async function runPipeline() {}",
+      }),
       unit("daily", { filePath: "src/daily/pipeline.ts", code: "export const pipeline = {};" }),
     ],
     [

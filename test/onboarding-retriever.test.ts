@@ -58,13 +58,20 @@ test("onboardingRetrieval favors docs, app boundaries, and product workflows", a
   ]);
 
   const result = onboardingRetrieval(store, {
-    query: "Create first-week onboarding docs for a product manager focused on sharing, collaboration, and offline saving.",
+    query:
+      "Create first-week onboarding docs for a product manager focused on sharing, collaboration, and offline saving.",
     topK: 3,
   });
 
-  assert.deepEqual(result.retrieved.map((item) => item.unitId), ["readme", "local", "app"]);
+  assert.deepEqual(
+    result.retrieved.map((item) => item.unitId),
+    ["readme", "local", "app"],
+  );
   assert.ok(result.diagnostics[0].reasons.includes("overview documentation"));
-  assert.equal(result.retrieved.some((item) => item.unitId === "test"), false);
+  assert.equal(
+    result.retrieved.some((item) => item.unitId === "test"),
+    false,
+  );
 });
 
 test("onboardingRetrieval penalizes giant modules in favor of targeted workflow files", async () => {

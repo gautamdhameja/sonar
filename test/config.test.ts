@@ -5,7 +5,7 @@ import { loadConfig } from "../src/config";
 test("loadConfig provides local defaults", () => {
   const config = loadConfig({ HOME: "/tmp/sonar-home" });
 
-  assert.equal(config.chat.baseUrl, "http://localhost:8000/v1");
+  assert.equal(config.chat.baseUrl, "http://localhost:8080/v1");
   assert.equal(config.chat.model, "Qwen/Qwen3.5-9B");
   assert.equal(config.ollama.baseUrl, "http://localhost:11434");
   assert.equal(config.qdrant.port, 6333);
@@ -59,10 +59,7 @@ test("loadConfig rejects invalid numeric values", () => {
 });
 
 test("loadConfig rejects invalid URLs", () => {
-  assert.throws(
-    () => loadConfig({ SONAR_CHAT_BASE_URL: "localhost:8000" }),
-    /SONAR_CHAT_BASE_URL must be a valid URL/,
-  );
+  assert.throws(() => loadConfig({ SONAR_CHAT_BASE_URL: "localhost:8000" }), /SONAR_CHAT_BASE_URL must be a valid URL/);
 });
 
 test("loadConfig rejects invalid booleans", () => {

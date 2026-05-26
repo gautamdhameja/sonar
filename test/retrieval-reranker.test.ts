@@ -56,7 +56,10 @@ test("rerankRetrievedResults explains exact config source selection", async () =
     3,
   );
 
-  assert.deepEqual(results.slice(0, 2).map((result) => result.unitId), ["config", "schema"]);
+  assert.deepEqual(
+    results.slice(0, 2).map((result) => result.unitId),
+    ["config", "schema"],
+  );
   assert.ok(diagnostics[0].reasons.some((reason) => reason.includes("exact query")));
 });
 
@@ -66,15 +69,18 @@ test("evaluateRetrievalCases reports missing expected files", async () => {
     unit("schema", "src/llama/schema.ts", "LLAMA_SERVER_URL: z.string().url()", "schema"),
   ]);
 
-  const [result] = evaluateRetrievalCases([
-    {
-      name: "llama config",
-      query: "Where is LLAMA_SERVER_URL configured and validated?",
-      intent: "general_code_question",
-      retrieved: [retrieved("config", 1, 1), retrieved("schema", 1, 2)],
-      expectedFiles: ["src/llama/config.ts", "src/llama/schema.ts"],
-    },
-  ], store);
+  const [result] = evaluateRetrievalCases(
+    [
+      {
+        name: "llama config",
+        query: "Where is LLAMA_SERVER_URL configured and validated?",
+        intent: "general_code_question",
+        retrieved: [retrieved("config", 1, 1), retrieved("schema", 1, 2)],
+        expectedFiles: ["src/llama/config.ts", "src/llama/schema.ts"],
+      },
+    ],
+    store,
+  );
 
   assert.equal(result.passed, true);
   assert.deepEqual(result.missingFiles, []);

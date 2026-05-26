@@ -17,20 +17,8 @@ export const MEILI_CODE_SEARCH_SETTINGS = {
     "contextualText",
     "code",
   ],
-  filterableAttributes: [
-    "language",
-    "kind",
-    "filePath",
-    "isVendored",
-  ],
-  rankingRules: [
-    "words",
-    "exactness",
-    "attribute",
-    "proximity",
-    "typo",
-    "sort",
-  ],
+  filterableAttributes: ["language", "kind", "filePath", "isVendored"],
+  rankingRules: ["words", "exactness", "attribute", "proximity", "typo", "sort"],
   typoTolerance: {
     enabled: true,
     minWordSizeForTypos: {
@@ -84,11 +72,7 @@ export async function indexToMeilisearch(units: CodeUnit[], projectId: string): 
   logger.info(`Indexed ${units.length} code units to Meilisearch`);
 }
 
-export async function searchMeilisearch(
-  query: string,
-  topK: number,
-  projectId: string,
-): Promise<ScoredResult[]> {
+export async function searchMeilisearch(query: string, topK: number, projectId: string): Promise<ScoredResult[]> {
   const client = createClient();
   const index = client.index(getIndexName(projectId));
 

@@ -112,9 +112,7 @@ function rowToProject(row: ProjectRow): Project {
 function parseJsonArrayField(value: string, fieldName: string, unitId: string): string[] {
   try {
     const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) && parsed.every((item) => typeof item === "string")
-      ? parsed
-      : [];
+    return Array.isArray(parsed) && parsed.every((item) => typeof item === "string") ? parsed : [];
   } catch {
     logger.warn(`Invalid ${fieldName} JSON for code unit ${unitId}; using empty array`);
     return [];
@@ -159,10 +157,12 @@ function parseSourcesJson(value: string | null, id: string): OnboardingMessage["
   return parsed.filter((item): item is OnboardingMessage["sources"][number] => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
     const source = item as Record<string, unknown>;
-    return typeof source.filePath === "string" &&
+    return (
+      typeof source.filePath === "string" &&
       typeof source.name === "string" &&
       typeof source.kind === "string" &&
-      typeof source.lines === "string";
+      typeof source.lines === "string"
+    );
   });
 }
 
@@ -255,9 +255,7 @@ export class ProjectRepo {
   }
 
   updateProjectStats(id: string, unitCount: number, fileCount: number): void {
-    this.db
-      .prepare("UPDATE projects SET unit_count = ?, file_count = ? WHERE id = ?")
-      .run(unitCount, fileCount, id);
+    this.db.prepare("UPDATE projects SET unit_count = ?, file_count = ? WHERE id = ?").run(unitCount, fileCount, id);
   }
 
   updateProjectSummary(id: string, summary: string): void {
@@ -303,9 +301,7 @@ export class ProjectRepo {
   }
 
   getCodeUnitsByProject(projectId: string): CodeUnit[] {
-    const rows = this.db
-      .prepare("SELECT * FROM code_units WHERE project_id = ?")
-      .all(projectId) as CodeUnitRow[];
+    const rows = this.db.prepare("SELECT * FROM code_units WHERE project_id = ?").all(projectId) as CodeUnitRow[];
     return rows.map(rowToCodeUnit);
   }
 
@@ -385,8 +381,15 @@ export class ProjectRepo {
     projectId: string,
   ): Array<{ sourceFile: string; targetFile: string; importStatement: string; edgeType: string }> {
     const rows = this.db
-      .prepare("SELECT source_file, target_file, import_statement, edge_type FROM dependency_edges WHERE project_id = ?")
-      .all(projectId) as Array<{ source_file: string; target_file: string; import_statement: string; edge_type: string }>;
+      .prepare(
+        "SELECT source_file, target_file, import_statement, edge_type FROM dependency_edges WHERE project_id = ?",
+      )
+      .all(projectId) as Array<{
+      source_file: string;
+      target_file: string;
+      import_statement: string;
+      edge_type: string;
+    }>;
 
     return rows.map((r) => ({
       sourceFile: r.source_file,
@@ -444,9 +447,9 @@ export class ProjectRepo {
   }
 
   getOnboardingSession(id: string): OnboardingSession | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM onboarding_sessions WHERE id = ?")
-      .get(id) as OnboardingSessionRow | undefined;
+    const row = this.db.prepare("SELECT * FROM onboarding_sessions WHERE id = ?").get(id) as
+      | OnboardingSessionRow
+      | undefined;
     return row ? rowToOnboardingSession(row) : undefined;
   }
 

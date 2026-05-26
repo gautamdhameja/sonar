@@ -49,16 +49,18 @@ function mergeRetrievedResults(resultSets: RetrievedUnit[], topK: number): Retri
     }
 
     existing.rrfScore = Math.max(existing.rrfScore, result.rrfScore);
-    existing.keywordRank = existing.keywordRank === null
-      ? result.keywordRank
-      : result.keywordRank === null
-        ? existing.keywordRank
-        : Math.min(existing.keywordRank, result.keywordRank);
-    existing.semanticRank = existing.semanticRank === null
-      ? result.semanticRank
-      : result.semanticRank === null
-        ? existing.semanticRank
-        : Math.min(existing.semanticRank, result.semanticRank);
+    existing.keywordRank =
+      existing.keywordRank === null
+        ? result.keywordRank
+        : result.keywordRank === null
+          ? existing.keywordRank
+          : Math.min(existing.keywordRank, result.keywordRank);
+    existing.semanticRank =
+      existing.semanticRank === null
+        ? result.semanticRank
+        : result.semanticRank === null
+          ? existing.semanticRank
+          : Math.min(existing.semanticRank, result.semanticRank);
     existing.isVendored = existing.isVendored || result.isVendored;
   }
 
@@ -82,10 +84,17 @@ export function classifyOnboardingFollowup(query: string): OnboardingFollowupInt
   if (/\b(risk|concern|ask engineering|open question|unknown|tradeoff|privacy|security)\b/.test(normalized)) {
     return "risk_questions";
   }
-  if (/\b(explain this file|explain this function|function|class|component|method)\b/.test(normalized) || /[`'"][^`'"]{4,}[`'"]/.test(query)) {
+  if (
+    /\b(explain this file|explain this function|function|class|component|method)\b/.test(normalized) ||
+    /[`'"][^`'"]{4,}[`'"]/.test(query)
+  ) {
     return "code_explanation";
   }
-  if (/\b(rewrite|summarize for|explain to|for a pm|for design|for support|non technical|non-technical)\b/.test(normalized)) {
+  if (
+    /\b(rewrite|summarize for|explain to|for a pm|for design|for support|non technical|non-technical)\b/.test(
+      normalized,
+    )
+  ) {
     return "persona_rewrite";
   }
 
@@ -125,9 +134,9 @@ function sourceFileResults(store: CodeUnitStore, sourceFiles: string[], query: s
         return { unit, score };
       })
       .sort((a, b) => {
-        return b.score - a.score ||
-          a.unit.startLine - b.unit.startLine ||
-          a.unit.filePath.localeCompare(b.unit.filePath);
+        return (
+          b.score - a.score || a.unit.startLine - b.unit.startLine || a.unit.filePath.localeCompare(b.unit.filePath)
+        );
       })
       .slice(0, 3)
       .map((entry) => entry.unit);
@@ -196,14 +205,20 @@ function buildRetrievalQuery(query: string, intent: OnboardingFollowupIntent): s
   return query;
 }
 
-export async function retrieveOnboardingFollowup(input: OnboardingFollowupRetrievalInput): Promise<OnboardingFollowupRetrievalResult> {
+export async function retrieveOnboardingFollowup(
+  input: OnboardingFollowupRetrievalInput,
+): Promise<OnboardingFollowupRetrievalResult> {
   const start = Date.now();
   const intent = classifyOnboardingFollowup(input.query);
   const retrievalQuery = buildRetrievalQuery(input.query, intent);
   const queryPlan = planQuery(retrievalQuery);
   const topK = CONFIG.retriever.fusedTopK;
-  const pinnedSourceResults = sourceFileResults(input.store, input.sourceFiles, retrievalQuery, Math.min(12, topK + 2))
-    .map((result, index) => ({ ...result, rrfScore: 1000 - index }));
+  const pinnedSourceResults = sourceFileResults(
+    input.store,
+    input.sourceFiles,
+    retrievalQuery,
+    Math.min(12, topK + 2),
+  ).map((result, index) => ({ ...result, rrfScore: 1000 - index }));
 
   const retrievedSets: RetrievedUnit[][] = [
     pinnedSourceResults,
@@ -212,7 +227,12 @@ export async function retrieveOnboardingFollowup(input: OnboardingFollowupRetrie
     localLexicalSearch(retrievalQuery, input.store, topK),
   ];
 
-  if (intent === "glossary" || intent === "persona_rewrite" || queryPlan.intent === "architecture_overview" || queryPlan.intent === "business_overview") {
+  if (
+    intent === "glossary" ||
+    intent === "persona_rewrite" ||
+    queryPlan.intent === "architecture_overview" ||
+    queryPlan.intent === "business_overview"
+  ) {
     retrievedSets.push(localOnboardingSearch(retrievalQuery, input.store, topK));
   }
 
@@ -237,7 +257,15 @@ export async function retrieveOnboardingFollowup(input: OnboardingFollowupRetrie
       ...pinnedSourceResults
         .map((result) => input.store.getUnit(result.unitId))
         .filter((unit): unit is CodeUnit => unit !== undefined),
-      ...graphEnhancedRetrieval(retrieved, input.store, input.projectId, graphRepo, 1, retrievalQuery, queryPlan.intent),
+      ...graphEnhancedRetrieval(
+        retrieved,
+        input.store,
+        input.projectId,
+        graphRepo,
+        1,
+        retrievalQuery,
+        queryPlan.intent,
+      ),
     ];
     graphEnhanced = true;
   } else {
@@ -245,7 +273,10 @@ export async function retrieveOnboardingFollowup(input: OnboardingFollowupRetrie
       ...pinnedSourceResults
         .map((result) => input.store.getUnit(result.unitId))
         .filter((unit): unit is CodeUnit => unit !== undefined),
-      ...expandContext(retrieved.map((result) => result.unitId), input.store),
+      ...expandContext(
+        retrieved.map((result) => result.unitId),
+        input.store,
+      ),
     ];
   }
 

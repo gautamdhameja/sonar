@@ -48,7 +48,13 @@ export async function indexProject(
 
   const start = Date.now();
   const rawName = name || path.basename(resolved);
-  const projectName = rawName.replace(/[\x00-\x1f]/g, "").slice(0, 200);
+  const projectName = [...rawName]
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return code >= 32 && code !== 127;
+    })
+    .join("")
+    .slice(0, 200);
 
   const existing = context.repo.getProjectByPath(resolved);
   if (existing) {

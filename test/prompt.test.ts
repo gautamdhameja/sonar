@@ -21,19 +21,13 @@ const unit: CodeUnit = {
 };
 
 test("buildPrompt includes persona guidance", () => {
-  const prompt = buildPrompt(
-    "What does this app do?",
-    [unit],
-    "sonar",
-    "A local code explainer.",
-    {
-      role: "product_manager",
-      technicalBackground: "basic",
-      avoidJargon: true,
-      explanationDepth: "standard",
-      businessContext: "Prepare onboarding notes",
-    },
-  );
+  const prompt = buildPrompt("What does this app do?", [unit], "sonar", "A local code explainer.", {
+    role: "product_manager",
+    technicalBackground: "basic",
+    avoidJargon: true,
+    explanationDepth: "standard",
+    businessContext: "Prepare onboarding notes",
+  });
 
   assert.match(prompt.system, /Role: product manager/);
   assert.match(prompt.system, /Prepare onboarding notes/);

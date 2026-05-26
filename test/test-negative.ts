@@ -3,6 +3,7 @@ const BASE = "http://localhost:3001";
 let passed = 0;
 let failed = 0;
 const failures: string[] = [];
+type ApiJson = Record<string, unknown> | Array<Record<string, unknown>>;
 
 async function test(name: string, fn: () => Promise<void>) {
   try {
@@ -28,7 +29,7 @@ async function json(method: string, path: string, body?: unknown) {
   };
   if (body !== undefined) opts.body = JSON.stringify(body);
   const res = await fetch(`${BASE}${path}`, opts);
-  const data = await res.json() as any;
+  const data = (await res.json()) as ApiJson;
   return { status: res.status, data };
 }
 
@@ -251,8 +252,9 @@ async function main() {
 
   // Very large single file
   mkdirSync("/tmp/test-huge-file-repo", { recursive: true });
-  const hugeCode = Array.from({ length: 500 }, (_, i) =>
-    `export function fn${i}(x: number): number { return x + ${i}; }`
+  const hugeCode = Array.from(
+    { length: 500 },
+    (_, i) => `export function fn${i}(x: number): number { return x + ${i}; }`,
   ).join("\n");
   writeFileSync("/tmp/test-huge-file-repo/huge.ts", hugeCode);
   await test("Index repo with 500-function file", async () => {
@@ -263,7 +265,10 @@ async function main() {
 
   // Special characters in filenames (create via code)
   mkdirSync("/tmp/test-special-chars-repo/src", { recursive: true });
-  writeFileSync("/tmp/test-special-chars-repo/src/file with spaces.ts", "export const x = 1;\nexport const y = 2;\nexport const z = 3;\nexport const w = 4;\nexport const v = 5;\nexport const u = 6;\n");
+  writeFileSync(
+    "/tmp/test-special-chars-repo/src/file with spaces.ts",
+    "export const x = 1;\nexport const y = 2;\nexport const z = 3;\nexport const w = 4;\nexport const v = 5;\nexport const u = 6;\n",
+  );
   writeFileSync("/tmp/test-special-chars-repo/src/normal.ts", "export function greet() { return 'hi'; }");
   await test("Index repo with spaces in filename", async () => {
     const r = await json("POST", "/projects/index", { repoRoot: "/tmp/test-special-chars-repo", name: "Special" });
@@ -412,7 +417,8 @@ async function main() {
     );
     // Should end up with exactly one project for this path
     const list = await json("GET", "/projects");
-    const matching = list.data.filter((p: any) => p.repoPath.endsWith("/test-repo"));
+    const projects = list.data as Array<{ repoPath: string }>;
+    const matching = projects.filter((p) => p.repoPath.endsWith("/test-repo"));
     assert(matching.length >= 1, `Expected at least 1 project, got ${matching.length}`);
   });
 

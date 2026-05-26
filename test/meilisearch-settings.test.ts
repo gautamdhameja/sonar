@@ -9,5 +9,8 @@ test("Meilisearch settings prioritize code identifiers before full code", () => 
   assert.ok(attrs.indexOf("filePath") < attrs.indexOf("code"));
   assert.ok(attrs.indexOf("imports") < attrs.indexOf("code"));
   assert.ok(MEILI_CODE_SEARCH_SETTINGS.typoTolerance.disableOnAttributes.includes("name"));
-  assert.ok(MEILI_CODE_SEARCH_SETTINGS.rankingRules.indexOf("exactness") < MEILI_CODE_SEARCH_SETTINGS.rankingRules.indexOf("typo"));
+  assert.ok(
+    MEILI_CODE_SEARCH_SETTINGS.rankingRules.indexOf("exactness") <
+      MEILI_CODE_SEARCH_SETTINGS.rankingRules.indexOf("typo"),
+  );
 });

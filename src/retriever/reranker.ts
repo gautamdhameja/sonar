@@ -27,7 +27,12 @@ function queryTerms(query: string): string[] {
 }
 
 function queryNeedles(query: string): string[] {
-  return [...new Set([...extractNeedlesForCitationOrPacking(query), ...extractPaths(query).map((item) => item.toLowerCase())])];
+  return [
+    ...new Set([
+      ...extractNeedlesForCitationOrPacking(query),
+      ...extractPaths(query).map((item) => item.toLowerCase()),
+    ]),
+  ];
 }
 
 export function rerankRetrievedResults(

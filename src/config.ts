@@ -152,7 +152,7 @@ function getStringList(env: Env, name: string, fallback: string[]): string[] {
 export function loadConfig(env: Env = process.env): SonarConfig {
   const dataDir = path.resolve(getString(env, "SONAR_DATA_DIR", defaultDataDir(env)));
   const dbPath = path.resolve(getString(env, "SONAR_DB_PATH", path.join(dataDir, "projects.db")));
-  const chatBaseUrl = getUrl(env, "SONAR_CHAT_BASE_URL", "http://localhost:8000/v1");
+  const chatBaseUrl = getUrl(env, "SONAR_CHAT_BASE_URL", "http://localhost:8080/v1");
   const chatModel = getString(env, "SONAR_CHAT_MODEL", "Qwen/Qwen3.5-9B");
 
   return {
@@ -162,9 +162,11 @@ export function loadConfig(env: Env = process.env): SonarConfig {
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3111",
+        "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
         "http://127.0.0.1:3111",
+        "http://127.0.0.1:5173",
         "http://tauri.localhost",
         "tauri://localhost",
       ]),

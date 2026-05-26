@@ -42,9 +42,7 @@ function traverse(
     frontier = nextFrontier;
   }
 
-  return Array.from(visited.values()).sort(
-    (a, b) => a.depth - b.depth || a.filePath.localeCompare(b.filePath),
-  );
+  return Array.from(visited.values()).sort((a, b) => a.depth - b.depth || a.filePath.localeCompare(b.filePath));
 }
 
 export function traverseUpstream(
@@ -84,7 +82,5 @@ export function traverseBidirectional(
     }
   }
 
-  return Array.from(merged.values()).sort(
-    (a, b) => a.depth - b.depth || a.filePath.localeCompare(b.filePath),
-  );
+  return Array.from(merged.values()).sort((a, b) => a.depth - b.depth || a.filePath.localeCompare(b.filePath));
 }

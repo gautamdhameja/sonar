@@ -4,7 +4,15 @@ import { detectVendoredPaths } from "./vendored-detector";
 
 const VALID_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".md", ".mdx"]);
 const EXCLUDED_DIRS = new Set([
-  "node_modules", ".git", "dist", "build", "__pycache__", ".next", ".venv", "venv", "coverage",
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  "__pycache__",
+  ".next",
+  ".venv",
+  "venv",
+  "coverage",
 ]);
 
 export interface WalkedFile {

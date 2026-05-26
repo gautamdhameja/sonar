@@ -5,12 +5,7 @@ import {
   shouldUseGraphForIntent,
 } from "./query-intent";
 
-export type RetrievalMode =
-  | "exact"
-  | "literal"
-  | "hybrid"
-  | "graph_hybrid"
-  | "summary_graph";
+export type RetrievalMode = "exact" | "literal" | "hybrid" | "graph_hybrid" | "summary_graph";
 
 export interface QueryPlan {
   intent: QueryIntent;
@@ -41,9 +36,11 @@ function hasQuotedLiteral(query: string): boolean {
 }
 
 function hasErrorOrConfigShape(query: string): boolean {
-  return /\b(error|exception|failed|stack trace|env|config|setting|key|token|url)\b/i.test(query) ||
+  return (
+    /\b(error|exception|failed|stack trace|env|config|setting|key|token|url)\b/i.test(query) ||
     /\b[A-Z][A-Z0-9_]{3,}\b/.test(query) ||
-    /\b\d{3,}\b/.test(query);
+    /\b\d{3,}\b/.test(query)
+  );
 }
 
 export function planQuery(query: string): QueryPlan {
@@ -107,9 +104,10 @@ export function planQuery(query: string): QueryPlan {
     return {
       intent,
       mode: "graph_hybrid",
-      requiredEvidence: intent === "workflow_trace"
-        ? ["workflow_entry", "stage_functions", "persistence_or_output"]
-        : ["semantic_seed", "graph_neighbors"],
+      requiredEvidence:
+        intent === "workflow_trace"
+          ? ["workflow_entry", "stage_functions", "persistence_or_output"]
+          : ["semantic_seed", "graph_neighbors"],
       preferredSources: ["code", "graph"],
       graphDirection: "bidirectional",
       sourceBudget: { code: 8, docs: 1, tests: 1 },

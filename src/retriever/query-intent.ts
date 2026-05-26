@@ -52,16 +52,7 @@ const DEPENDENCY_PATTERNS = [
   "connected",
 ];
 
-const RISK_PATTERNS = [
-  "risk",
-  "risks",
-  "gap",
-  "gaps",
-  "missing",
-  "concerns",
-  "limitations",
-  "what could go wrong",
-];
+const RISK_PATTERNS = ["risk", "risks", "gap", "gaps", "missing", "concerns", "limitations", "what could go wrong"];
 
 function includesAny(query: string, patterns: string[]): boolean {
   return patterns.some((pattern) => query.includes(pattern));
@@ -101,15 +92,19 @@ export function classifyQueryIntent(query: string): QueryIntent {
 }
 
 export function shouldUseGraphForIntent(intent: QueryIntent): boolean {
-  return intent === "architecture_overview" ||
+  return (
+    intent === "architecture_overview" ||
     intent === "workflow_trace" ||
     intent === "dependency_explanation" ||
-    intent === "risk_or_gap_analysis";
+    intent === "risk_or_gap_analysis"
+  );
 }
 
 export function shouldIncludeSummaryForIntent(intent: QueryIntent): boolean {
-  return intent === "architecture_overview" ||
+  return (
+    intent === "architecture_overview" ||
     intent === "business_overview" ||
     intent === "workflow_trace" ||
-    intent === "risk_or_gap_analysis";
+    intent === "risk_or_gap_analysis"
+  );
 }

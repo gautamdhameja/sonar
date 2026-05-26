@@ -41,12 +41,9 @@ test("persistent embedding cache stores and reads vectors", async () => {
 });
 
 test("persistent embedding cache drops invalid vector dimensions", async () => {
-  const {
-    buildEmbeddingCacheKey,
-    deleteEmbeddingCache,
-    readEmbeddingCache,
-    writeEmbeddingCache,
-  } = await import("../src/indexer/embedding-cache");
+  const { buildEmbeddingCacheKey, deleteEmbeddingCache, readEmbeddingCache, writeEmbeddingCache } = await import(
+    "../src/indexer/embedding-cache"
+  );
   const parts = {
     provider: "ollama",
     baseUrl: "http://localhost:11434",

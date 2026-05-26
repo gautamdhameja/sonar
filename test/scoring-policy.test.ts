@@ -1,11 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { CodeUnit } from "../src/parser/types";
-import {
-  hasExactEvidenceMatch,
-  testFilePenalty,
-  workflowEvidenceBonus,
-} from "../src/retriever/scoring-policy";
+import { hasExactEvidenceMatch, testFilePenalty, workflowEvidenceBonus } from "../src/retriever/scoring-policy";
 
 function unit(id: string, overrides: Partial<CodeUnit> = {}): CodeUnit {
   return {

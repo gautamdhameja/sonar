@@ -40,10 +40,11 @@ function parseGitmodules(repoRoot: string, vendored: Set<string>): void {
   try {
     const content = fs.readFileSync(gitmodulesPath, "utf-8");
     const pathRegex = /^\s*path\s*=\s*(.+)$/gm;
-    let match;
-    while ((match = pathRegex.exec(content)) !== null) {
+    let match: RegExpExecArray | null = pathRegex.exec(content);
+    while (match !== null) {
       const submodulePath = match[1].trim();
       vendored.add(submodulePath);
+      match = pathRegex.exec(content);
     }
   } catch {
     // Ignore read errors
@@ -67,9 +68,10 @@ function parseFoundryRemappings(repoRoot: string, vendored: Set<string>): void {
       const content = fs.readFileSync(foundryPath, "utf-8");
       // Match remapping values like "lib/openzeppelin-contracts/" or "lib/forge-std/src/"
       const remapRegex = /=\s*(lib\/[^/'"]+)/g;
-      let match;
-      while ((match = remapRegex.exec(content)) !== null) {
+      let match: RegExpExecArray | null = remapRegex.exec(content);
+      while (match !== null) {
         vendored.add(match[1]);
+        match = remapRegex.exec(content);
       }
     } catch {
       // Ignore
@@ -83,10 +85,11 @@ function parseFoundryRemappings(repoRoot: string, vendored: Set<string>): void {
       try {
         const content = fs.readFileSync(subFoundryPath, "utf-8");
         const remapRegex = /=\s*(lib\/[^/'"]+)/g;
-        let match;
-        while ((match = remapRegex.exec(content)) !== null) {
+        let match: RegExpExecArray | null = remapRegex.exec(content);
+        while (match !== null) {
           // Prefix with the subdirectory
           vendored.add(path.join(subdir, match[1]));
+          match = remapRegex.exec(content);
         }
       } catch {
         // Ignore
@@ -100,9 +103,10 @@ function parseFoundryRemappings(repoRoot: string, vendored: Set<string>): void {
     try {
       const content = fs.readFileSync(remappingsPath, "utf-8");
       const remapRegex = /=\s*(lib\/[^/\s]+)/gm;
-      let match;
-      while ((match = remapRegex.exec(content)) !== null) {
+      let match: RegExpExecArray | null = remapRegex.exec(content);
+      while (match !== null) {
         vendored.add(match[1]);
+        match = remapRegex.exec(content);
       }
     } catch {
       // Ignore
@@ -115,11 +119,7 @@ function parseFoundryRemappings(repoRoot: string, vendored: Set<string>): void {
  * Only scans 3 levels deep to avoid deep traversal.
  * Skips node_modules and the repo's own .git.
  */
-function scanForNestedGitDirs(
-  dir: string,
-  vendored: Set<string>,
-  depth: number,
-): void {
+function scanForNestedGitDirs(dir: string, vendored: Set<string>, depth: number): void {
   if (depth > 3) return;
 
   const SKIP = new Set(["node_modules", ".git", "dist", "build", ".next"]);

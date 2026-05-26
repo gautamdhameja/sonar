@@ -29,7 +29,14 @@ test("buildFileGraphResponse groups units by file and preserves edge types", () 
       unit("handler", "src/api/server.ts", "function"),
       unit("repo", "src/db/project-repo.ts", "class"),
     ],
-    [{ sourceFile: "src/api/server.ts", targetFile: "src/db/project-repo.ts", importStatement: "import repo", edgeType: "imports" }],
+    [
+      {
+        sourceFile: "src/api/server.ts",
+        targetFile: "src/db/project-repo.ts",
+        importStatement: "import repo",
+        edgeType: "imports",
+      },
+    ],
   );
 
   assert.deepEqual(response.nodes, [
@@ -41,15 +48,26 @@ test("buildFileGraphResponse groups units by file and preserves edge types", () 
 
 test("buildDirectoryGraphResponse deduplicates directory edges and drops self loops", () => {
   const response = buildDirectoryGraphResponse(
+    [unit("api", "src/api/server.ts"), unit("routes", "src/api/routes.ts"), unit("repo", "src/db/project-repo.ts")],
     [
-      unit("api", "src/api/server.ts"),
-      unit("routes", "src/api/routes.ts"),
-      unit("repo", "src/db/project-repo.ts"),
-    ],
-    [
-      { sourceFile: "src/api/server.ts", targetFile: "src/db/project-repo.ts", importStatement: "import repo", edgeType: "imports" },
-      { sourceFile: "src/api/routes.ts", targetFile: "src/db/project-repo.ts", importStatement: "import repo", edgeType: "imports" },
-      { sourceFile: "src/api/server.ts", targetFile: "src/api/routes.ts", importStatement: "import routes", edgeType: "imports" },
+      {
+        sourceFile: "src/api/server.ts",
+        targetFile: "src/db/project-repo.ts",
+        importStatement: "import repo",
+        edgeType: "imports",
+      },
+      {
+        sourceFile: "src/api/routes.ts",
+        targetFile: "src/db/project-repo.ts",
+        importStatement: "import repo",
+        edgeType: "imports",
+      },
+      {
+        sourceFile: "src/api/server.ts",
+        targetFile: "src/api/routes.ts",
+        importStatement: "import routes",
+        edgeType: "imports",
+      },
     ],
   );
 

@@ -21,10 +21,7 @@ test("parseTypeScript creates a module unit for schema-only files", async () => 
 
 test("parsePython creates a module unit for constant-only files", async () => {
   const units = await parsePython(
-    [
-      "from pydantic import BaseModel",
-      "LLAMA_SERVER_URL = 'http://localhost:8080'",
-    ].join("\n"),
+    ["from pydantic import BaseModel", "LLAMA_SERVER_URL = 'http://localhost:8080'"].join("\n"),
     "src/llama/schema.py",
   );
 
@@ -40,8 +37,14 @@ test("parsers are safe to use concurrently across languages", async () => {
       parsePython("def run():\n    return client.open()", `src/client_${i}.py`),
     ]);
 
-    assert.equal(tsUnits.some((unit) => unit.name === "connect"), true);
-    assert.equal(pyUnits.some((unit) => unit.name === "run"), true);
+    assert.equal(
+      tsUnits.some((unit) => unit.name === "connect"),
+      true,
+    );
+    assert.equal(
+      pyUnits.some((unit) => unit.name === "run"),
+      true,
+    );
   }
 });
 

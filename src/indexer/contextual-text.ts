@@ -35,7 +35,9 @@ export function buildContextualHeader(unit: CodeUnit, unitsByFile?: Map<string, 
     unit.calledFunctions.length > 0 ? `Calls: ${unit.calledFunctions.slice(0, 16).join(", ")}` : "",
     siblings.length > 0 ? `Sibling symbols: ${siblings.join(", ")}` : "",
     unit.isVendored ? "Source class: vendored dependency" : "Source class: project source",
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildContextualEmbeddingTexts(units: CodeUnit[]): string[] {
@@ -46,12 +48,16 @@ export function buildContextualEmbeddingTexts(units: CodeUnit[]): string[] {
     unitsByFile.set(unit.filePath, list);
   }
 
-  return units.map((unit) => [
-    buildContextualHeader(unit, unitsByFile),
-    unit.docstring ? `Docstring:\n${unit.docstring}` : "",
-    "Code:",
-    unit.code,
-  ].filter(Boolean).join("\n\n"));
+  return units.map((unit) =>
+    [
+      buildContextualHeader(unit, unitsByFile),
+      unit.docstring ? `Docstring:\n${unit.docstring}` : "",
+      "Code:",
+      unit.code,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  );
 }
 
 export function enrichUnitsForKeywordIndex(units: CodeUnit[]): Array<CodeUnit & { contextualText: string }> {

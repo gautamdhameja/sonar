@@ -11,20 +11,22 @@ function titleFromMarkdown(source: string, filePath: string): string {
 export function parseMarkdown(source: string, filePath: string): CodeUnit[] {
   if (source.trim().length === 0) return [];
 
-  return [{
-    id: uuidv4(),
-    filePath,
-    language: "markdown",
-    kind: "module",
-    name: titleFromMarkdown(source, filePath),
-    code: source,
-    startLine: 1,
-    endLine: source.split("\n").length,
-    parentName: null,
-    imports: [],
-    docstring: null,
-    exportedNames: [],
-    calledFunctions: [],
-    isVendored: false,
-  }];
+  return [
+    {
+      id: uuidv4(),
+      filePath,
+      language: "markdown",
+      kind: "module",
+      name: titleFromMarkdown(source, filePath),
+      code: source,
+      startLine: 1,
+      endLine: source.split("\n").length,
+      parentName: null,
+      imports: [],
+      docstring: null,
+      exportedNames: [],
+      calledFunctions: [],
+      isVendored: false,
+    },
+  ];
 }

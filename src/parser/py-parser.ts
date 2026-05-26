@@ -71,11 +71,12 @@ function lineCount(node: TSNode): number {
 }
 
 function hasModuleContent(rootNode: TSNode): boolean {
-  return rootNode.children.some((child) =>
-    child.isNamed &&
-    child.type !== "import_statement" &&
-    child.type !== "import_from_statement" &&
-    child.type !== "comment"
+  return rootNode.children.some(
+    (child) =>
+      child.isNamed &&
+      child.type !== "import_statement" &&
+      child.type !== "import_from_statement" &&
+      child.type !== "comment",
   );
 }
 
@@ -88,12 +89,7 @@ export async function parsePython(source: string, filePath: string): Promise<Cod
   const imports = collectImports(rootNode);
   const units: CodeUnit[] = [];
 
-  function makeUnit(
-    node: TSNode,
-    kind: CodeUnitKind,
-    name: string,
-    parentName: string | null,
-  ): CodeUnit {
+  function makeUnit(node: TSNode, kind: CodeUnitKind, name: string, parentName: string | null): CodeUnit {
     return {
       id: uuidv4(),
       filePath,

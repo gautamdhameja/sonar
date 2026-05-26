@@ -245,6 +245,16 @@ Run the fast local checks:
 npm run check
 ```
 
+Formatting and linting:
+
+```bash
+npm run format
+npm run format:check
+npm run lint
+```
+
+`npm run format` applies Biome formatting to TypeScript, React, CSS, JSON, and HTML files, then runs Rustfmt on the Tauri shell. `npm run lint` runs Biome linting and Rust Clippy.
+
 Desktop checks:
 
 ```bash

@@ -7,7 +7,8 @@ interface DirectorySummary {
   summary: string;
 }
 
-const DIR_SYSTEM = "Summarize what this code module does in 1-2 sentences. Base your answer only on the function/class names and documentation provided. Do not speculate beyond what is given.";
+const DIR_SYSTEM =
+  "Summarize what this code module does in 1-2 sentences. Base your answer only on the function/class names and documentation provided. Do not speculate beyond what is given.";
 
 const OVERVIEW_SYSTEM = [
   "You are writing a technical overview of a software project for an engineer who has never seen the code.",
@@ -45,7 +46,9 @@ export async function generateCodebaseSummary(structure: CodebaseStructure): Pro
       dir.sampleDocstrings.length > 0 ? `Docs: ${dir.sampleDocstrings.join(" | ")}` : "",
       `Imported by: ${dir.importedBy.join(", ") || "(nothing)"}`,
       `Imports from: ${dir.importsFrom.join(", ") || "(nothing)"}`,
-    ].filter(Boolean).join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const summary = await generateResponse(DIR_SYSTEM, userPrompt);
     dirSummaries.push({ path: dir.path, summary });
@@ -55,13 +58,9 @@ export async function generateCodebaseSummary(structure: CodebaseStructure): Pro
   // If too many directories, batch them into a condensed form
   logger.info("Generating overall codebase summary...");
 
-  const dirLines = dirSummaries
-    .map((ds) => `- ${ds.path}: ${ds.summary}`)
-    .join("\n");
+  const dirLines = dirSummaries.map((ds) => `- ${ds.path}: ${ds.summary}`).join("\n");
 
-  const depLines = structure.dependencyGraph
-    .map((e) => `${e.from} → ${e.to}`)
-    .join(", ");
+  const depLines = structure.dependencyGraph.map((e) => `${e.from} → ${e.to}`).join(", ");
 
   // Keep the overall prompt compact to fit 8K context
   const overallUser = [
@@ -77,13 +76,9 @@ export async function generateCodebaseSummary(structure: CodebaseStructure): Pro
   const overallSummary = await generateResponse(OVERVIEW_SYSTEM, overallUser);
 
   // Step 3: Build formatted output
-  const dirDetails = dirSummaries
-    .map((ds) => `### ${ds.path}\n${ds.summary}`)
-    .join("\n\n");
+  const dirDetails = dirSummaries.map((ds) => `### ${ds.path}\n${ds.summary}`).join("\n\n");
 
-  const depMap = structure.dependencyGraph
-    .map((e) => `- ${e.from} depends on ${e.to}`)
-    .join("\n");
+  const depMap = structure.dependencyGraph.map((e) => `- ${e.from} depends on ${e.to}`).join("\n");
 
   const result = [
     `# Codebase Overview: ${structure.projectName}`,

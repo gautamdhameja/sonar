@@ -23,10 +23,7 @@ function unit(id: string, code: string): CodeUnit {
 }
 
 test("trimToTokenBudget truncates oversized units and preserves order", () => {
-  const result = trimToTokenBudget([
-    unit("large", "x".repeat(1200)),
-    unit("small", "return true;"),
-  ], 100);
+  const result = trimToTokenBudget([unit("large", "x".repeat(1200)), unit("small", "return true;")], 100);
 
   assert.equal(result.length, 2);
   assert.equal(result[0].id, "large");
@@ -35,19 +32,23 @@ test("trimToTokenBudget truncates oversized units and preserves order", () => {
 });
 
 test("trimToTokenBudget drops later units when the budget is full", () => {
-  const result = trimToTokenBudget([
-    unit("first", "x".repeat(90)),
-    unit("second", "x".repeat(90)),
-    unit("third", "x".repeat(90)),
-  ], 40);
+  const result = trimToTokenBudget(
+    [unit("first", "x".repeat(90)), unit("second", "x".repeat(90)), unit("third", "x".repeat(90))],
+    40,
+  );
 
-  assert.deepEqual(result.map((item) => item.id), ["first"]);
+  assert.deepEqual(
+    result.map((item) => item.id),
+    ["first"],
+  );
 });
 
 test("truncateLargeUnits updates endLine to the visible snippet range", () => {
-  const result = truncateLargeUnits([
-    unit("large", Array.from({ length: 50 }, (_, index) => `line${index}`).join("\n")),
-  ], 10, 0.5);
+  const result = truncateLargeUnits(
+    [unit("large", Array.from({ length: 50 }, (_, index) => `line${index}`).join("\n"))],
+    10,
+    0.5,
+  );
 
   assert.equal(result[0].startLine, 1);
   assert.ok(result[0].endLine < 50);

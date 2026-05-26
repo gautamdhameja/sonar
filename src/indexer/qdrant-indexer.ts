@@ -6,11 +6,7 @@ function baseUrl(): string {
   return `http://${CONFIG.qdrant.host}:${CONFIG.qdrant.port}`;
 }
 
-async function qdrantFetch<T>(
-  path: string,
-  init?: RequestInit,
-  allowNotFound = false,
-): Promise<T> {
+async function qdrantFetch<T>(path: string, init?: RequestInit, allowNotFound = false): Promise<T> {
   const response = await fetch(`${baseUrl()}${path}`, {
     ...init,
     headers: {
@@ -77,11 +73,7 @@ export async function indexToQdrant(
   logger.info(`Indexed ${units.length} embeddings to Qdrant`);
 }
 
-export async function searchQdrant(
-  queryEmbedding: number[],
-  topK: number,
-  projectId: string,
-): Promise<ScoredResult[]> {
+export async function searchQdrant(queryEmbedding: number[], topK: number, projectId: string): Promise<ScoredResult[]> {
   const response = await qdrantFetch<{
     result: Array<{ score: number; payload?: Record<string, unknown> }>;
   }>(`/collections/${getCollectionName(projectId)}/points/search`, {

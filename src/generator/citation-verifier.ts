@@ -14,11 +14,12 @@ function splitClaims(answer: string): string[] {
     .split(/\n+/)
     .flatMap((line) => line.split(/(?<=[.!?])\s+/))
     .map((line) => line.replace(/^[-*]\s+/, "").trim())
-    .filter((line) =>
-      line.length > 40 &&
-      !/^#{1,6}\s/.test(line) &&
-      !/^\|/.test(line) &&
-      !/^(purpose|main components|how work moves|questions|what this means)\b/i.test(line)
+    .filter(
+      (line) =>
+        line.length > 40 &&
+        !/^#{1,6}\s/.test(line) &&
+        !/^\|/.test(line) &&
+        !/^(purpose|main components|how work moves|questions|what this means)\b/i.test(line),
     );
 }
 
@@ -31,7 +32,10 @@ function parseCitation(value: string): { filePath: string; startLine?: number; e
   if (!match) return null;
   const startLine = match[2] ? Number.parseInt(match[2], 10) : undefined;
   const endLine = match[3] ? Number.parseInt(match[3], 10) : startLine;
-  if ((startLine !== undefined && !Number.isFinite(startLine)) || (endLine !== undefined && !Number.isFinite(endLine))) {
+  if (
+    (startLine !== undefined && !Number.isFinite(startLine)) ||
+    (endLine !== undefined && !Number.isFinite(endLine))
+  ) {
     return null;
   }
   return {
@@ -42,7 +46,9 @@ function parseCitation(value: string): { filePath: string; startLine?: number; e
 }
 
 export function verifyCitations(answer: string, contextUnits: CodeUnit[]): CitationVerification {
-  const citations = [...new Set(Array.from(answer.matchAll(/\[([^\]\n]{2,160})\](?!\()/g), (match) => match[1].trim()))];
+  const citations = [
+    ...new Set(Array.from(answer.matchAll(/\[([^\]\n]{2,160})\](?!\()/g), (match) => match[1].trim())),
+  ];
   const sourceKeys = new Set<string>();
   const basenameCounts = new Map<string, number>();
 

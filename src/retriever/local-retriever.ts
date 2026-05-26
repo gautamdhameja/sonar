@@ -24,7 +24,9 @@ function searchableText(unit: CodeUnit): string {
     unit.exportedNames.join("\n"),
     unit.calledFunctions.join("\n"),
     unit.code,
-  ].join("\n").toLowerCase();
+  ]
+    .join("\n")
+    .toLowerCase();
 }
 
 function rawSearchableText(unit: CodeUnit): string {
@@ -45,7 +47,8 @@ export function localExactSearch(query: string, store: CodeUnitStore, topK = 10)
   const paths = extractPaths(query).map(normalize);
   const normalizedQuery = normalize(query);
 
-  const scored = store.getAllUnits()
+  const scored = store
+    .getAllUnits()
     .map((unit) => {
       const name = normalize(unit.name);
       const filePath = normalize(unit.filePath);
@@ -96,7 +99,8 @@ export function localGrepSearch(query: string, store: CodeUnitStore, topK = 20):
     return [];
   }
 
-  const scored = store.getAllUnits()
+  const scored = store
+    .getAllUnits()
     .map((unit) => {
       const rawText = rawSearchableText(unit);
       const lowerText = rawText.toLowerCase();
@@ -166,7 +170,8 @@ export function localLexicalSearch(query: string, store: CodeUnitStore, topK = 1
     return [];
   }
 
-  const scored = store.getAllUnits()
+  const scored = store
+    .getAllUnits()
     .map((unit) => {
       const text = searchableText(unit);
       const filePath = normalize(unit.filePath);
@@ -216,7 +221,8 @@ export function localLexicalSearch(query: string, store: CodeUnitStore, topK = 1
 
 export function localOnboardingSearch(query: string, store: CodeUnitStore, topK = 12): RetrievedUnit[] {
   const normalized = normalize(query);
-  const scored = store.getAllUnits()
+  const scored = store
+    .getAllUnits()
     .map((unit) => {
       const filePath = normalize(unit.filePath);
       const name = normalize(unit.name);
@@ -228,7 +234,11 @@ export function localOnboardingSearch(query: string, store: CodeUnitStore, topK 
       if (/src\/framework\/pipeline\/(runner|defaultcomponents)\.(ts|tsx|js|jsx|py)$/.test(filePath)) score += 22;
       if (/src\/daily\/pipeline\.(ts|tsx|js|jsx|py)$/.test(filePath)) score += 20;
       if (/src\/(config|db|llama|agent|tools)\//.test(filePath)) score += 8;
-      if (/\b(purpose|overview|architecture|workflow|onboarding|customer|business|risk)\b/.test(`${filePath} ${name} ${code}`)) {
+      if (
+        /\b(purpose|overview|architecture|workflow|onboarding|customer|business|risk)\b/.test(
+          `${filePath} ${name} ${code}`,
+        )
+      ) {
         score += 6;
       }
       if (normalized.includes("sales") && /\b(customer|value|use case|digest|enterprise)\b/.test(code)) score += 8;

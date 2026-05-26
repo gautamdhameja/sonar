@@ -21,9 +21,7 @@ export function expandContext(retrievedIds: string[], store: CodeUnitStore): Cod
     if (unit.kind === "method" && unit.parentName) {
       // Find parent class in same file
       const candidates = store.getUnitsByFile(unit.filePath);
-      const parentClass = candidates.find(
-        (u) => u.kind === "class" && u.name === unit.parentName,
-      );
+      const parentClass = candidates.find((u) => u.kind === "class" && u.name === unit.parentName);
       if (parentClass && !included.has(parentClass.id)) {
         expanded.push(parentClass);
         included.add(parentClass.id);

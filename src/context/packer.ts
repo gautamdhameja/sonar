@@ -44,16 +44,16 @@ function queryPlanBonus(unit: CodeUnit, plan?: QueryPlan): number {
 
   if (plan.requiredEvidence.includes("entry_points") && /src\/(main|runpipeline)\./.test(filePath)) bonus += 12;
   if (plan.requiredEvidence.includes("central_modules") && /src\/framework\/pipeline\//.test(filePath)) bonus += 8;
-  if (plan.requiredEvidence.includes("persistence_or_output") && /src\/(db|daily\/digest|pipelines\/.*renderer)/.test(filePath)) bonus += 8;
+  if (
+    plan.requiredEvidence.includes("persistence_or_output") &&
+    /src\/(db|daily\/digest|pipelines\/.*renderer)/.test(filePath)
+  )
+    bonus += 8;
 
   return bonus;
 }
 
-export function packContext(
-  units: CodeUnit[],
-  retrieved: RetrievedUnit[],
-  options: PackedContextOptions,
-): CodeUnit[] {
+export function packContext(units: CodeUnit[], retrieved: RetrievedUnit[], options: PackedContextOptions): CodeUnit[] {
   const retrievedScores = new Map(retrieved.map((result) => [result.unitId, result.rrfScore]));
   const maxRetrievedScore = Math.max(0, ...retrieved.map((result) => result.rrfScore));
   const terms = queryTerms(options.query);
@@ -90,7 +90,10 @@ export function packContext(
     })
     .sort((a, b) => b.score - a.score);
 
-  const bounded = truncateLargeUnits(scored.map((entry) => entry.unit), options.maxTokens);
+  const bounded = truncateLargeUnits(
+    scored.map((entry) => entry.unit),
+    options.maxTokens,
+  );
   const byId = new Map(bounded.map((unit) => [unit.id, unit]));
   const scoreById = new Map(scored.map((entry) => [entry.unit.id, entry.score]));
   const fileCounts = new Map<string, number>();
@@ -121,8 +124,7 @@ export function packContext(
     const aRank = retrieved.findIndex((result) => result.unitId === a.id);
     const bRank = retrieved.findIndex((result) => result.unitId === b.id);
     if (aRank !== -1 || bRank !== -1) {
-      return (aRank === -1 ? Number.MAX_SAFE_INTEGER : aRank) -
-        (bRank === -1 ? Number.MAX_SAFE_INTEGER : bRank);
+      return (aRank === -1 ? Number.MAX_SAFE_INTEGER : aRank) - (bRank === -1 ? Number.MAX_SAFE_INTEGER : bRank);
     }
     return a.filePath.localeCompare(b.filePath) || a.startLine - b.startLine;
   });

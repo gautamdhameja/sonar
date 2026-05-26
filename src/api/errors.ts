@@ -18,6 +18,6 @@ export function toErrorResponse(err: unknown): { status: number; message: string
   if (err instanceof PersonaValidationError) {
     return { status: 400, message: err.message };
   }
-  logger.error(err instanceof Error ? err.stack ?? err.message : String(err));
+  logger.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
   return { status: 500, message: "Internal server error" };
 }

@@ -33,7 +33,9 @@ test("classifyQueryIntent routes dependency and risk questions", () => {
 
 test("classifyQueryIntent keeps onboarding overviews in overview mode", () => {
   assert.equal(
-    classifyQueryIntent("Create a role-aware onboarding overview of this codebase. Focus areas: purpose, workflows, risks."),
+    classifyQueryIntent(
+      "Create a role-aware onboarding overview of this codebase. Focus areas: purpose, workflows, risks.",
+    ),
     "architecture_overview",
   );
   assert.equal(

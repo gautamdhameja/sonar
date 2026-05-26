@@ -3,14 +3,8 @@ import assert from "node:assert/strict";
 import { graphRetrievalDiagnostics, selectGraphTraversalMode } from "../src/retriever/graph-retriever";
 
 test("selectGraphTraversalMode follows dependency question direction", () => {
-  assert.equal(
-    selectGraphTraversalMode("What depends on parser?", "dependency_explanation"),
-    "downstream",
-  );
-  assert.equal(
-    selectGraphTraversalMode("What does parser depend on?", "dependency_explanation"),
-    "upstream",
-  );
+  assert.equal(selectGraphTraversalMode("What depends on parser?", "dependency_explanation"), "downstream");
+  assert.equal(selectGraphTraversalMode("What does parser depend on?", "dependency_explanation"), "upstream");
 });
 
 test("selectGraphTraversalMode keeps workflows broad", () => {

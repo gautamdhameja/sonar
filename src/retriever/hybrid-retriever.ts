@@ -25,10 +25,14 @@ export async function hybridSearch(query: string, projectId: string): Promise<Re
 
   // Build maps of unitId -> 1-based rank for each result set
   const keywordRanks = new Map<string, number>();
-  keywordResults.forEach((r, i) => keywordRanks.set(r.unitId, i + 1));
+  for (const [index, result] of keywordResults.entries()) {
+    keywordRanks.set(result.unitId, index + 1);
+  }
 
   const semanticRanks = new Map<string, number>();
-  semanticResults.forEach((r, i) => semanticRanks.set(r.unitId, i + 1));
+  for (const [index, result] of semanticResults.entries()) {
+    semanticRanks.set(result.unitId, index + 1);
+  }
 
   // Track vendored status from either result set
   const vendoredMap = new Map<string, boolean>();
@@ -87,7 +91,9 @@ export async function safeHybridSearch(query: string, projectId: string): Promis
   try {
     return await hybridSearch(query, projectId);
   } catch (err) {
-    logger.warn(`Hybrid search unavailable; continuing with local retrieval: ${err instanceof Error ? err.message : String(err)}`);
+    logger.warn(
+      `Hybrid search unavailable; continuing with local retrieval: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return [];
   }
 }

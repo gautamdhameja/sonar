@@ -118,7 +118,7 @@ export async function startServer(port: number): Promise<RunningServer> {
     focus?: string[];
     error?: string;
   } {
-    const requestBody = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
+    const requestBody = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
     const audience = optionalTrimmedString(requestBody.audience, 1000);
     const focus = optionalStringList(requestBody.focus, "focus", 10);
     if (focus.error) return { error: focus.error };
@@ -276,7 +276,15 @@ export async function startServer(port: number): Promise<RunningServer> {
         codebaseSummary = project.summary;
       }
 
-      const result = await answerQuery(parsedQuery.value, store, project.name, project.id, codebaseSummary, repo, persona);
+      const result = await answerQuery(
+        parsedQuery.value,
+        store,
+        project.name,
+        project.id,
+        codebaseSummary,
+        repo,
+        persona,
+      );
       res.json(result);
     } catch (err) {
       const { status, message } = toErrorResponse(err);
@@ -537,9 +545,7 @@ export async function startServer(port: number): Promise<RunningServer> {
       indexed: currentProjectId !== null,
       currentProjectId: currentProjectId,
       projectName: project?.name ?? null,
-      unitCount: currentProjectId && stores.has(currentProjectId)
-        ? stores.get(currentProjectId)!.size
-        : 0,
+      unitCount: currentProjectId && stores.has(currentProjectId) ? stores.get(currentProjectId)!.size : 0,
     });
   });
 
@@ -569,12 +575,13 @@ export async function startServer(port: number): Promise<RunningServer> {
     app,
     server,
     repo,
-    close: () => new Promise((resolve, reject) => {
-      server.close((err) => {
-        repo.close();
-        if (err) reject(err);
-        else resolve();
-      });
-    }),
+    close: () =>
+      new Promise((resolve, reject) => {
+        server.close((err) => {
+          repo.close();
+          if (err) reject(err);
+          else resolve();
+        });
+      }),
   };
 }

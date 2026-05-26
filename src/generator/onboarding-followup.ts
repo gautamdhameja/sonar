@@ -72,7 +72,7 @@ function buildFollowupPrompt(input: {
     "3. Every concrete product, workflow, file, component, data, privacy, or operational claim must include a citation in [file:start-end] form.",
     "4. If the provided context does not answer the question, say what is missing and suggest the source or team to ask.",
     "5. Keep the default depth suitable for a product manager unless the user asks for implementation detail.",
-    "6. Separate observed facts from inferences. Mark inferences with \"(inferred)\".",
+    '6. Separate observed facts from inferences. Mark inferences with "(inferred)".',
   ].join("\n");
 
   const user = [
@@ -83,7 +83,9 @@ function buildFollowupPrompt(input: {
     input.intent,
     "",
     "## Session Focus",
-    input.session.focus.length > 0 ? input.session.focus.map((item) => `- ${item}`).join("\n") : "No explicit focus areas.",
+    input.session.focus.length > 0
+      ? input.session.focus.map((item) => `- ${item}`).join("\n")
+      : "No explicit focus areas.",
     "",
     "## Onboarding Brief (Orientation Only)",
     trimText(input.session.brief, 4500),
@@ -113,9 +115,7 @@ function buildFollowupPrompt(input: {
 }
 
 function buildFollowupCitationRepairPrompt(answer: string, contextUnits: CodeUnit[]): { system: string; user: string } {
-  const validSources = contextUnits
-    .map((unit) => `- ${unit.filePath}:${unit.startLine}-${unit.endLine}`)
-    .join("\n");
+  const validSources = contextUnits.map((unit) => `- ${unit.filePath}:${unit.startLine}-${unit.endLine}`).join("\n");
 
   return {
     system: [
@@ -209,7 +209,10 @@ export async function answerOnboardingFollowup(input: {
     sources,
     citationVerification,
   });
-  input.repo.updateOnboardingSessionSummary(input.session.id, updateRollingSummary(input.session.rollingSummary, input.question, answer));
+  input.repo.updateOnboardingSessionSummary(
+    input.session.id,
+    updateRollingSummary(input.session.rollingSummary, input.question, answer),
+  );
 
   return {
     sessionId: input.session.id,

@@ -12,12 +12,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   const text = await response.text();
-  const body = text ? JSON.parse(text) as unknown : {};
+  const body = text ? (JSON.parse(text) as unknown) : {};
 
   if (!response.ok) {
-    const message = body && typeof body === "object" && "error" in body
-      ? String((body as { error: unknown }).error)
-      : `Request failed with ${response.status}`;
+    const message =
+      body && typeof body === "object" && "error" in body
+        ? String((body as { error: unknown }).error)
+        : `Request failed with ${response.status}`;
     throw new Error(message);
   }
 
@@ -28,7 +29,10 @@ export async function listProjects(): Promise<Project[]> {
   return request<Project[]>("/projects");
 }
 
-export async function indexProject(repoRoot: string, name: string): Promise<{ projectId: string; unitCount: number; timeSeconds: number }> {
+export async function indexProject(
+  repoRoot: string,
+  name: string,
+): Promise<{ projectId: string; unitCount: number; timeSeconds: number }> {
   return request("/projects/index", {
     method: "POST",
     body: JSON.stringify({ repoRoot, name, summarize: true }),

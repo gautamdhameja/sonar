@@ -24,7 +24,7 @@ async function main() {
       await running.close();
       logger.info("Sonar API server stopped");
     } catch (err) {
-      logger.error(err instanceof Error ? err.stack ?? err.message : String(err));
+      logger.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
     }
   };
 
@@ -57,4 +57,4 @@ async function main() {
   }
 }
 
-main().catch((err) => logger.error(err instanceof Error ? err.stack ?? err.message : String(err)));
+main().catch((err) => logger.error(err instanceof Error ? (err.stack ?? err.message) : String(err)));

@@ -22,13 +22,7 @@ import {
   SlidersHorizontal,
   Sparkles,
 } from "lucide-react";
-import {
-  askFollowup,
-  apiBaseUrl,
-  createOnboardingSession,
-  indexProject,
-  listProjects,
-} from "./api";
+import { askFollowup, apiBaseUrl, createOnboardingSession, indexProject, listProjects } from "./api";
 import type {
   ClonedRepository,
   DesktopModelConfig,
@@ -41,7 +35,8 @@ import type {
 } from "./types";
 import "./styles.css";
 
-const defaultQuestion = "How does the main product workflow work at a product level, and what should I ask engineering about it?";
+const defaultQuestion =
+  "How does the main product workflow work at a product level, and what should I ask engineering about it?";
 type RepositorySource = "github" | "local";
 
 declare global {
@@ -160,11 +155,13 @@ function SourceList({ sources }: { sources: SourceRef[] }) {
   return (
     <div className="source-list">
       {sources.slice(0, 12).map((source, index) => (
-        <div className="source-row" key={`${source.filePath}-${source.lines}-${index}`}>
+        <div className="source-row" key={`${source.filePath}-${source.kind}-${source.name}-${source.lines}`}>
           <span className="source-index">{index + 1}</span>
           <div>
             <strong>{source.filePath}</strong>
-            <span>{source.kind} · {source.name} · lines {source.lines}</span>
+            <span>
+              {source.kind} · {source.name} · lines {source.lines}
+            </span>
           </div>
         </div>
       ))}
@@ -233,6 +230,7 @@ function App() {
     }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: startup bootstrap should run once on mount.
   useEffect(() => {
     void bootstrap();
   }, []);
@@ -323,7 +321,9 @@ function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand-block">
-          <div className="brand-mark"><CircleDot size={18} /></div>
+          <div className="brand-mark">
+            <CircleDot size={18} />
+          </div>
           <div>
             <h1>Sonar</h1>
             <p>Local codebase onboarding</p>
@@ -333,7 +333,12 @@ function App() {
         <section className="panel">
           <div className="panel-title">
             <span>Runtime</span>
-            <button className="icon-button" onClick={() => void bootstrap()} title="Restart service check">
+            <button
+              className="icon-button"
+              onClick={() => void bootstrap()}
+              title="Restart service check"
+              type="button"
+            >
               <RefreshCw size={16} />
             </button>
           </div>
@@ -343,7 +348,9 @@ function App() {
                 <span className="service-dot" />
                 <div>
                   <strong>{service.label}</strong>
-                  <small>{stateLabel(service.state)} · {service.detail}</small>
+                  <small>
+                    {stateLabel(service.state)} · {service.detail}
+                  </small>
                 </div>
               </div>
             ))}
@@ -354,7 +361,12 @@ function App() {
         <section className="panel">
           <div className="panel-title">
             <span>Projects</span>
-            <button className="icon-button" onClick={() => void refreshProjects()} title="Refresh projects">
+            <button
+              className="icon-button"
+              onClick={() => void refreshProjects()}
+              title="Refresh projects"
+              type="button"
+            >
               <RefreshCw size={16} />
             </button>
           </div>
@@ -363,6 +375,7 @@ function App() {
               <button
                 className={project.id === selectedProjectId ? "project active" : "project"}
                 key={project.id}
+                type="button"
                 onClick={() => {
                   setSelectedProjectId(project.id);
                   setSession(null);
@@ -370,7 +383,9 @@ function App() {
                 }}
               >
                 <span>{project.name}</span>
-                <small>{project.fileCount} files · {project.unitCount} units</small>
+                <small>
+                  {project.fileCount} files · {project.unitCount} units
+                </small>
               </button>
             ))}
             {projects.length === 0 && <p className="muted">No indexed projects yet.</p>}
@@ -385,11 +400,16 @@ function App() {
             <h2>Onboard to a codebase without opening the terminal.</h2>
           </div>
           <div className="topbar-actions">
-            <button className="secondary" onClick={() => void refreshServices()}>
+            <button className="secondary" onClick={() => void refreshServices()} type="button">
               <ShieldCheck size={16} />
               Check services
             </button>
-            <button className="primary" onClick={() => void handleCreateOnboarding()} disabled={!selectedProjectId || busy !== null}>
+            <button
+              className="primary"
+              onClick={() => void handleCreateOnboarding()}
+              disabled={!selectedProjectId || busy !== null}
+              type="button"
+            >
               <Sparkles size={16} />
               Generate brief
             </button>
@@ -445,7 +465,10 @@ function App() {
                 onChange={(event) => {
                   setGithubRepository(event.target.value);
                   if (!projectName.trim()) {
-                    const parts = event.target.value.replace(/\.git$/, "").split("/").filter(Boolean);
+                    const parts = event.target.value
+                      .replace(/\.git$/, "")
+                      .split("/")
+                      .filter(Boolean);
                     const repo = parts.at(-1);
                     const owner = parts.at(-2);
                     if (owner && repo) setProjectName(`${owner}/${repo}`);
@@ -455,16 +478,29 @@ function App() {
               />
             ) : (
               <div className="repo-picker">
-                <input value={repoPath} onChange={(event) => setRepoPath(event.target.value)} placeholder="/Users/you/code/product" />
-                <button className="secondary" onClick={() => void chooseDirectory()}>
+                <input
+                  value={repoPath}
+                  onChange={(event) => setRepoPath(event.target.value)}
+                  placeholder="/Users/you/code/product"
+                />
+                <button className="secondary" onClick={() => void chooseDirectory()} type="button">
                   <FolderOpen size={16} />
                   Browse
                 </button>
               </div>
             )}
 
-            <input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Project name" />
-            <button className="primary wide" onClick={() => void handleAnalyze()} disabled={!canAnalyze || busy !== null}>
+            <input
+              value={projectName}
+              onChange={(event) => setProjectName(event.target.value)}
+              placeholder="Project name"
+            />
+            <button
+              className="primary wide"
+              onClick={() => void handleAnalyze()}
+              disabled={!canAnalyze || busy !== null}
+              type="button"
+            >
               <Play size={16} />
               Analyze repository
             </button>
@@ -486,7 +522,12 @@ function App() {
             ) : (
               <p className="muted">Select or index a project first.</p>
             )}
-            <button className="primary wide" onClick={() => void handleCreateOnboarding()} disabled={!selectedProjectId || busy !== null}>
+            <button
+              className="primary wide"
+              onClick={() => void handleCreateOnboarding()}
+              disabled={!selectedProjectId || busy !== null}
+              type="button"
+            >
               <Sparkles size={16} />
               Create first-week brief
             </button>
@@ -539,12 +580,14 @@ function App() {
           <div className="preset-row">
             <button
               className="secondary"
-              onClick={() => setModelConfig((current) => ({
-                ...current,
-                chatBaseUrl: "http://localhost:8080/v1",
-                chatModel: "Qwen/Qwen3.5-9B",
-                chatApiKey: "not-needed",
-              }))}
+              onClick={() =>
+                setModelConfig((current) => ({
+                  ...current,
+                  chatBaseUrl: "http://localhost:8080/v1",
+                  chatModel: "Qwen/Qwen3.5-9B",
+                  chatApiKey: "not-needed",
+                }))
+              }
               type="button"
             >
               <Server size={16} />
@@ -552,18 +595,25 @@ function App() {
             </button>
             <button
               className="secondary"
-              onClick={() => setModelConfig((current) => ({
-                ...current,
-                chatBaseUrl: "https://api.openai.com/v1",
-                chatModel: "gpt-4.1-mini",
-                chatApiKey: "",
-              }))}
+              onClick={() =>
+                setModelConfig((current) => ({
+                  ...current,
+                  chatBaseUrl: "https://api.openai.com/v1",
+                  chatModel: "gpt-4.1-mini",
+                  chatApiKey: "",
+                }))
+              }
               type="button"
             >
               <Server size={16} />
               OpenAI compatible
             </button>
-            <button className="primary" onClick={() => void handleSaveModelConfig()} disabled={busy !== null} type="button">
+            <button
+              className="primary"
+              onClick={() => void handleSaveModelConfig()}
+              disabled={busy !== null}
+              type="button"
+            >
               <Save size={16} />
               Save and restart API
             </button>
@@ -611,17 +661,27 @@ function App() {
           </div>
           <div className="question-row">
             <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
-            <button className="primary" onClick={() => void handleFollowup()} disabled={!session || busy !== null}>
+            <button
+              className="primary"
+              onClick={() => void handleFollowup()}
+              disabled={!session || busy !== null}
+              type="button"
+            >
               Ask
               <ChevronRight size={16} />
             </button>
           </div>
           <div className="answers">
-            {followups.map((item, index) => (
-              <article className="answer" key={`${item.intent}-${index}`}>
+            {followups.map((item) => (
+              <article
+                className="answer"
+                key={`${item.intent}-${item.retrievalTime}-${item.generationTime}-${item.answer.slice(0, 48)}`}
+              >
                 <div className="answer-meta">
                   <span>{item.intent}</span>
-                  <span>{formatMs(item.retrievalTime)} retrieval · {formatMs(item.generationTime)} generation</span>
+                  <span>
+                    {formatMs(item.retrievalTime)} retrieval · {formatMs(item.generationTime)} generation
+                  </span>
                 </div>
                 <div className="markdownish">{item.answer}</div>
               </article>

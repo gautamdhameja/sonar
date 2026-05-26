@@ -26,13 +26,19 @@ async function main(): Promise<void> {
   const results = evaluateRetrievalCases(fixture.cases, store);
   const passed = results.filter((result) => result.passed).length;
 
-  process.stdout.write(JSON.stringify({
-    fixture: fixturePath,
-    repoRoot,
-    passed,
-    total: results.length,
-    results,
-  }, null, 2) + "\n");
+  process.stdout.write(
+    JSON.stringify(
+      {
+        fixture: fixturePath,
+        repoRoot,
+        passed,
+        total: results.length,
+        results,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
 
   if (passed !== results.length) {
     process.exitCode = 1;
@@ -40,6 +46,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  process.stderr.write(`${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
+  process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
   process.exitCode = 1;
 });

@@ -80,10 +80,8 @@ function lineCount(node: TSNode): number {
 }
 
 function hasModuleContent(rootNode: TSNode): boolean {
-  return rootNode.children.some((child) =>
-    child.isNamed &&
-    child.type !== "import_statement" &&
-    child.type !== "comment"
+  return rootNode.children.some(
+    (child) => child.isNamed && child.type !== "import_statement" && child.type !== "comment",
   );
 }
 
@@ -154,10 +152,7 @@ export async function parseTypeScript(source: string, filePath: string): Promise
           }
         }
       }
-    } else if (
-      node.type === "lexical_declaration" ||
-      node.type === "variable_declaration"
-    ) {
+    } else if (node.type === "lexical_declaration" || node.type === "variable_declaration") {
       // Arrow functions assigned to variables
       for (const declarator of node.namedChildren) {
         if (declarator.type === "variable_declarator") {

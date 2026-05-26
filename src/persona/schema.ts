@@ -1,10 +1,4 @@
-import {
-  DEFAULT_PERSONA,
-  ExplanationDepth,
-  Persona,
-  TechnicalBackground,
-  UserRole,
-} from "./types";
+import { DEFAULT_PERSONA, ExplanationDepth, Persona, TechnicalBackground, UserRole } from "./types";
 
 const USER_ROLES: readonly UserRole[] = [
   "product_manager",
@@ -17,12 +11,7 @@ const USER_ROLES: readonly UserRole[] = [
   "other",
 ];
 
-const TECHNICAL_BACKGROUNDS: readonly TechnicalBackground[] = [
-  "none",
-  "basic",
-  "some_coding",
-  "technical",
-];
+const TECHNICAL_BACKGROUNDS: readonly TechnicalBackground[] = ["none", "basic", "some_coding", "technical"];
 
 const EXPLANATION_DEPTHS: readonly ExplanationDepth[] = ["quick", "standard", "deep"];
 
@@ -99,12 +88,7 @@ export function parsePersona(value: unknown): Persona {
       DEFAULT_PERSONA.technicalBackground,
     ),
     avoidJargon: booleanValue(value, "avoidJargon", DEFAULT_PERSONA.avoidJargon),
-    explanationDepth: enumValue(
-      value,
-      "explanationDepth",
-      EXPLANATION_DEPTHS,
-      DEFAULT_PERSONA.explanationDepth,
-    ),
+    explanationDepth: enumValue(value, "explanationDepth", EXPLANATION_DEPTHS, DEFAULT_PERSONA.explanationDepth),
   };
 
   const roleDescription = optionalString(value, "roleDescription");

@@ -21,9 +21,16 @@ export interface CodebaseStructure {
 }
 
 const ENTRY_POINT_NAMES = new Set([
-  "index.ts", "main.ts", "app.ts", "server.ts",
-  "index.js", "main.js", "app.js", "server.js",
-  "main.py", "app.py",
+  "index.ts",
+  "main.ts",
+  "app.ts",
+  "server.ts",
+  "index.js",
+  "main.js",
+  "app.js",
+  "server.js",
+  "main.py",
+  "app.py",
 ]);
 
 export function analyzeCodebaseStructure(

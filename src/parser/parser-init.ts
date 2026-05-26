@@ -21,9 +21,7 @@ export async function createParser(languageName: string): Promise<Parser> {
 
 export async function getLanguage(name: string): Promise<Language> {
   if (!languages[name]) {
-    languages[name] = await Language.load(
-      path.join(GRAMMARS_DIR, `tree-sitter-${name}.wasm`),
-    );
+    languages[name] = await Language.load(path.join(GRAMMARS_DIR, `tree-sitter-${name}.wasm`));
   }
   return languages[name];
 }

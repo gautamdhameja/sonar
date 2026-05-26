@@ -22,11 +22,7 @@ export function selectGraphTraversalMode(query: string, intent: QueryIntent): Gr
     return "upstream";
   }
 
-  if (
-    intent === "architecture_overview" ||
-    intent === "workflow_trace" ||
-    intent === "risk_or_gap_analysis"
-  ) {
+  if (intent === "architecture_overview" || intent === "workflow_trace" || intent === "risk_or_gap_analysis") {
     return "bidirectional";
   }
 
@@ -62,11 +58,12 @@ export function graphEnhancedRetrieval(
 
   // Step 4: Traverse the graph
   const traversalMode = selectGraphTraversalMode(query, intent);
-  const graphNodes = traversalMode === "upstream"
-    ? traverseUpstream(seedFiles, edges, maxGraphDepth)
-    : traversalMode === "downstream"
-      ? traverseDownstream(seedFiles, edges, maxGraphDepth)
-      : traverseBidirectional(seedFiles, edges, maxGraphDepth);
+  const graphNodes =
+    traversalMode === "upstream"
+      ? traverseUpstream(seedFiles, edges, maxGraphDepth)
+      : traversalMode === "downstream"
+        ? traverseDownstream(seedFiles, edges, maxGraphDepth)
+        : traverseBidirectional(seedFiles, edges, maxGraphDepth);
 
   // Step 5 & 6: Collect graph-discovered units with scores
   const graphUnits: Array<{ unit: CodeUnit; bonus: number }> = [];

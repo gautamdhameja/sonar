@@ -32,24 +32,28 @@ test("verifyCitations accepts cited claims with real source citations", () => {
 });
 
 test("verifyCitations rejects citations outside the supplied line range", () => {
-  const result = verifyCitations(
-    "The configuration function validates runtime settings [src/llama/config.ts:4-999].",
-    [unit],
-  );
+  const result = verifyCitations("The configuration function validates runtime settings [src/llama/config.ts:4-999].", [
+    unit,
+  ]);
 
   assert.equal(result.valid, false);
   assert.deepEqual(result.invalidCitations, ["src/llama/config.ts:4-999"]);
 });
 
 test("verifyCitations rejects broad summary labels", () => {
-  const result = verifyCitations("The workflow validates local model configuration before execution [Data Flow].", [unit]);
+  const result = verifyCitations("The workflow validates local model configuration before execution [Data Flow].", [
+    unit,
+  ]);
 
   assert.equal(result.valid, false);
   assert.deepEqual(result.invalidCitations, ["Data Flow"]);
 });
 
 test("verifyCitations flags uncited factual claims", () => {
-  const result = verifyCitations("The configuration function validates the local model URL before returning runtime settings.", [unit]);
+  const result = verifyCitations(
+    "The configuration function validates the local model URL before returning runtime settings.",
+    [unit],
+  );
 
   assert.equal(result.valid, false);
   assert.equal(result.uncitedClaims.length, 1);

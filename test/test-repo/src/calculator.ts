@@ -1,5 +1,3 @@
-import { EventEmitter } from "events";
-
 /** A basic arithmetic calculator. */
 class Calculator {
   private history: number[] = [];

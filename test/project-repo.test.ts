@@ -40,7 +40,7 @@ test("ProjectRepo tolerates corrupt JSON array fields in code units", async () =
 
   const originalWarn = console.warn;
   console.warn = () => undefined;
-  let loaded;
+  let loaded: CodeUnit | undefined;
   try {
     [loaded] = repo.getCodeUnitsByProject(project.id);
   } finally {
@@ -120,9 +120,7 @@ test("ProjectRepo tolerates corrupt onboarding JSON fields", async () => {
   getDatabase()
     .prepare("UPDATE onboarding_sessions SET focus_json = ?, source_files_json = ?, persona_json = ? WHERE id = ?")
     .run("{}", "[1]", "[]", session.id);
-  getDatabase()
-    .prepare("UPDATE onboarding_messages SET sources_json = ? WHERE session_id = ?")
-    .run("[1]", session.id);
+  getDatabase().prepare("UPDATE onboarding_messages SET sources_json = ? WHERE session_id = ?").run("[1]", session.id);
 
   const loaded = repo.getOnboardingSessionForProject(project.id, session.id);
   assert.deepEqual(loaded?.focus, []);
