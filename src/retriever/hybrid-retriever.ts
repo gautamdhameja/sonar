@@ -82,3 +82,12 @@ export async function hybridSearch(query: string, projectId: string): Promise<Re
 
   return results;
 }
+
+export async function safeHybridSearch(query: string, projectId: string): Promise<RetrievedUnit[]> {
+  try {
+    return await hybridSearch(query, projectId);
+  } catch (err) {
+    logger.warn(`Hybrid search unavailable; continuing with local retrieval: ${err instanceof Error ? err.message : String(err)}`);
+    return [];
+  }
+}

@@ -46,6 +46,9 @@ Useful environment variables:
 SONAR_CHAT_BASE_URL=http://localhost:8000/v1
 SONAR_CHAT_MODEL=Qwen/Qwen3.5-9B
 SONAR_CHAT_API_KEY=not-needed
+SONAR_API_HOST=127.0.0.1
+SONAR_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3111
+SONAR_API_TOKEN=
 SONAR_EMBEDDING_PROVIDER=ollama
 SONAR_OLLAMA_BASE_URL=http://localhost:11434
 SONAR_OLLAMA_EMBEDDING_MODEL=nomic-embed-text
@@ -54,14 +57,17 @@ SONAR_MEILI_API_KEY=masterKey
 SONAR_QDRANT_HOST=localhost
 SONAR_QDRANT_PORT=6333
 SONAR_QDRANT_VECTOR_SIZE=768
-SONAR_DATA_DIR=$HOME/.code-explorer
-SONAR_DB_PATH=$HOME/.code-explorer/projects.db
+SONAR_DATA_DIR=$HOME/.sonar
+SONAR_DB_PATH=$HOME/.sonar/projects.db
 SONAR_MAX_CONTEXT_TOKENS=5000
 SONAR_MAX_RESPONSE_TOKENS=2000
 SONAR_ALLOWED_REPO_ROOTS=/Users/you/code,/Users/you/work
+SONAR_ALLOW_ANY_REPO_ROOT=false
 ```
 
-If `SONAR_ALLOWED_REPO_ROOTS` is unset, Sonar keeps the early-development behavior of accepting any local directory path. If it is set, indexing is limited to those real paths.
+By default Sonar binds to `127.0.0.1` and only indexes repositories under the process working directory. Set `SONAR_ALLOWED_REPO_ROOTS` to the explicit local roots you want Sonar to index. `SONAR_ALLOW_ANY_REPO_ROOT=true` restores the early-development behavior of accepting any local directory path and should not be used for a browser-accessible server.
+
+If `SONAR_API_TOKEN` is set, every mutating request (`POST`, `DELETE`, `PUT`, `PATCH`) must include `X-Sonar-Token: <token>`. Browser callers must also use an origin listed in `SONAR_CORS_ALLOWED_ORIGINS`.
 
 Health checks:
 
@@ -88,6 +94,8 @@ curl --json '{
   "summarize": true
 }' http://localhost:3001/projects/index
 ```
+
+If `SONAR_API_TOKEN` is configured, add `-H 'X-Sonar-Token: <token>'` to mutating `curl` requests.
 
 Create an onboarding session:
 

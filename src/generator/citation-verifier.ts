@@ -26,6 +26,21 @@ function normalizeCitation(value: string): string {
   return value.toLowerCase().replace(/\s+/g, "");
 }
 
+function parseCitation(value: string): { filePath: string; startLine?: number; endLine?: number } | null {
+  const match = value.trim().match(/^(.+?)(?::(\d+)(?:-(\d+))?)?$/);
+  if (!match) return null;
+  const startLine = match[2] ? Number.parseInt(match[2], 10) : undefined;
+  const endLine = match[3] ? Number.parseInt(match[3], 10) : startLine;
+  if ((startLine !== undefined && !Number.isFinite(startLine)) || (endLine !== undefined && !Number.isFinite(endLine))) {
+    return null;
+  }
+  return {
+    filePath: normalizeCitation(match[1]),
+    startLine,
+    endLine,
+  };
+}
+
 export function verifyCitations(answer: string, contextUnits: CodeUnit[]): CitationVerification {
   const citations = [...new Set(Array.from(answer.matchAll(/\[([^\]\n]{2,160})\](?!\()/g), (match) => match[1].trim()))];
   const sourceKeys = new Set<string>();
@@ -52,10 +67,23 @@ export function verifyCitations(answer: string, contextUnits: CodeUnit[]): Citat
     }
   }
 
+  const validRanges = contextUnits.flatMap((unit) => {
+    const keys = [normalizeCitation(unit.filePath)];
+    const basename = path.basename(unit.filePath);
+    if (basenameCounts.get(normalizeCitation(basename)) === 1) keys.push(normalizeCitation(basename));
+    return keys.map((key) => ({ filePath: key, startLine: unit.startLine, endLine: unit.endLine }));
+  });
+
   const invalidCitations = citations.filter((citation) => {
-    const normalized = normalizeCitation(citation);
-    if (sourceKeys.has(normalized)) return false;
-    return !Array.from(sourceKeys).some((key) => normalized.startsWith(key) || key.startsWith(normalized));
+    const parsed = parseCitation(citation);
+    if (!parsed) return true;
+
+    return !validRanges.some((range) => {
+      if (parsed.filePath !== range.filePath) return false;
+      if (parsed.startLine === undefined) return true;
+      const citationEnd = parsed.endLine ?? parsed.startLine;
+      return parsed.startLine >= range.startLine && citationEnd <= range.endLine;
+    });
   });
   const uncitedClaims = splitClaims(answer).filter((claim) => !/\[[^\]\n]{2,160}\](?!\()/.test(claim));
 

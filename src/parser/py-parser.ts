@@ -2,7 +2,7 @@ import path from "path";
 import { Node as TSNode } from "web-tree-sitter";
 import { v4 as uuidv4 } from "uuid";
 import { CodeUnit, CodeUnitKind } from "./types";
-import { ensureParserInit, getParser, getLanguage } from "./parser-init";
+import { createParser } from "./parser-init";
 
 function getDocstring(node: TSNode): string | null {
   const body = node.childForFieldName("body");
@@ -30,6 +30,8 @@ function collectCalledFunctions(node: TSNode): string[] {
           calls.add(fn.text);
         } else if (fn.type === "attribute") {
           calls.add(fn.text);
+          const attribute = fn.childForFieldName("attribute");
+          if (attribute) calls.add(attribute.text);
         }
       }
     }
@@ -78,11 +80,7 @@ function hasModuleContent(rootNode: TSNode): boolean {
 }
 
 export async function parsePython(source: string, filePath: string): Promise<CodeUnit[]> {
-  await ensureParserInit();
-
-  const parser = getParser();
-  parser.setLanguage(await getLanguage("python"));
-
+  const parser = await createParser("python");
   const tree = parser.parse(source);
   if (!tree) return [];
 

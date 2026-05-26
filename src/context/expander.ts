@@ -30,7 +30,7 @@ export function expandContext(retrievedIds: string[], store: CodeUnitStore): Cod
       }
     } else if (unit.kind === "class") {
       // Add all methods of this class
-      const methods = store.getMethodsOfClass(unit.name);
+      const methods = store.getMethodsOfClass(unit.name, unit.filePath);
       for (const method of methods) {
         if (!included.has(method.id)) {
           expanded.push(method);

@@ -15,20 +15,24 @@ export function getDatabase(): Database.Database {
 }
 
 function initSchema(db: Database.Database): void {
-  // Migration: add is_vendored column if missing (for existing databases)
-  try {
-    db.exec("ALTER TABLE code_units ADD COLUMN is_vendored INTEGER NOT NULL DEFAULT 0");
-  } catch {
-    // Column already exists or table doesn't exist yet (will be created below)
-  }
+  const addColumnIfMissing = (sql: string): void => {
+    try {
+      db.exec(sql);
+    } catch (err) {
+      const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+      if (message.includes("duplicate column name") || message.includes("no such table")) return;
+      throw err;
+    }
+  };
 
-  try {
-    db.exec("ALTER TABLE dependency_edges ADD COLUMN edge_type TEXT NOT NULL DEFAULT 'imports'");
-  } catch {
-    // Column already exists or table doesn't exist yet (will be created below)
-  }
+  addColumnIfMissing("ALTER TABLE projects ADD COLUMN summary TEXT");
+  addColumnIfMissing("ALTER TABLE projects ADD COLUMN summary_generated_at TEXT");
+  addColumnIfMissing("ALTER TABLE code_units ADD COLUMN is_vendored INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing("ALTER TABLE dependency_edges ADD COLUMN edge_type TEXT NOT NULL DEFAULT 'imports'");
 
   db.exec(`
+    PRAGMA user_version = 1;
+
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,

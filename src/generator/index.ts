@@ -1,4 +1,4 @@
-import { hybridSearch, RetrievedUnit } from "../retriever/hybrid-retriever";
+import { RetrievedUnit, safeHybridSearch } from "../retriever/hybrid-retriever";
 import { CodeUnitStore } from "../retriever/unit-store";
 import { expandContext } from "../context/expander";
 import { graphEnhancedRetrieval } from "../retriever/graph-retriever";
@@ -92,13 +92,13 @@ export async function answerQuery(
   }
 
   if (queryPlan.useVector) {
-    retrievedSets.push(await hybridSearch(query, projectId));
+    retrievedSets.push(await safeHybridSearch(query, projectId));
   }
 
   let retrieved = mergeRetrievedResults(retrievedSets.flat(), CONFIG.retriever.fusedTopK * 2);
 
   if (retrieved.length === 0) {
-    retrieved = await hybridSearch(query, projectId);
+    retrieved = await safeHybridSearch(query, projectId);
   }
 
   const reranked = rerankRetrievedResults(query, queryPlan.intent, retrieved, store, CONFIG.retriever.fusedTopK);

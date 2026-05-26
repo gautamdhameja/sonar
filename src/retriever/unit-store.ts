@@ -61,9 +61,9 @@ export class CodeUnitStore {
     return this.byName.get(name) || [];
   }
 
-  getMethodsOfClass(className: string): CodeUnit[] {
+  getMethodsOfClass(className: string, filePath?: string): CodeUnit[] {
     return Array.from(this.units.values()).filter(
-      (u) => u.kind === "method" && u.parentName === className,
+      (u) => u.kind === "method" && u.parentName === className && (!filePath || u.filePath === filePath),
     );
   }
 

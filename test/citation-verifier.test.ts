@@ -22,13 +22,23 @@ const unit: CodeUnit = {
 
 test("verifyCitations accepts cited claims with real source citations", () => {
   const result = verifyCitations(
-    "The configuration function reads and validates the local model server URL before returning runtime settings [src/llama/config.ts:getLlamaConfig].",
+    "The configuration function reads and validates the local model server URL before returning runtime settings [src/llama/config.ts:4-16].",
     [unit],
   );
 
   assert.equal(result.valid, true);
   assert.deepEqual(result.invalidCitations, []);
   assert.deepEqual(result.uncitedClaims, []);
+});
+
+test("verifyCitations rejects citations outside the supplied line range", () => {
+  const result = verifyCitations(
+    "The configuration function validates runtime settings [src/llama/config.ts:4-999].",
+    [unit],
+  );
+
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.invalidCitations, ["src/llama/config.ts:4-999"]);
 });
 
 test("verifyCitations rejects broad summary labels", () => {

@@ -10,9 +10,12 @@ export function truncateLargeUnits(units: CodeUnit[], maxTokens: number, maxUnit
     if (estimateTokens(unit.code) <= maxSingleUnit) return unit;
 
     const charLimit = maxSingleUnit * 3;
+    const truncatedCode = unit.code.slice(0, charLimit);
+    const visibleLineCount = Math.max(1, truncatedCode.split("\n").length);
     return {
       ...unit,
-      code: unit.code.slice(0, charLimit) + "\n// ... truncated ...",
+      code: truncatedCode + "\n// ... truncated ...",
+      endLine: Math.min(unit.endLine, unit.startLine + visibleLineCount - 1),
     };
   });
 }

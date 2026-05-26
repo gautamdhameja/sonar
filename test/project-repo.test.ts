@@ -95,3 +95,38 @@ test("ProjectRepo persists onboarding sessions and messages", async () => {
   assert.equal(messages[1].citationVerification?.valid, true);
   assert.equal(messages[1].sources[0].filePath, "src/share.ts");
 });
+
+test("ProjectRepo tolerates corrupt onboarding JSON fields", async () => {
+  const { ProjectRepo } = await import("../src/db/project-repo");
+  const { DEFAULT_PERSONA } = await import("../src/persona/types");
+  const { getDatabase } = await import("../src/db/schema");
+  const repo = new ProjectRepo();
+  const project = repo.createProject("repo with corrupt onboarding", "/tmp/repo-with-corrupt-onboarding");
+  const session = repo.createOnboardingSession({
+    projectId: project.id,
+    repoName: project.name,
+    focus: ["sharing"],
+    persona: DEFAULT_PERSONA,
+    brief: "Brief",
+    sourceFiles: ["README.md"],
+  });
+  repo.addOnboardingMessage({
+    sessionId: session.id,
+    role: "assistant",
+    content: "Answer",
+    sources: [{ filePath: "README.md", name: "README", kind: "module", lines: "1-2" }],
+  });
+
+  getDatabase()
+    .prepare("UPDATE onboarding_sessions SET focus_json = ?, source_files_json = ?, persona_json = ? WHERE id = ?")
+    .run("{}", "[1]", "[]", session.id);
+  getDatabase()
+    .prepare("UPDATE onboarding_messages SET sources_json = ? WHERE session_id = ?")
+    .run("[1]", session.id);
+
+  const loaded = repo.getOnboardingSessionForProject(project.id, session.id);
+  assert.deepEqual(loaded?.focus, []);
+  assert.deepEqual(loaded?.sourceFiles, []);
+  assert.deepEqual(loaded?.persona, DEFAULT_PERSONA);
+  assert.deepEqual(repo.listOnboardingMessages(session.id)[0].sources, []);
+});

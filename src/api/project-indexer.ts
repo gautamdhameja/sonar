@@ -17,7 +17,7 @@ export interface ProjectIndexContext {
 }
 
 async function assertRepoRootAllowed(repoRoot: string): Promise<void> {
-  if (CONFIG.security.allowedRepoRoots.length === 0) return;
+  if (CONFIG.security.allowAnyRepoRoot) return;
 
   const actualRoot = await fs.promises.realpath(repoRoot);
   const allowedRoots = await Promise.all(

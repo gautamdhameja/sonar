@@ -131,6 +131,41 @@ function parseJsonObjectField<T>(value: string | null, fallback: T, fieldName: s
   }
 }
 
+function parseStringArrayJson(value: string | null, fieldName: string, id: string): string[] {
+  const parsed = parseJsonObjectField<unknown>(value, [], fieldName, id);
+  if (!Array.isArray(parsed)) {
+    logger.warn(`Invalid ${fieldName} JSON for ${id}; using empty array`);
+    return [];
+  }
+  return parsed.filter((item): item is string => typeof item === "string");
+}
+
+function parsePersonaJson(value: string | null, id: string): Persona {
+  const parsed = parseJsonObjectField<unknown>(value, DEFAULT_PERSONA, "persona", id);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    logger.warn(`Invalid persona JSON for ${id}; using default persona`);
+    return DEFAULT_PERSONA;
+  }
+  return { ...DEFAULT_PERSONA, ...parsed } as Persona;
+}
+
+function parseSourcesJson(value: string | null, id: string): OnboardingMessage["sources"] {
+  const parsed = parseJsonObjectField<unknown>(value, [], "message sources", id);
+  if (!Array.isArray(parsed)) {
+    logger.warn(`Invalid message sources JSON for ${id}; using empty array`);
+    return [];
+  }
+
+  return parsed.filter((item): item is OnboardingMessage["sources"][number] => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const source = item as Record<string, unknown>;
+    return typeof source.filePath === "string" &&
+      typeof source.name === "string" &&
+      typeof source.kind === "string" &&
+      typeof source.lines === "string";
+  });
+}
+
 function rowToCodeUnit(row: CodeUnitRow): CodeUnit {
   return {
     id: row.id,
@@ -156,10 +191,10 @@ function rowToOnboardingSession(row: OnboardingSessionRow): OnboardingSession {
     projectId: row.project_id,
     repoName: row.repo_name,
     audience: row.audience,
-    focus: parseJsonObjectField(row.focus_json, [], "focus", row.id),
-    persona: parseJsonObjectField(row.persona_json, DEFAULT_PERSONA, "persona", row.id),
+    focus: parseStringArrayJson(row.focus_json, "focus", row.id),
+    persona: parsePersonaJson(row.persona_json, row.id),
     brief: row.brief,
-    sourceFiles: parseJsonObjectField(row.source_files_json, [], "source files", row.id),
+    sourceFiles: parseStringArrayJson(row.source_files_json, "source files", row.id),
     rollingSummary: row.rolling_summary,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -173,7 +208,7 @@ function rowToOnboardingMessage(row: OnboardingMessageRow): OnboardingMessage {
     role: row.role,
     content: row.content,
     intent: row.intent,
-    sources: parseJsonObjectField(row.sources_json, [], "message sources", row.id),
+    sources: parseSourcesJson(row.sources_json, row.id),
     citationVerification: parseJsonObjectField(row.citation_verification_json, null, "citation verification", row.id),
     createdAt: row.created_at,
   };

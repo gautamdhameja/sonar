@@ -2,7 +2,7 @@ import path from "path";
 import { Node as TSNode } from "web-tree-sitter";
 import { v4 as uuidv4 } from "uuid";
 import { CodeUnit, CodeUnitKind } from "./types";
-import { ensureParserInit, getParser, getLanguage } from "./parser-init";
+import { createParser } from "./parser-init";
 
 function getLanguageForFile(filePath: string): { langKey: string; language: string } {
   const ext = path.extname(filePath);
@@ -38,6 +38,8 @@ function collectCalledFunctions(node: TSNode): string[] {
           calls.add(fn.text);
         } else if (fn.type === "member_expression") {
           calls.add(fn.text);
+          const property = fn.childForFieldName("property");
+          if (property) calls.add(property.text);
         }
       }
     }
@@ -86,12 +88,8 @@ function hasModuleContent(rootNode: TSNode): boolean {
 }
 
 export async function parseTypeScript(source: string, filePath: string): Promise<CodeUnit[]> {
-  await ensureParserInit();
-
   const { langKey, language } = getLanguageForFile(filePath);
-  const parser = getParser();
-  parser.setLanguage(await getLanguage(langKey));
-
+  const parser = await createParser(langKey);
   const tree = parser.parse(source);
   if (!tree) return [];
 

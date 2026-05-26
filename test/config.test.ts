@@ -10,7 +10,10 @@ test("loadConfig provides local defaults", () => {
   assert.equal(config.ollama.baseUrl, "http://localhost:11434");
   assert.equal(config.qdrant.port, 6333);
   assert.equal(config.qdrant.vectorSize, 768);
-  assert.equal(config.storage.dbPath, "/tmp/sonar-home/.code-explorer/projects.db");
+  assert.equal(config.storage.dbPath, "/tmp/sonar-home/.sonar/projects.db");
+  assert.equal(config.api.host, "127.0.0.1");
+  assert.deepEqual(config.security.allowedRepoRoots, [process.cwd()]);
+  assert.equal(config.security.allowAnyRepoRoot, false);
 });
 
 test("loadConfig reads environment overrides", () => {
@@ -23,7 +26,11 @@ test("loadConfig reads environment overrides", () => {
     SONAR_QDRANT_PORT: "6334",
     SONAR_QDRANT_VECTOR_SIZE: "1024",
     SONAR_DB_PATH: "/tmp/sonar.db",
+    SONAR_API_HOST: "0.0.0.0",
+    SONAR_CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173",
+    SONAR_API_TOKEN: "dev-token",
     SONAR_ALLOWED_REPO_ROOTS: "/tmp/repos,/Users/example/repos",
+    SONAR_ALLOW_ANY_REPO_ROOT: "true",
     SONAR_LOCAL_RERANKER_ENABLED: "true",
     SONAR_LOCAL_RERANKER_TOP_K: "12",
   });
@@ -35,7 +42,11 @@ test("loadConfig reads environment overrides", () => {
   assert.equal(config.qdrant.port, 6334);
   assert.equal(config.qdrant.vectorSize, 1024);
   assert.equal(config.storage.dbPath, "/tmp/sonar.db");
+  assert.equal(config.api.host, "0.0.0.0");
+  assert.deepEqual(config.api.corsAllowedOrigins, ["http://localhost:5173", "http://127.0.0.1:5173"]);
   assert.deepEqual(config.security.allowedRepoRoots, ["/tmp/repos", "/Users/example/repos"]);
+  assert.equal(config.security.allowAnyRepoRoot, true);
+  assert.equal(config.security.apiToken, "dev-token");
   assert.equal(config.retriever.localReranker.enabled, true);
   assert.equal(config.retriever.localReranker.topK, 12);
 });

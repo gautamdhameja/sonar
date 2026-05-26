@@ -32,3 +32,23 @@ test("parsePython creates a module unit for constant-only files", async () => {
   assert.equal(units[0].kind, "module");
   assert.match(units[0].code, /LLAMA_SERVER_URL/);
 });
+
+test("parsers are safe to use concurrently across languages", async () => {
+  for (let i = 0; i < 10; i++) {
+    const [tsUnits, pyUnits] = await Promise.all([
+      parseTypeScript("export function connect() { return client.open(); }", `src/client-${i}.ts`),
+      parsePython("def run():\n    return client.open()", `src/client_${i}.py`),
+    ]);
+
+    assert.equal(tsUnits.some((unit) => unit.name === "connect"), true);
+    assert.equal(pyUnits.some((unit) => unit.name === "run"), true);
+  }
+});
+
+test("parsers include terminal member call names for expansion", async () => {
+  const tsUnits = await parseTypeScript("export function run() { return client.connect(); }", "src/client.ts");
+  const pyUnits = await parsePython("def run():\n    return client.connect()", "src/client.py");
+
+  assert.ok(tsUnits.find((unit) => unit.name === "run")?.calledFunctions.includes("connect"));
+  assert.ok(pyUnits.find((unit) => unit.name === "run")?.calledFunctions.includes("connect"));
+});

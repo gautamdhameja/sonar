@@ -17,7 +17,23 @@ async function main() {
     }
   }
 
-  await startServer(port);
+  const running = await startServer(port);
+
+  const shutdown = async () => {
+    try {
+      await running.close();
+      logger.info("Sonar API server stopped");
+    } catch (err) {
+      logger.error(err instanceof Error ? err.stack ?? err.message : String(err));
+    }
+  };
+
+  process.once("SIGINT", () => {
+    void shutdown().finally(() => process.exit(0));
+  });
+  process.once("SIGTERM", () => {
+    void shutdown().finally(() => process.exit(0));
+  });
 
   if (repoRoot) {
     logger.info(`Auto-indexing repository: ${repoRoot}`);

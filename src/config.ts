@@ -3,6 +3,10 @@ import path from "path";
 export type EmbeddingProvider = "ollama";
 
 export interface SonarConfig {
+  api: {
+    host: string;
+    corsAllowedOrigins: string[];
+  };
   chat: {
     baseUrl: string;
     model: string;
@@ -54,6 +58,8 @@ export interface SonarConfig {
   };
   security: {
     allowedRepoRoots: string[];
+    allowAnyRepoRoot: boolean;
+    apiToken: string | null;
   };
 }
 
@@ -61,7 +67,7 @@ type Env = NodeJS.ProcessEnv;
 
 function defaultDataDir(env: Env): string {
   const home = env.HOME || env.USERPROFILE || ".";
-  return path.join(home, ".code-explorer");
+  return path.join(home, ".sonar");
 }
 
 function getString(env: Env, name: string, fallback: string): string {
@@ -119,14 +125,28 @@ function getBoolean(env: Env, name: string, fallback: boolean): boolean {
   throw new Error(`${name} must be a boolean; received "${raw}"`);
 }
 
+function optionalToken(value: string | undefined): string | null {
+  if (value === undefined || value.trim() === "") return null;
+  return value.trim();
+}
+
 function getAllowedRepoRoots(env: Env): string[] {
   const raw = env.SONAR_ALLOWED_REPO_ROOTS;
-  if (!raw || raw.trim() === "") return [];
+  if (!raw || raw.trim() === "") return [process.cwd()];
   return raw
     .split(/[,:;]/)
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => path.resolve(entry));
+}
+
+function getStringList(env: Env, name: string, fallback: string[]): string[] {
+  const raw = env[name];
+  if (!raw || raw.trim() === "") return fallback;
+  return raw
+    .split(/[,\n;]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 export function loadConfig(env: Env = process.env): SonarConfig {
@@ -136,6 +156,17 @@ export function loadConfig(env: Env = process.env): SonarConfig {
   const chatModel = getString(env, "SONAR_CHAT_MODEL", "Qwen/Qwen3.5-9B");
 
   return {
+    api: {
+      host: getString(env, "SONAR_API_HOST", "127.0.0.1"),
+      corsAllowedOrigins: getStringList(env, "SONAR_CORS_ALLOWED_ORIGINS", [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3111",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3111",
+      ]),
+    },
     chat: {
       baseUrl: chatBaseUrl,
       model: chatModel,
@@ -187,6 +218,8 @@ export function loadConfig(env: Env = process.env): SonarConfig {
     },
     security: {
       allowedRepoRoots: getAllowedRepoRoots(env),
+      allowAnyRepoRoot: getBoolean(env, "SONAR_ALLOW_ANY_REPO_ROOT", false),
+      apiToken: optionalToken(env.SONAR_API_TOKEN),
     },
   };
 }

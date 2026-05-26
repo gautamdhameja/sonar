@@ -2,7 +2,6 @@ import path from "path";
 import { Parser, Language } from "web-tree-sitter";
 
 let initialized = false;
-let parser: Parser;
 const languages: Record<string, Language> = {};
 
 const GRAMMARS_DIR = path.resolve(__dirname, "../../grammars");
@@ -10,11 +9,13 @@ const GRAMMARS_DIR = path.resolve(__dirname, "../../grammars");
 export async function ensureParserInit(): Promise<void> {
   if (initialized) return;
   await Parser.init();
-  parser = new Parser();
   initialized = true;
 }
 
-export function getParser(): Parser {
+export async function createParser(languageName: string): Promise<Parser> {
+  await ensureParserInit();
+  const parser = new Parser();
+  parser.setLanguage(await getLanguage(languageName));
   return parser;
 }
 

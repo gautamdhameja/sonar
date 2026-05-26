@@ -1,6 +1,6 @@
 # System Prompt for Code Analysis LLM
 
-This file contains the system prompt template used by the code-explorer engine
+This file contains the system prompt template used by the Sonar engine
 when querying the local LLM. It is designed for small models (8K-32K context)
 running via vLLM with an OpenAI-compatible API.
 

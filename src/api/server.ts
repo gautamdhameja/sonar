@@ -1,4 +1,5 @@
 import path from "path";
+import http from "http";
 import express, { Request, Response, NextFunction } from "express";
 import { CodeUnitStore } from "../retriever/unit-store";
 import { answerQuery } from "../generator";
@@ -13,11 +14,19 @@ import { checkDependencies } from "./dependency-health";
 import { toErrorResponse } from "./errors";
 import { buildDirectoryGraphResponse, buildFileGraphResponse } from "./graph-response";
 import { indexProject, ProjectIndexContext } from "./project-indexer";
+import { optionalStringList, optionalTrimmedString, requiredTrimmedString } from "./request-validation";
 import { logger } from "../utils/logger";
 
 const stores = new Map<string, CodeUnitStore>();
 let currentProjectId: string | null = null;
 let repo: ProjectRepo;
+
+export interface RunningServer {
+  app: express.Express;
+  server: http.Server;
+  repo: ProjectRepo;
+  close(): Promise<void>;
+}
 
 async function getStore(projectId: string): Promise<CodeUnitStore | null> {
   const project = repo.getProject(projectId);
@@ -31,7 +40,7 @@ async function getStore(projectId: string): Promise<CodeUnitStore | null> {
   return store;
 }
 
-export async function startServer(port: number): Promise<void> {
+export async function startServer(port: number): Promise<RunningServer> {
   repo = new ProjectRepo();
   const app = express();
   const indexContext: ProjectIndexContext = {
@@ -44,19 +53,56 @@ export async function startServer(port: number): Promise<void> {
   };
 
   app.use(express.json({ limit: "1mb" }));
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (err instanceof SyntaxError && typeof err === "object" && err !== null && "body" in err) {
+      res.status(400).json({ error: "Request body must be valid JSON" });
+      return;
+    }
+    next(err);
+  });
+
+  function isAllowedOrigin(origin: string | undefined): boolean {
+    return !origin || CONFIG.api.corsAllowedOrigins.includes(origin);
+  }
+
+  function assertApiToken(req: Request, res: Response, next: NextFunction): void {
+    if (!["POST", "DELETE", "PUT", "PATCH"].includes(req.method)) {
+      next();
+      return;
+    }
+    if (!isAllowedOrigin(req.headers.origin)) {
+      res.status(403).json({ error: "Origin is not allowed" });
+      return;
+    }
+    if (CONFIG.security.apiToken && req.header("X-Sonar-Token") !== CONFIG.security.apiToken) {
+      res.status(401).json({ error: "Missing or invalid X-Sonar-Token" });
+      return;
+    }
+    next();
+  }
 
   // CORS
   app.use((_req: Request, res: Response, next: NextFunction) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    const origin = _req.headers.origin;
+    if (typeof origin === "string" && isAllowedOrigin(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+    }
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Sonar-Token");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     next();
   });
 
   // Preflight
   app.options("*", (_req: Request, res: Response) => {
+    if (!isAllowedOrigin(_req.headers.origin)) {
+      res.sendStatus(403);
+      return;
+    }
     res.sendStatus(204);
   });
+
+  app.use(assertApiToken);
 
   // Request logging
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -66,6 +112,18 @@ export async function startServer(port: number): Promise<void> {
     });
     next();
   });
+
+  function parseOnboardingRequest(body: unknown): {
+    audience?: string;
+    focus?: string[];
+    error?: string;
+  } {
+    const requestBody = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
+    const audience = optionalTrimmedString(requestBody.audience, 1000);
+    const focus = optionalStringList(requestBody.focus, "focus", 10);
+    if (focus.error) return { error: focus.error };
+    return { audience, focus: focus.value };
+  }
 
   // --- Project endpoints ---
 
@@ -188,18 +246,14 @@ export async function startServer(port: number): Promise<void> {
     try {
       const body = req.body ?? {};
       const { query } = body;
+      const parsedQuery = requiredTrimmedString(query, "query", 10000);
+      if (parsedQuery.error || !parsedQuery.value) {
+        res.status(400).json({ error: parsedQuery.error });
+        return;
+      }
       const requestProjectId = routeProjectId ?? body.projectId ?? currentProjectId;
       if (!requestProjectId || typeof requestProjectId !== "string") {
         res.status(400).json({ error: "No project selected" });
-        return;
-      }
-
-      if (!query || typeof query !== "string") {
-        res.status(400).json({ error: "query is required and must be a string" });
-        return;
-      }
-      if (query.length > 10000) {
-        res.status(400).json({ error: "query exceeds maximum length of 10000 characters" });
         return;
       }
 
@@ -217,12 +271,12 @@ export async function startServer(port: number): Promise<void> {
 
       // Inject codebase summary for architectural queries
       let codebaseSummary: string | null = null;
-      const queryPlan = planQuery(query);
+      const queryPlan = planQuery(parsedQuery.value);
       if (queryPlan.includeSummary && project.summary) {
         codebaseSummary = project.summary;
       }
 
-      const result = await answerQuery(query, store, project.name, project.id, codebaseSummary, repo, persona);
+      const result = await answerQuery(parsedQuery.value, store, project.name, project.id, codebaseSummary, repo, persona);
       res.json(result);
     } catch (err) {
       const { status, message } = toErrorResponse(err);
@@ -248,13 +302,12 @@ export async function startServer(port: number): Promise<void> {
 
       const body = req.body ?? {};
       const persona = parsePersona(body.persona);
-      const focus = Array.isArray(body.focus)
-        ? body.focus.filter((item: unknown): item is string => typeof item === "string").slice(0, 8)
-        : ["purpose", "main components", "main workflows", "risks and questions"];
-      if (body.focus !== undefined && (!Array.isArray(body.focus) || focus.length === 0)) {
-        res.status(400).json({ error: "focus must be a non-empty array of strings" });
+      const focusInput = optionalStringList(body.focus, "focus", 8);
+      if (focusInput.error) {
+        res.status(400).json({ error: focusInput.error });
         return;
       }
+      const focus = focusInput.value ?? ["purpose", "main components", "main workflows", "risks and questions"];
 
       const store = await getStore(project.id);
       if (!store) {
@@ -311,12 +364,9 @@ export async function startServer(port: number): Promise<void> {
 
       const body = req.body ?? {};
       const persona = parsePersona(body.persona);
-      const audience = typeof body.audience === "string" ? body.audience.slice(0, 1000) : undefined;
-      const focus = Array.isArray(body.focus)
-        ? body.focus.filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 10)
-        : undefined;
-      if (body.focus !== undefined && (!Array.isArray(body.focus) || focus?.length === 0)) {
-        res.status(400).json({ error: "focus must be a non-empty array of strings" });
+      const onboardingRequest = parseOnboardingRequest(body);
+      if (onboardingRequest.error) {
+        res.status(400).json({ error: onboardingRequest.error });
         return;
       }
 
@@ -329,8 +379,8 @@ export async function startServer(port: number): Promise<void> {
       const result = await generateOnboardingBrief(store, {
         projectId: project.id,
         repoName: project.name,
-        audience,
-        focus,
+        audience: onboardingRequest.audience,
+        focus: onboardingRequest.focus,
         persona,
       });
       res.json(result);
@@ -350,12 +400,9 @@ export async function startServer(port: number): Promise<void> {
 
       const body = req.body ?? {};
       const persona = parsePersona(body.persona);
-      const audience = typeof body.audience === "string" ? body.audience.slice(0, 1000) : undefined;
-      const focus = Array.isArray(body.focus)
-        ? body.focus.filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 10)
-        : undefined;
-      if (body.focus !== undefined && (!Array.isArray(body.focus) || focus?.length === 0)) {
-        res.status(400).json({ error: "focus must be a non-empty array of strings" });
+      const onboardingRequest = parseOnboardingRequest(body);
+      if (onboardingRequest.error) {
+        res.status(400).json({ error: onboardingRequest.error });
         return;
       }
 
@@ -368,15 +415,15 @@ export async function startServer(port: number): Promise<void> {
       const briefResult = await generateOnboardingBrief(store, {
         projectId: project.id,
         repoName: project.name,
-        audience,
-        focus,
+        audience: onboardingRequest.audience,
+        focus: onboardingRequest.focus,
         persona,
       });
       const session = repo.createOnboardingSession({
         projectId: project.id,
         repoName: project.name,
-        audience,
-        focus,
+        audience: onboardingRequest.audience,
+        focus: onboardingRequest.focus,
         persona,
         brief: briefResult.brief,
         sourceFiles: onboardingSessionSourceFiles(briefResult.sources),
@@ -427,12 +474,9 @@ export async function startServer(port: number): Promise<void> {
       }
 
       const { question } = req.body ?? {};
-      if (!question || typeof question !== "string") {
-        res.status(400).json({ error: "question is required and must be a string" });
-        return;
-      }
-      if (question.length > 10000) {
-        res.status(400).json({ error: "question exceeds maximum length of 10000 characters" });
+      const parsedQuestion = requiredTrimmedString(question, "question", 10000);
+      if (parsedQuestion.error || !parsedQuestion.value) {
+        res.status(400).json({ error: parsedQuestion.error });
         return;
       }
 
@@ -444,7 +488,7 @@ export async function startServer(port: number): Promise<void> {
 
       const result = await answerOnboardingFollowup({
         session,
-        question,
+        question: parsedQuestion.value,
         store,
         repo,
       });
@@ -517,7 +561,20 @@ export async function startServer(port: number): Promise<void> {
     res.json(stats);
   });
 
-  app.listen(port, () => {
-    logger.info(`Code Explorer API server running on port ${port}`);
+  const server = app.listen(port, CONFIG.api.host, () => {
+    logger.info(`Sonar API server running on ${CONFIG.api.host}:${port}`);
   });
+
+  return {
+    app,
+    server,
+    repo,
+    close: () => new Promise((resolve, reject) => {
+      server.close((err) => {
+        repo.close();
+        if (err) reject(err);
+        else resolve();
+      });
+    }),
+  };
 }
