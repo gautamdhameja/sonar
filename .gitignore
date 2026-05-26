@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Sonar local runtime data
+data.ms/
+.code-explorer/
+projects.db
+projects.db-*
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Logs and process output
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.claude/settings.local.json
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+.tmp/

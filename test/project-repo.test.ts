@@ -1,0 +1,97 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { CodeUnit } from "../src/parser/types";
+
+process.env.SONAR_DB_PATH = join(mkdtempSync(join(tmpdir(), "sonar-project-repo-")), "projects.db");
+
+function unit(overrides: Partial<CodeUnit> = {}): CodeUnit {
+  return {
+    id: "unit-1",
+    filePath: "src/index.ts",
+    language: "typescript",
+    kind: "function",
+    name: "main",
+    code: "export function main() {}",
+    startLine: 1,
+    endLine: 1,
+    parentName: null,
+    imports: [],
+    docstring: null,
+    exportedNames: ["main"],
+    calledFunctions: [],
+    isVendored: false,
+    ...overrides,
+  };
+}
+
+test("ProjectRepo tolerates corrupt JSON array fields in code units", async () => {
+  const { ProjectRepo } = await import("../src/db/project-repo");
+  const { getDatabase } = await import("../src/db/schema");
+  const repo = new ProjectRepo();
+  const project = repo.createProject("repo", "/tmp/repo");
+  repo.insertCodeUnits(project.id, [unit()]);
+
+  getDatabase()
+    .prepare("UPDATE code_units SET imports = ?, exported_names = ?, called_functions = ? WHERE id = ?")
+    .run("{bad json", "{}", "[1]", "unit-1");
+
+  const originalWarn = console.warn;
+  console.warn = () => undefined;
+  let loaded;
+  try {
+    [loaded] = repo.getCodeUnitsByProject(project.id);
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.deepEqual(loaded!.imports, []);
+  assert.deepEqual(loaded!.exportedNames, []);
+  assert.deepEqual(loaded!.calledFunctions, []);
+});
+
+test("ProjectRepo persists onboarding sessions and messages", async () => {
+  const { ProjectRepo } = await import("../src/db/project-repo");
+  const { DEFAULT_PERSONA } = await import("../src/persona/types");
+  const repo = new ProjectRepo();
+  const project = repo.createProject("repo with onboarding", "/tmp/repo-with-onboarding");
+
+  const session = repo.createOnboardingSession({
+    projectId: project.id,
+    repoName: project.name,
+    audience: "Product manager",
+    focus: ["sharing", "privacy"],
+    persona: DEFAULT_PERSONA,
+    brief: "A first-week brief.",
+    sourceFiles: ["README.md", "src/share.ts"],
+  });
+  repo.addOnboardingMessage({
+    sessionId: session.id,
+    role: "user",
+    content: "How does sharing work?",
+    intent: "workflow",
+  });
+  repo.addOnboardingMessage({
+    sessionId: session.id,
+    role: "assistant",
+    content: "Sharing uses a link.",
+    intent: "workflow",
+    sources: [{ filePath: "src/share.ts", name: "share", kind: "function", lines: "1-4" }],
+    citationVerification: { valid: true, citations: [], invalidCitations: [], uncitedClaims: [], sourceKeys: [] },
+  });
+  repo.updateOnboardingSessionSummary(session.id, "User asked about sharing.");
+
+  const loaded = repo.getOnboardingSessionForProject(project.id, session.id);
+  assert.equal(loaded?.audience, "Product manager");
+  assert.deepEqual(loaded?.focus, ["sharing", "privacy"]);
+  assert.deepEqual(loaded?.sourceFiles, ["README.md", "src/share.ts"]);
+  assert.equal(loaded?.rollingSummary, "User asked about sharing.");
+
+  const messages = repo.listOnboardingMessages(session.id);
+  assert.equal(messages.length, 2);
+  assert.equal(messages[0].role, "user");
+  assert.equal(messages[1].citationVerification?.valid, true);
+  assert.equal(messages[1].sources[0].filePath, "src/share.ts");
+});

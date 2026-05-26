@@ -1,0 +1,44 @@
+import { startServer } from "./api/server";
+import { logger } from "./utils/logger";
+
+async function main() {
+  const args = process.argv.slice(2);
+  let port = 3001;
+  let repoRoot: string | null = null;
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--port" && args[i + 1]) {
+      port = parseInt(args[i + 1], 10);
+      i++;
+    }
+    if (args[i] === "--repo" && args[i + 1]) {
+      repoRoot = args[i + 1];
+      i++;
+    }
+  }
+
+  await startServer(port);
+
+  if (repoRoot) {
+    logger.info(`Auto-indexing repository: ${repoRoot}`);
+    const response = await fetch(`http://localhost:${port}/projects/index`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repoRoot }),
+    });
+    const result = (await response.json()) as {
+      success?: boolean;
+      projectId?: string;
+      unitCount?: number;
+      timeSeconds?: number;
+      error?: string;
+    };
+    if (result.success) {
+      logger.info(`Repository indexed: ${result.unitCount} code units in ${result.timeSeconds}s`);
+    } else {
+      logger.error(`Indexing failed: ${result.error}`);
+    }
+  }
+}
+
+main().catch((err) => logger.error(err instanceof Error ? err.stack ?? err.message : String(err)));

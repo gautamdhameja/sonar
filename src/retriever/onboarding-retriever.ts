@@ -1,0 +1,205 @@
+import { CodeUnit } from "../parser/types";
+import { CodeUnitStore } from "./unit-store";
+import { RetrievedUnit } from "./hybrid-retriever";
+import { isDocumentationFile, isTestFile } from "./source-classifier";
+
+export interface OnboardingRetrievalOptions {
+  query: string;
+  topK?: number;
+  maxPerFile?: number;
+}
+
+export interface OnboardingRetrievalDiagnostic {
+  unitId: string;
+  filePath: string;
+  name: string;
+  score: number;
+  reasons: string[];
+}
+
+export interface OnboardingRetrievalResult {
+  retrieved: RetrievedUnit[];
+  diagnostics: OnboardingRetrievalDiagnostic[];
+}
+
+const WORKFLOW_TERMS = [
+  "collab",
+  "collaboration",
+  "share",
+  "sharing",
+  "export",
+  "import",
+  "save",
+  "storage",
+  "localstorage",
+  "indexeddb",
+  "firebase",
+  "encrypt",
+  "decrypt",
+  "room",
+  "auth",
+  "login",
+  "settings",
+  "onboarding",
+];
+
+const PRODUCT_TERMS = [
+  "product",
+  "user",
+  "customer",
+  "workflow",
+  "feature",
+  "offline",
+  "privacy",
+  "security",
+  "risk",
+  "roadmap",
+  "overview",
+];
+
+function normalizedUnitText(unit: CodeUnit): string {
+  return [
+    unit.filePath,
+    unit.name,
+    unit.kind,
+    unit.docstring ?? "",
+    unit.exportedNames.join(" "),
+    unit.calledFunctions.join(" "),
+    unit.code,
+  ].join("\n").toLowerCase();
+}
+
+function isPackageBoundary(unit: CodeUnit): boolean {
+  return /(^|\/)(index|main|app|server|client)\.(ts|tsx|js|jsx|py)$/.test(unit.filePath) ||
+    /^packages\/[^/]+\/src\/index\.(ts|tsx|js|jsx|py)$/.test(unit.filePath) ||
+    /^packages\/[^/]+\/index\.(ts|tsx|js|jsx|py)$/.test(unit.filePath);
+}
+
+function unitLengthPenalty(unit: CodeUnit): number {
+  const lineCount = unit.endLine - unit.startLine + 1;
+  if (isDocumentationFile(unit.filePath) && /(^|\/)readme\.mdx?$/i.test(unit.filePath)) return 0;
+  if (isDocumentationFile(unit.filePath) && lineCount > 1000) return -30;
+  if (lineCount > 1200) return -32;
+  if (lineCount > 600) return -20;
+  if (lineCount > 300) return -8;
+  return 0;
+}
+
+function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; reasons: string[] } {
+  const text = normalizedUnitText(unit);
+  const filePath = unit.filePath.toLowerCase();
+  const queryText = query.toLowerCase();
+  const reasons: string[] = [];
+  let score = 0;
+
+  if (unit.isVendored) return { score: 0, reasons: [] };
+  if (isTestFile(unit.filePath)) score -= 30;
+  if (/(^|\/)changelog\.mdx?$/i.test(unit.filePath) && !/\b(changelog|release|version|migration|api change)\b/.test(queryText)) {
+    score -= 55;
+  }
+
+  if (isDocumentationFile(unit.filePath)) {
+    score += /^readme\.md$/i.test(unit.filePath) ? 44 : 24;
+    reasons.push("overview documentation");
+  }
+
+  if (isPackageBoundary(unit)) {
+    score += 22;
+    reasons.push("package or app boundary");
+  }
+
+  if (/^(src|app|apps|packages|excalidraw-app)\//.test(filePath)) {
+    score += 8;
+    reasons.push("production source");
+  }
+
+  if (unit.kind === "module") {
+    score += 5;
+    reasons.push("file-level context");
+  } else if (unit.kind === "class" || unit.kind === "function") {
+    score += 3;
+  }
+
+  for (const term of WORKFLOW_TERMS) {
+    if (filePath.includes(term) || unit.name.toLowerCase().includes(term)) {
+      score += 10;
+      reasons.push(`workflow term in path/name: ${term}`);
+    } else if (text.includes(term)) {
+      score += 3;
+    }
+  }
+
+  for (const term of PRODUCT_TERMS) {
+    if (queryText.includes(term) && text.includes(term)) {
+      score += 4;
+    }
+  }
+
+  if (/\b(product manager|pm|onboarding|first week|first-week|non-technical)\b/.test(queryText)) {
+    if (/\b(readme|docs|welcome|share|export|collab|local|privacy|security|risk)\b/.test(filePath)) {
+      score += 10;
+      reasons.push("product onboarding match");
+    }
+    if (/\b(localdata|filemanager|portal|firebase|sharedialog|exporttobackend|collab|collaboration|storage|share)\b/.test(`${filePath} ${unit.name}`.toLowerCase())) {
+      score += 18;
+      reasons.push("first-week workflow owner");
+    }
+  }
+
+  if (/\b(local|offline|save|persist|restore)\b/.test(queryText) && /\b(local|storage|save|persist|restore|indexeddb|localstorage)\b/.test(text)) {
+    score += 12;
+    reasons.push("local persistence evidence");
+  }
+
+  if (/\b(collab|collaboration|share|room|privacy|encrypt)\b/.test(queryText) && /\b(collab|socket|room|firebase|encrypt|decrypt|share)\b/.test(text)) {
+    score += 12;
+    reasons.push("collaboration/privacy evidence");
+  }
+
+  score += unitLengthPenalty(unit);
+
+  return { score, reasons };
+}
+
+export function onboardingRetrieval(
+  store: CodeUnitStore,
+  options: OnboardingRetrievalOptions,
+): OnboardingRetrievalResult {
+  const topK = options.topK ?? 24;
+  const maxPerFile = options.maxPerFile ?? 2;
+  const fileCounts = new Map<string, number>();
+
+  const scored = store.getAllUnits()
+    .map((unit) => {
+      const { score, reasons } = scoreOnboardingUnit(unit, options.query);
+      return { unit, score, reasons };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.unit.filePath.localeCompare(b.unit.filePath));
+
+  const selected: typeof scored = [];
+  for (const entry of scored) {
+    const count = fileCounts.get(entry.unit.filePath) ?? 0;
+    if (count >= maxPerFile) continue;
+    selected.push(entry);
+    fileCounts.set(entry.unit.filePath, count + 1);
+    if (selected.length >= topK) break;
+  }
+
+  return {
+    retrieved: selected.map((entry, index) => ({
+      unitId: entry.unit.id,
+      rrfScore: entry.score,
+      keywordRank: index + 1,
+      semanticRank: null,
+      isVendored: entry.unit.isVendored,
+    })),
+    diagnostics: selected.map((entry) => ({
+      unitId: entry.unit.id,
+      filePath: entry.unit.filePath,
+      name: entry.unit.name,
+      score: entry.score,
+      reasons: entry.reasons,
+    })),
+  };
+}

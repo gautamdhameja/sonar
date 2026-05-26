@@ -1,0 +1,23 @@
+{
+  "repoRoot": "../eval-repo",
+  "cases": [
+    {
+      "name": "llama config validation",
+      "query": "Where is LLAMA_SERVER_URL configured and validated?",
+      "expectedFiles": ["src/llama/config.ts", "src/llama/schema.ts"],
+      "topK": 5
+    },
+    {
+      "name": "daily workflow",
+      "query": "How does the daily pipeline collect, classify, score, and save candidates?",
+      "expectedFiles": ["src/daily/pipeline.ts"],
+      "topK": 5
+    },
+    {
+      "name": "onboarding overview",
+      "query": "Create a codebase onboarding overview for sales",
+      "expectedFiles": ["README.md", "src/daily/pipeline.ts"],
+      "topK": 5
+    }
+  ]
+}

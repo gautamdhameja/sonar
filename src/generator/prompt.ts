@@ -1,0 +1,63 @@
+import { CodeUnit } from "../parser/types";
+import { DEFAULT_PERSONA, Persona } from "../persona/types";
+import { buildPersonaGuidance } from "./persona-guidance";
+
+function buildSystemPrompt(repoName: string, persona: Persona): string {
+  return [
+    `You are Sonar, a local code explainer for the project "${repoName}". Your sole knowledge source is the supplied code snippets and codebase overview. You have no other information about this project.`,
+    "",
+    buildPersonaGuidance(persona),
+    "",
+    "RULES:",
+    "1. Answer ONLY from the provided code. If the code does not contain the answer, say: \"Not found in the provided context\" and explain what would be needed.",
+    "2. Always cite sources as [file:function] (e.g., [sdk/src/sdk.ts:writeContract]). Every claim must have a citation.",
+    "3. When tracing execution flow, list the call chain step by step: A calls B, B calls C.",
+    '4. Distinguish between what the code DOES (observable from the source) and what it MIGHT do (inferred). Mark inferences with "(inferred)".',
+    "5. For architectural or onboarding questions, organize your answer as: Purpose, Main Components, How Work Moves Through It, What This Means For The Audience, and Questions To Ask Engineering.",
+    "6. Be concise. Prefer short sections and bullets over long paragraphs. Do not restate the question.",
+    "7. If multiple interpretations exist, state the most likely one first, then note alternatives.",
+    "8. Treat Code Context as authoritative for implementation details. Use the Codebase Overview only for orientation and broad framing.",
+  ].join("\n");
+}
+
+function trimOverview(codebaseSummary: string, hasCodeContext: boolean): string {
+  const maxChars = hasCodeContext ? 3000 : 9000;
+  if (codebaseSummary.length <= maxChars) return codebaseSummary;
+
+  const trimmed = codebaseSummary.slice(0, maxChars);
+  const lastBreak = Math.max(trimmed.lastIndexOf("\n## "), trimmed.lastIndexOf("\n### "), trimmed.lastIndexOf("\n\n"));
+  const cut = lastBreak > 1200 ? trimmed.slice(0, lastBreak).trim() : trimmed.trim();
+  return `${cut}\n\n[Overview truncated because precise code context is available.]`;
+}
+
+export function buildPrompt(
+  query: string,
+  contextUnits: CodeUnit[],
+  repoName: string,
+  codebaseSummary?: string | null,
+  persona: Persona = DEFAULT_PERSONA,
+): { system: string; user: string } {
+  const system = buildSystemPrompt(repoName, persona);
+
+  const parts: string[] = [];
+
+  if (codebaseSummary) {
+    parts.push("## Codebase Overview (Supplemental)\n");
+    parts.push("Use this overview for orientation only. Prefer the code snippets below for concrete implementation claims and citations.");
+    parts.push("");
+    parts.push(trimOverview(codebaseSummary, contextUnits.length > 0));
+    parts.push("");
+  }
+
+  parts.push("## Code Context\n");
+  for (const unit of contextUnits) {
+    parts.push(`### ${unit.filePath}:${unit.startLine}-${unit.endLine} - ${unit.kind} ${unit.name}`);
+    parts.push(`\`\`\`${unit.language}`);
+    parts.push(unit.code);
+    parts.push("```\n");
+  }
+  parts.push("## Question");
+  parts.push(query);
+
+  return { system, user: parts.join("\n") };
+}

@@ -1,0 +1,194 @@
+import path from "path";
+
+export type EmbeddingProvider = "ollama";
+
+export interface SonarConfig {
+  chat: {
+    baseUrl: string;
+    model: string;
+    apiKey: string;
+  };
+  vllm: {
+    baseUrl: string;
+    model: string;
+  };
+  embedding: {
+    provider: EmbeddingProvider;
+  };
+  ollama: {
+    baseUrl: string;
+    embeddingModel: string;
+  };
+  meilisearch: {
+    host: string;
+    apiKey: string;
+  };
+  qdrant: {
+    host: string;
+    port: number;
+    vectorSize: number;
+  };
+  parser: {
+    supportedLanguages: readonly ["typescript", "python", "javascript"];
+    maxChunkTokens: number;
+  };
+  retriever: {
+    keywordTopK: number;
+    semanticTopK: number;
+    fusedTopK: number;
+    rrf_k: number;
+    vendoredPenalty: number;
+    localReranker: {
+      enabled: boolean;
+      topK: number;
+    };
+  };
+  generator: {
+    maxContextTokens: number;
+    maxResponseTokens: number;
+    temperature: number;
+  };
+  storage: {
+    dataDir: string;
+    dbPath: string;
+  };
+  security: {
+    allowedRepoRoots: string[];
+  };
+}
+
+type Env = NodeJS.ProcessEnv;
+
+function defaultDataDir(env: Env): string {
+  const home = env.HOME || env.USERPROFILE || ".";
+  return path.join(home, ".code-explorer");
+}
+
+function getString(env: Env, name: string, fallback: string): string {
+  const value = env[name];
+  return value === undefined || value.trim() === "" ? fallback : value.trim();
+}
+
+function getUrl(env: Env, name: string, fallback: string): string {
+  const value = getString(env, name, fallback);
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("unsupported protocol");
+    }
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    throw new Error(`${name} must be a valid URL; received "${value}"`);
+  }
+}
+
+function getInteger(env: Env, name: string, fallback: number): number {
+  const raw = env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || String(parsed) !== raw.trim() || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer; received "${raw}"`);
+  }
+  return parsed;
+}
+
+function getNumber(env: Env, name: string, fallback: number): number {
+  const raw = env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive number; received "${raw}"`);
+  }
+  return parsed;
+}
+
+function getEmbeddingProvider(env: Env): EmbeddingProvider {
+  const provider = getString(env, "SONAR_EMBEDDING_PROVIDER", "ollama");
+  if (provider !== "ollama") {
+    throw new Error(`SONAR_EMBEDDING_PROVIDER must be "ollama"; received "${provider}"`);
+  }
+  return provider;
+}
+
+function getBoolean(env: Env, name: string, fallback: boolean): boolean {
+  const raw = env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const normalized = raw.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  throw new Error(`${name} must be a boolean; received "${raw}"`);
+}
+
+function getAllowedRepoRoots(env: Env): string[] {
+  const raw = env.SONAR_ALLOWED_REPO_ROOTS;
+  if (!raw || raw.trim() === "") return [];
+  return raw
+    .split(/[,:;]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => path.resolve(entry));
+}
+
+export function loadConfig(env: Env = process.env): SonarConfig {
+  const dataDir = path.resolve(getString(env, "SONAR_DATA_DIR", defaultDataDir(env)));
+  const dbPath = path.resolve(getString(env, "SONAR_DB_PATH", path.join(dataDir, "projects.db")));
+  const chatBaseUrl = getUrl(env, "SONAR_CHAT_BASE_URL", "http://localhost:8000/v1");
+  const chatModel = getString(env, "SONAR_CHAT_MODEL", "Qwen/Qwen3.5-9B");
+
+  return {
+    chat: {
+      baseUrl: chatBaseUrl,
+      model: chatModel,
+      apiKey: getString(env, "SONAR_CHAT_API_KEY", "not-needed"),
+    },
+    vllm: {
+      baseUrl: chatBaseUrl,
+      model: chatModel,
+    },
+    embedding: {
+      provider: getEmbeddingProvider(env),
+    },
+    ollama: {
+      baseUrl: getUrl(env, "SONAR_OLLAMA_BASE_URL", "http://localhost:11434"),
+      embeddingModel: getString(env, "SONAR_OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
+    },
+    meilisearch: {
+      host: getUrl(env, "SONAR_MEILI_HOST", "http://localhost:7700"),
+      apiKey: getString(env, "SONAR_MEILI_API_KEY", "masterKey"),
+    },
+    qdrant: {
+      host: getString(env, "SONAR_QDRANT_HOST", "localhost"),
+      port: getInteger(env, "SONAR_QDRANT_PORT", 6333),
+      vectorSize: getInteger(env, "SONAR_QDRANT_VECTOR_SIZE", 768),
+    },
+    parser: {
+      supportedLanguages: ["typescript", "python", "javascript"],
+      maxChunkTokens: 2000,
+    },
+    retriever: {
+      keywordTopK: 30,
+      semanticTopK: 30,
+      fusedTopK: 10,
+      rrf_k: 60,
+      vendoredPenalty: 0.2,
+      localReranker: {
+        enabled: getBoolean(env, "SONAR_LOCAL_RERANKER_ENABLED", false),
+        topK: getInteger(env, "SONAR_LOCAL_RERANKER_TOP_K", 30),
+      },
+    },
+    generator: {
+      maxContextTokens: getInteger(env, "SONAR_MAX_CONTEXT_TOKENS", 5000),
+      maxResponseTokens: getInteger(env, "SONAR_MAX_RESPONSE_TOKENS", 2000),
+      temperature: getNumber(env, "SONAR_TEMPERATURE", 0.1),
+    },
+    storage: {
+      dataDir,
+      dbPath,
+    },
+    security: {
+      allowedRepoRoots: getAllowedRepoRoots(env),
+    },
+  };
+}
+
+export const CONFIG = loadConfig();
