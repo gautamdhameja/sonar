@@ -5,6 +5,7 @@ node_modules/
 dist/
 build/
 coverage/
+*.tsbuildinfo
 
 # Local environment and secrets
 .env
@@ -14,12 +15,17 @@ coverage/
 # Sonar local runtime data
 data.ms/
 .code-explorer/
+.sonar/
+reports/
 projects.db
 projects.db-*
+code-units.json
 *.db
 *.db-*
 *.sqlite
 *.sqlite3
+qdrant_storage/
+meili_data/
 
 # Logs and process output
 *.log
@@ -42,3 +48,6 @@ Thumbs.db
 tmp/
 temp/
 .tmp/
+
+# Local package artifacts
+*.tgz

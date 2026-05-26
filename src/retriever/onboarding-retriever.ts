@@ -33,10 +33,12 @@ const WORKFLOW_TERMS = [
   "storage",
   "localstorage",
   "indexeddb",
-  "firebase",
   "encrypt",
   "decrypt",
   "room",
+  "socket",
+  "sync",
+  "backend",
   "auth",
   "login",
   "settings",
@@ -108,7 +110,7 @@ function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; re
     reasons.push("package or app boundary");
   }
 
-  if (/^(src|app|apps|packages|excalidraw-app)\//.test(filePath)) {
+  if (/^(src|app|apps|packages)\//.test(filePath)) {
     score += 8;
     reasons.push("production source");
   }
@@ -140,7 +142,7 @@ function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; re
       score += 10;
       reasons.push("product onboarding match");
     }
-    if (/\b(localdata|filemanager|portal|firebase|sharedialog|exporttobackend|collab|collaboration|storage|share)\b/.test(`${filePath} ${unit.name}`.toLowerCase())) {
+    if (/\b(localdata|filemanager|portal|backend|sharedialog|export|collab|collaboration|storage|share|sync|socket)\b/.test(`${filePath} ${unit.name}`.toLowerCase())) {
       score += 18;
       reasons.push("first-week workflow owner");
     }
@@ -151,7 +153,7 @@ function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; re
     reasons.push("local persistence evidence");
   }
 
-  if (/\b(collab|collaboration|share|room|privacy|encrypt)\b/.test(queryText) && /\b(collab|socket|room|firebase|encrypt|decrypt|share)\b/.test(text)) {
+  if (/\b(collab|collaboration|share|room|privacy|encrypt)\b/.test(queryText) && /\b(collab|socket|room|backend|encrypt|decrypt|share|sync)\b/.test(text)) {
     score += 12;
     reasons.push("collaboration/privacy evidence");
   }

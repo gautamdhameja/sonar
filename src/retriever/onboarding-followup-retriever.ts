@@ -177,7 +177,6 @@ function filterDistractingFollowupResults(
   const normalized = query.toLowerCase();
   const sourceSet = new Set(sourceFiles);
   const asksForReleaseHistory = /\b(changelog|release|version|migration|api change)\b/.test(normalized);
-  const asksForMermaid = /\bmermaid\b/.test(normalized);
 
   return retrieved.filter((result) => {
     const unit = store.getUnit(result.unitId);
@@ -186,7 +185,6 @@ function filterDistractingFollowupResults(
 
     const filePath = unit.filePath.toLowerCase();
     if (!asksForReleaseHistory && /(^|\/)changelog\.mdx?$/.test(filePath)) return false;
-    if (!asksForMermaid && filePath.includes("mermaid-to-excalidraw")) return false;
     return true;
   });
 }
