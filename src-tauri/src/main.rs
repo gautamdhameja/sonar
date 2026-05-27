@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::hash_map::DefaultHasher,
     env, fs,
+    hash::{Hash, Hasher},
+    io::Write,
     net::TcpStream,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
@@ -201,7 +204,20 @@ fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), String> 
     };
     let json = serde_json::to_string_pretty(&normalized)
         .map_err(|err| format!("Unable to serialize desktop config: {err}"))?;
-    fs::write(path, json).map_err(|err| format!("Unable to write desktop config: {err}"))
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(&path)
+        .map_err(|err| format!("Unable to write desktop config: {err}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(fs::Permissions::from_mode(0o600))
+            .map_err(|err| format!("Unable to secure desktop config permissions: {err}"))?;
+    }
+    file.write_all(json.as_bytes())
+        .map_err(|err| format!("Unable to write desktop config: {err}"))
 }
 
 async fn check_url(url: &str) -> Result<(), String> {
@@ -373,11 +389,14 @@ fn safe_repository_volume_name(repo_path: &Path, project_name: &str) -> String {
         })
         .collect();
     let trimmed = sanitized.trim_matches('-');
-    if trimmed.is_empty() {
+    let base = if trimmed.is_empty() {
         "repository".to_string()
     } else {
-        trimmed.chars().take(80).collect()
-    }
+        trimmed.chars().take(64).collect()
+    };
+    let mut hasher = DefaultHasher::new();
+    repo_path.display().to_string().hash(&mut hasher);
+    format!("{base}-{:08x}", hasher.finish() as u32)
 }
 
 fn start_docker_services() -> Result<(), String> {
@@ -387,11 +406,14 @@ fn start_docker_services() -> Result<(), String> {
 
     let root = repo_root()?;
     let compose_file = root.join("compose.yml");
+    let model_config = desktop_model_config();
     let status = Command::new("docker")
         .args(["compose", "-f"])
         .arg(compose_file)
         .args(["up", "-d"])
         .current_dir(root)
+        .env("SONAR_CHAT_MODEL", model_config.chat_model)
+        .env("SONAR_EMBEDDING_MODEL", model_config.embedding_model)
         .status()
         .map_err(|err| err.to_string())?;
 
@@ -422,8 +444,13 @@ fn start_sonar_api() -> Result<(), String> {
         command
     };
 
-    let allowed_roots =
-        env::var("SONAR_ALLOWED_REPO_ROOTS").unwrap_or_else(|_| root.display().to_string());
+    let allowed_roots = env::var("SONAR_ALLOWED_REPO_ROOTS").unwrap_or_else(|_| {
+        let mut roots = vec![root.display().to_string()];
+        if let Ok(cache_dir) = repository_cache_dir() {
+            roots.push(cache_dir.display().to_string());
+        }
+        roots.join(",")
+    });
     let model_config = desktop_model_config();
 
     command
@@ -433,7 +460,6 @@ fn start_sonar_api() -> Result<(), String> {
             "SONAR_CORS_ALLOWED_ORIGINS",
             "http://tauri.localhost,http://127.0.0.1:5173,http://localhost:5173",
         )
-        .env("SONAR_ALLOW_ANY_REPO_ROOT", "true")
         .env("SONAR_ALLOWED_REPO_ROOTS", allowed_roots)
         .env("SONAR_CHAT_BASE_URL", model_config.chat_base_url)
         .env("SONAR_CHAT_MODEL", model_config.chat_model)
@@ -443,7 +469,11 @@ fn start_sonar_api() -> Result<(), String> {
         .env("SONAR_EMBEDDING_MODEL", model_config.embedding_model)
         .env("SONAR_EMBEDDING_API_KEY", "not-needed")
         .env("SONAR_MEILI_HOST", "http://localhost:7700")
-        .env("SONAR_MEILI_API_KEY", "masterKey")
+        .env(
+            "SONAR_MEILI_API_KEY",
+            env::var("SONAR_MEILI_MASTER_KEY")
+                .unwrap_or_else(|_| "dev-only-master-key".to_string()),
+        )
         .env("SONAR_QDRANT_HOST", "localhost")
         .env("SONAR_QDRANT_PORT", "6333")
         .env("SONAR_QDRANT_VECTOR_SIZE", "768");
@@ -639,7 +669,7 @@ async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
             .iter()
             .any(|service| service.id == "sonar" && service.state != "ready")
     {
-        let _ = start_docker_services();
+        start_docker_services()?;
         tokio::time::sleep(Duration::from_secs(2)).await;
     }
 
@@ -665,7 +695,7 @@ fn get_model_config() -> DesktopModelConfig {
 #[tauri::command]
 async fn save_model_config(config: DesktopModelConfig) -> Result<ServiceSnapshot, String> {
     save_desktop_model_config(&config)?;
-    let _ = start_docker_services();
+    start_docker_services()?;
     tokio::time::sleep(Duration::from_secs(2)).await;
     let _ = ensure_embedding_model();
     stop_sonar_api()?;
@@ -681,9 +711,14 @@ fn export_markdown(path: String, contents: String) -> Result<(), String> {
     }
 
     let target = PathBuf::from(path);
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|err| format!("Unable to create export directory: {err}"))?;
+    if target.extension().and_then(|value| value.to_str()) != Some("md") {
+        return Err("Briefings can only be exported as Markdown (.md) files.".to_string());
+    }
+    let parent = target
+        .parent()
+        .ok_or_else(|| "Choose a file inside an existing folder.".to_string())?;
+    if !parent.is_dir() {
+        return Err("Choose a file inside an existing folder.".to_string());
     }
     fs::write(&target, contents).map_err(|err| format!("Unable to export briefing: {err}"))
 }

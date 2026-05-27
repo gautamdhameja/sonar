@@ -2,7 +2,7 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { CodeUnit } from "./types";
 
-export function ensureFileModuleUnits(units: CodeUnit[]): CodeUnit[] {
+export function ensureFileModuleUnits(units: CodeUnit[], sourceByFile: Map<string, string> = new Map()): CodeUnit[] {
   const byFile = new Map<string, CodeUnit[]>();
   for (const unit of units) {
     const list = byFile.get(unit.filePath) ?? [];
@@ -19,7 +19,8 @@ export function ensureFileModuleUnits(units: CodeUnit[]): CodeUnit[] {
     const imports = [...new Set(fileUnits.flatMap((unit) => unit.imports))];
     const exportedNames = [...new Set(fileUnits.flatMap((unit) => unit.exportedNames))];
     const calledFunctions = [...new Set(fileUnits.flatMap((unit) => unit.calledFunctions))];
-    const code = ordered.map((unit) => unit.code).join("\n\n");
+    const source = sourceByFile.get(filePath);
+    const code = source ?? ordered.map((unit) => unit.code).join("\n\n");
 
     additions.push({
       id: uuidv4(),
@@ -29,7 +30,7 @@ export function ensureFileModuleUnits(units: CodeUnit[]): CodeUnit[] {
       name: path.basename(filePath, path.extname(filePath)),
       code,
       startLine: 1,
-      endLine: Math.max(...fileUnits.map((unit) => unit.endLine)),
+      endLine: source ? source.split("\n").length : Math.max(...fileUnits.map((unit) => unit.endLine)),
       parentName: null,
       imports,
       docstring: first.docstring,

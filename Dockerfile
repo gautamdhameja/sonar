@@ -24,6 +24,11 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/grammars ./grammars
 
+RUN mkdir -p /data \
+  && chown -R node:node /app /data
+
+USER node
+
 EXPOSE 3001
 
 CMD ["node", "dist/index.js", "--port", "3001"]

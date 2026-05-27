@@ -55,3 +55,38 @@ test("parsers include terminal member call names for expansion", async () => {
   assert.ok(tsUnits.find((unit) => unit.name === "run")?.calledFunctions.includes("connect"));
   assert.ok(pyUnits.find((unit) => unit.name === "run")?.calledFunctions.includes("connect"));
 });
+
+test("parseTypeScript captures export-from and dynamic imports as dependency evidence", async () => {
+  const units = await parseTypeScript(
+    [
+      "export { createClient } from './client';",
+      "export async function loadPage() {",
+      "  return import('./pages/home');",
+      "}",
+    ].join("\n"),
+    "src/index.ts",
+  );
+
+  const loadPage = units.find((unit) => unit.name === "loadPage");
+  assert.ok(loadPage);
+  assert.ok(loadPage.imports.some((line) => line.includes("from './client'")));
+  assert.ok(loadPage.imports.some((line) => line.includes("import('./pages/home')")));
+  assert.deepEqual(loadPage.exportedNames, ["loadPage"]);
+  assert.match(loadPage.code, /^export async function loadPage/);
+});
+
+test("parsePython extracts decorated class methods", async () => {
+  const units = await parsePython(
+    [
+      "class RuntimeConfig:",
+      "    @property",
+      "    def server_url(self):",
+      "        return self.env['LLAMA_SERVER_URL']",
+    ].join("\n"),
+    "src/config.py",
+  );
+
+  const method = units.find((unit) => unit.kind === "method" && unit.name === "server_url");
+  assert.ok(method);
+  assert.match(method.code, /@property/);
+});

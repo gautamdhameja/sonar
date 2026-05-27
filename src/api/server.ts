@@ -22,6 +22,23 @@ const stores = new Map<string, CodeUnitStore>();
 let currentProjectId: string | null = null;
 let repo: ProjectRepo;
 
+export function isApiRequestAuthorized(
+  method: string,
+  origin: string | undefined,
+  requestToken: string | undefined,
+  configuredToken: string | null,
+  allowedOrigins: string[],
+): { authorized: boolean; status?: number; error?: string } {
+  if (method === "OPTIONS") return { authorized: true };
+  if (origin && !allowedOrigins.includes(origin)) {
+    return { authorized: false, status: 403, error: "Origin is not allowed" };
+  }
+  if (configuredToken && requestToken !== configuredToken) {
+    return { authorized: false, status: 401, error: "Missing or invalid X-Sonar-Token" };
+  }
+  return { authorized: true };
+}
+
 export interface RunningServer {
   app: express.Express;
   server: http.Server;
@@ -66,17 +83,16 @@ export async function startServer(port: number): Promise<RunningServer> {
     return !origin || CONFIG.api.corsAllowedOrigins.includes(origin);
   }
 
-  function assertApiToken(req: Request, res: Response, next: NextFunction): void {
-    if (!["POST", "DELETE", "PUT", "PATCH"].includes(req.method)) {
-      next();
-      return;
-    }
-    if (!isAllowedOrigin(req.headers.origin)) {
-      res.status(403).json({ error: "Origin is not allowed" });
-      return;
-    }
-    if (CONFIG.security.apiToken && req.header("X-Sonar-Token") !== CONFIG.security.apiToken) {
-      res.status(401).json({ error: "Missing or invalid X-Sonar-Token" });
+  function assertApiAccess(req: Request, res: Response, next: NextFunction): void {
+    const decision = isApiRequestAuthorized(
+      req.method,
+      req.headers.origin,
+      req.header("X-Sonar-Token"),
+      CONFIG.security.apiToken,
+      CONFIG.api.corsAllowedOrigins,
+    );
+    if (!decision.authorized) {
+      res.status(decision.status ?? 403).json({ error: decision.error ?? "Request is not allowed" });
       return;
     }
     next();
@@ -103,7 +119,7 @@ export async function startServer(port: number): Promise<RunningServer> {
     res.sendStatus(204);
   });
 
-  app.use(assertApiToken);
+  app.use(assertApiAccess);
 
   // Request logging
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -141,8 +157,18 @@ export async function startServer(port: number): Promise<RunningServer> {
         res.status(400).json({ error: "repoRoot is required and must be a string" });
         return;
       }
+      if (name !== undefined && typeof name !== "string") {
+        res.status(400).json({ error: "name must be a string when provided" });
+        return;
+      }
       const summarize = req.query.summarize === "true" || req.body?.summarize === true;
-      const result = await indexProject(root, name, summarize, indexContext, controller.signal);
+      const result = await indexProject(
+        root,
+        optionalTrimmedString(name, 200) ?? "",
+        summarize,
+        indexContext,
+        controller.signal,
+      );
       res.json({ success: true, ...result });
     } catch (err) {
       if (isOperationAborted(err)) {

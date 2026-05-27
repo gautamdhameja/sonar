@@ -40,6 +40,15 @@ test("verifyCitations rejects citations outside the supplied line range", () => 
   assert.deepEqual(result.invalidCitations, ["src/llama/config.ts:4-999"]);
 });
 
+test("verifyCitations rejects broad file-only citations", () => {
+  const result = verifyCitations("The configuration function validates runtime settings [src/llama/config.ts].", [
+    unit,
+  ]);
+
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.invalidCitations, ["src/llama/config.ts"]);
+});
+
 test("verifyCitations rejects broad summary labels", () => {
   const result = verifyCitations("The workflow validates local model configuration before execution [Data Flow].", [
     unit,

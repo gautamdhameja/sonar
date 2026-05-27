@@ -54,3 +54,15 @@ test("truncateLargeUnits updates endLine to the visible snippet range", () => {
   assert.ok(result[0].endLine < 50);
   assert.match(result[0].code, /truncated/);
 });
+
+test("truncateLargeUnits keeps exact query evidence in long units", () => {
+  const code = [
+    ...Array.from({ length: 80 }, (_, index) => `const filler${index} = ${index};`),
+    "const serverUrl = process.env.LLAMA_SERVER_URL;",
+    ...Array.from({ length: 80 }, (_, index) => `const tail${index} = ${index};`),
+  ].join("\n");
+  const result = truncateLargeUnits([unit("large", code)], 40, 0.5, "Where is LLAMA_SERVER_URL configured?");
+
+  assert.match(result[0].code, /LLAMA_SERVER_URL/);
+  assert.ok(result[0].startLine > 1);
+});

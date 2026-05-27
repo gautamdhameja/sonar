@@ -52,14 +52,20 @@ function collectCalledFunctions(node: TSNode): string[] {
   return Array.from(calls);
 }
 
-function collectImports(rootNode: TSNode): string[] {
-  const imports: string[] = [];
+function collectImports(rootNode: TSNode, source: string): string[] {
+  const imports = new Set<string>();
   for (const child of rootNode.children) {
     if (child.type === "import_statement") {
-      imports.push(child.text);
+      imports.add(child.text);
+    } else if (child.type === "export_statement" && /\bfrom\s+['"]/.test(child.text)) {
+      imports.add(child.text);
     }
   }
-  return imports;
+
+  for (const match of source.matchAll(/\bimport\s*\(\s*['"][^'"]+['"]\s*\)/g)) {
+    imports.add(match[0]);
+  }
+  return Array.from(imports);
 }
 
 function isTopLevelCode(node: TSNode): boolean {
@@ -85,6 +91,17 @@ function hasModuleContent(rootNode: TSNode): boolean {
   );
 }
 
+function exportedNamesFor(name: string, exportWrapper?: TSNode | null): string[] {
+  if (!exportWrapper) return [];
+  const names = new Set<string>([name]);
+  for (const match of exportWrapper.text.matchAll(
+    /\b(?:function|class|const|let|var|type|interface)\s+([A-Za-z_$][\w$]*)/g,
+  )) {
+    names.add(match[1]);
+  }
+  return Array.from(names);
+}
+
 export async function parseTypeScript(source: string, filePath: string): Promise<CodeUnit[]> {
   const { langKey, language } = getLanguageForFile(filePath);
   const parser = await createParser(langKey);
@@ -92,7 +109,7 @@ export async function parseTypeScript(source: string, filePath: string): Promise
   if (!tree) return [];
 
   const rootNode = tree.rootNode;
-  const imports = collectImports(rootNode);
+  const imports = collectImports(rootNode, source);
   const units: CodeUnit[] = [];
 
   function makeUnit(
@@ -101,31 +118,33 @@ export async function parseTypeScript(source: string, filePath: string): Promise
     name: string,
     parentName: string | null,
     docNode?: TSNode | null,
+    sourceNode?: TSNode | null,
   ): CodeUnit {
+    const codeNode = sourceNode ?? node;
     return {
       id: uuidv4(),
       filePath,
       language,
       kind,
       name,
-      code: node.text,
-      startLine: node.startPosition.row + 1,
-      endLine: node.endPosition.row + 1,
+      code: codeNode.text,
+      startLine: codeNode.startPosition.row + 1,
+      endLine: codeNode.endPosition.row + 1,
       parentName,
       imports,
       docstring: docNode ? docNode.text : getJSDoc(node),
-      exportedNames: [],
-      calledFunctions: collectCalledFunctions(node),
+      exportedNames: exportedNamesFor(name, sourceNode),
+      calledFunctions: collectCalledFunctions(codeNode),
       isVendored: false,
     };
   }
 
-  function extractFromNode(node: TSNode): void {
+  function extractFromNode(node: TSNode, exportWrapper?: TSNode | null): void {
     // Unwrap export_statement to get the actual declaration
     if (node.type === "export_statement") {
       const declaration = node.childForFieldName("declaration");
       if (declaration) {
-        extractFromNode(declaration);
+        extractFromNode(declaration, node);
       }
       return;
     }
@@ -133,12 +152,12 @@ export async function parseTypeScript(source: string, filePath: string): Promise
     if (node.type === "function_declaration") {
       const nameNode = node.childForFieldName("name");
       if (nameNode) {
-        units.push(makeUnit(node, "function", nameNode.text, null));
+        units.push(makeUnit(node, "function", nameNode.text, null, null, exportWrapper));
       }
     } else if (node.type === "class_declaration") {
       const nameNode = node.childForFieldName("name");
       const className = nameNode ? nameNode.text : "AnonymousClass";
-      units.push(makeUnit(node, "class", className, null));
+      units.push(makeUnit(node, "class", className, null, null, exportWrapper));
 
       // Extract methods from class body
       const body = node.childForFieldName("body");
@@ -160,7 +179,7 @@ export async function parseTypeScript(source: string, filePath: string): Promise
           if (value && value.type === "arrow_function") {
             const nameNode = declarator.childForFieldName("name");
             if (nameNode) {
-              units.push(makeUnit(node, "function", nameNode.text, null));
+              units.push(makeUnit(node, "function", nameNode.text, null, null, exportWrapper));
             }
           }
         }

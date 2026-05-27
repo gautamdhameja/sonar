@@ -49,7 +49,7 @@ curl --json '{
 }' http://localhost:3001/projects/index
 ```
 
-If `SONAR_API_TOKEN` is configured, add `-H 'X-Sonar-Token: <token>'` to mutating `curl` requests.
+If `SONAR_API_TOKEN` is configured, add `-H 'X-Sonar-Token: <token>'` to API requests.
 
 Create an onboarding session:
 

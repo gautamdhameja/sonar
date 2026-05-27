@@ -5,6 +5,8 @@ import { logger } from "../utils/logger";
 const client = new OpenAI({
   baseURL: CONFIG.chat.baseUrl,
   apiKey: CONFIG.chat.apiKey,
+  timeout: 120_000,
+  maxRetries: 1,
 });
 
 export async function generateResponse(system: string, user: string): Promise<string> {

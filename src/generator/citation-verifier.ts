@@ -86,7 +86,7 @@ export function verifyCitations(answer: string, contextUnits: CodeUnit[]): Citat
 
     return !validRanges.some((range) => {
       if (parsed.filePath !== range.filePath) return false;
-      if (parsed.startLine === undefined) return true;
+      if (parsed.startLine === undefined) return false;
       const citationEnd = parsed.endLine ?? parsed.startLine;
       return parsed.startLine >= range.startLine && citationEnd <= range.endLine;
     });

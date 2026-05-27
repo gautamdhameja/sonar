@@ -22,7 +22,7 @@ Prerequisites:
 
 - Docker Desktop with Docker Model Runner enabled
 - Docker Compose 2.38 or newer
-- Node.js 22 or newer
+- Node.js 22.x, 23.x, 24.x, or 25.x
 - Git, if you want Sonar to clone GitHub repositories from the desktop app
 - Rust toolchain, if you are running or packaging the Tauri app locally
 

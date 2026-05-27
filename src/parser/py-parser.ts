@@ -80,6 +80,16 @@ function hasModuleContent(rootNode: TSNode): boolean {
   );
 }
 
+function decoratedDefinition(node: TSNode): TSNode | null {
+  if (node.type !== "decorated_definition") return node;
+  return node.namedChildren.find((child) => child.type.endsWith("_definition")) ?? null;
+}
+
+function methodDefinitionNode(node: TSNode): TSNode | null {
+  const definition = decoratedDefinition(node);
+  return definition?.type === "function_definition" ? definition : null;
+}
+
 export async function parsePython(source: string, filePath: string): Promise<CodeUnit[]> {
   const parser = await createParser("python");
   const tree = parser.parse(source);
@@ -123,8 +133,9 @@ export async function parsePython(source: string, filePath: string): Promise<Cod
       const body = child.childForFieldName("body");
       if (body) {
         for (const member of body.namedChildren) {
-          if (member.type === "function_definition") {
-            const methodName = member.childForFieldName("name");
+          const methodNode = methodDefinitionNode(member);
+          if (methodNode) {
+            const methodName = methodNode.childForFieldName("name");
             if (methodName) {
               units.push(makeUnit(member, "method", methodName.text, className));
             }
@@ -147,8 +158,9 @@ export async function parsePython(source: string, filePath: string): Promise<Cod
         const body = definition.childForFieldName("body");
         if (body) {
           for (const member of body.namedChildren) {
-            if (member.type === "function_definition") {
-              const methodName = member.childForFieldName("name");
+            const methodNode = methodDefinitionNode(member);
+            if (methodNode) {
+              const methodName = methodNode.childForFieldName("name");
               if (methodName) {
                 units.push(makeUnit(member, "method", methodName.text, className));
               }

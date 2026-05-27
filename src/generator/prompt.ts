@@ -10,7 +10,7 @@ function buildSystemPrompt(repoName: string, persona: Persona): string {
     "",
     "RULES:",
     '1. Answer ONLY from the provided code. If the code does not contain the answer, say: "Not found in the provided context" and explain what would be needed.',
-    "2. Always cite sources as [file:function] (e.g., [sdk/src/sdk.ts:writeContract]). Every claim must have a citation.",
+    "2. Always cite sources with line ranges as [file:start-end] (e.g., [sdk/src/sdk.ts:12-34]). Every factual claim must have a citation.",
     "3. When tracing execution flow, list the call chain step by step: A calls B, B calls C.",
     '4. Distinguish between what the code DOES (observable from the source) and what it MIGHT do (inferred). Mark inferences with "(inferred)".',
     "5. For architectural or onboarding questions, organize your answer as: Purpose, Main Components, How Work Moves Through It, What This Means For The Audience, and Questions To Ask Engineering.",

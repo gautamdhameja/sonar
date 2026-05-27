@@ -18,7 +18,7 @@ async function loadStore(repoRoot: string): Promise<CodeUnitStore> {
 }
 
 async function main(): Promise<void> {
-  const fixturePath = process.argv[2] ?? "test/fixtures/retrieval-eval/birbal.json";
+  const fixturePath = process.argv[2] ?? "test/fixtures/retrieval-eval/eval-repo.json";
   const raw = await fs.readFile(fixturePath, "utf-8");
   const fixture = JSON.parse(raw) as EvalFixture;
   const repoRoot = path.resolve(path.dirname(fixturePath), fixture.repoRoot);

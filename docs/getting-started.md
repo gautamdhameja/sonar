@@ -38,7 +38,7 @@ The Docker-first stack does not mount your home directory. Docker can only see r
 
 API mode prerequisites:
 
-- Node.js 22 or newer
+- Node.js 22.x, 23.x, 24.x, or 25.x
 - Meilisearch reachable at `SONAR_MEILI_HOST`
 - Qdrant reachable at `SONAR_QDRANT_HOST:SONAR_QDRANT_PORT`
 - An Ollama or OpenAI-compatible embedding endpoint

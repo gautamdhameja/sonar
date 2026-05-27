@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { CONFIG } from "../config";
 import { detectVendoredPaths } from "./vendored-detector";
 
 const VALID_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".md", ".mdx"]);
@@ -24,12 +25,16 @@ export async function walkRepository(repoRoot: string): Promise<WalkedFile[]> {
   const vendoredPaths = detectVendoredPaths(repoRoot);
   const results: WalkedFile[] = [];
 
-  async function walk(dir: string): Promise<void> {
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (depth > CONFIG.parser.maxDepth || results.length >= CONFIG.parser.maxFiles) return;
+
     const entries = await fs.promises.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
+      if (results.length >= CONFIG.parser.maxFiles) return;
+
       if (entry.isDirectory()) {
         if (!EXCLUDED_DIRS.has(entry.name)) {
-          await walk(path.join(dir, entry.name));
+          await walk(path.join(dir, entry.name), depth + 1);
         }
       } else if (entry.isFile()) {
         if (VALID_EXTENSIONS.has(path.extname(entry.name))) {
@@ -41,7 +46,7 @@ export async function walkRepository(repoRoot: string): Promise<WalkedFile[]> {
     }
   }
 
-  await walk(repoRoot);
+  await walk(repoRoot, 0);
   results.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
   return results;
 }

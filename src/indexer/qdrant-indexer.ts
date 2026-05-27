@@ -1,20 +1,23 @@
 import { CONFIG } from "../config";
 import { ScoredResult } from "./types";
 import { logger } from "../utils/logger";
-import { throwIfAborted } from "../utils/abort";
+import { throwIfAborted, withTimeout } from "../utils/abort";
 
 function baseUrl(): string {
   return `http://${CONFIG.qdrant.host}:${CONFIG.qdrant.port}`;
 }
 
 async function qdrantFetch<T>(path: string, init?: RequestInit, allowNotFound = false): Promise<T> {
-  const response = await fetch(`${baseUrl()}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
+  const response = await withTimeout(init?.signal ?? undefined, 30_000, (signal) =>
+    fetch(`${baseUrl()}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+      signal,
+    }),
+  );
 
   if (allowNotFound && response.status === 404) {
     return undefined as T;

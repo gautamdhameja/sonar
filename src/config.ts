@@ -42,6 +42,10 @@ export interface SonarConfig {
   parser: {
     supportedLanguages: readonly ["typescript", "python", "javascript"];
     maxChunkTokens: number;
+    maxFiles: number;
+    maxFileBytes: number;
+    maxTotalBytes: number;
+    maxDepth: number;
   };
   retriever: {
     keywordTopK: number;
@@ -141,7 +145,7 @@ function getAllowedRepoRoots(env: Env): string[] {
   const raw = env.SONAR_ALLOWED_REPO_ROOTS;
   if (!raw || raw.trim() === "") return [process.cwd()];
   return raw
-    .split(/[,:;]/)
+    .split(/[,\n;]/)
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => path.resolve(entry));
@@ -212,7 +216,7 @@ export function loadConfig(env: Env = process.env): SonarConfig {
     },
     meilisearch: {
       host: getUrl(env, "SONAR_MEILI_HOST", "http://localhost:7700"),
-      apiKey: getString(env, "SONAR_MEILI_API_KEY", "masterKey"),
+      apiKey: getString(env, "SONAR_MEILI_API_KEY", "dev-only-master-key"),
     },
     qdrant: {
       host: getString(env, "SONAR_QDRANT_HOST", "localhost"),
@@ -222,6 +226,10 @@ export function loadConfig(env: Env = process.env): SonarConfig {
     parser: {
       supportedLanguages: ["typescript", "python", "javascript"],
       maxChunkTokens: 2000,
+      maxFiles: getInteger(env, "SONAR_MAX_INDEX_FILES", 5000),
+      maxFileBytes: getInteger(env, "SONAR_MAX_INDEX_FILE_BYTES", 1_000_000),
+      maxTotalBytes: getInteger(env, "SONAR_MAX_INDEX_TOTAL_BYTES", 50_000_000),
+      maxDepth: getInteger(env, "SONAR_MAX_INDEX_DEPTH", 25),
     },
     retriever: {
       keywordTopK: 30,

@@ -2,7 +2,13 @@
   "name": "sonar",
   "version": "0.1.0",
   "description": "Local-first codebase onboarding and explanation engine",
+  "license": "MIT",
   "main": "dist/index.js",
+  "packageManager": "npm@11.12.1",
+  "engines": {
+    "node": ">=22 <26",
+    "npm": ">=10"
+  },
   "files": [
     "dist",
     "grammars",
@@ -21,7 +27,7 @@
     "typecheck:ui": "tsc --noEmit -p tsconfig.ui.json",
     "test": "npm run test:dev",
     "test:dev": "node --test -r ts-node/register test/*.test.ts",
-    "test:integration": "node --test -r ts-node/register test/*.integration.ts || (echo 'No integration tests found or integration tests failed' && exit 1)",
+    "test:integration": "node scripts/run-integration-tests.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run typecheck:ui && npm run test:dev",
     "eval:retrieval": "ts-node src/eval/retrieval-cli.ts",
     "start": "node dist/index.js",

@@ -17,6 +17,8 @@ export interface ProjectIndexContext {
   setCurrentProjectId(projectId: string | null): void;
 }
 
+const activeIndexingRoots = new Set<string>();
+
 async function assertRepoRootAllowed(repoRoot: string): Promise<void> {
   if (CONFIG.security.allowAnyRepoRoot) return;
 
@@ -52,66 +54,84 @@ export async function indexProject(
 ): Promise<{ projectId: string; unitCount: number; timeSeconds: number }> {
   throwIfAborted(signal);
   const resolved = path.resolve(repoRoot);
-  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
-    throw new Error("repoRoot must be an existing directory");
+  let realRoot: string;
+  try {
+    realRoot = await fs.promises.realpath(resolved);
+    const stat = await fs.promises.stat(realRoot);
+    if (!stat.isDirectory()) {
+      throw new HttpError(400, "repoRoot must be an existing directory");
+    }
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    throw new HttpError(400, "repoRoot must be an existing directory");
   }
-  await assertRepoRootAllowed(resolved);
+  if (activeIndexingRoots.has(realRoot)) {
+    throw new HttpError(409, "This repository is already being indexed");
+  }
+  activeIndexingRoots.add(realRoot);
 
   const start = Date.now();
-  const rawName = name || path.basename(resolved);
-  const projectName = [...rawName]
+  const rawName = name || path.basename(realRoot);
+  const sanitizedName = [...rawName]
     .filter((character) => {
       const code = character.charCodeAt(0);
       return code >= 32 && code !== 127;
     })
     .join("")
     .slice(0, 200);
-
-  const existing = context.repo.getProjectByPath(resolved);
-  if (existing) {
-    context.repo.deleteProject(existing.id);
-    context.stores.delete(existing.id);
-    if (context.getCurrentProjectId() === existing.id) {
-      context.setCurrentProjectId(null);
-    }
-  }
-
-  const project = context.repo.createProject(projectName, resolved);
+  const projectName = sanitizedName.trim() || path.basename(realRoot) || "repository";
 
   try {
-    throwIfAborted(signal);
-    const units = await parseRepository(resolved, signal);
-    throwIfAborted(signal);
-    await indexRepository(units, project.id, signal);
-    throwIfAborted(signal);
-    context.repo.insertCodeUnits(project.id, units);
+    await assertRepoRootAllowed(realRoot);
 
-    const edges = extractDependencyEdges(units);
-    if (edges.length > 0) {
-      context.repo.insertDependencyEdges(project.id, edges);
+    const existing = context.repo.getProjectByPath(realRoot);
+    if (existing) {
+      context.repo.deleteProject(existing.id);
+      context.stores.delete(existing.id);
+      if (context.getCurrentProjectId() === existing.id) {
+        context.setCurrentProjectId(null);
+      }
     }
 
-    const filesSet = new Set(units.map((unit) => unit.filePath));
-    context.repo.updateProjectStats(project.id, units.length, filesSet.size);
+    const project = context.repo.createProject(projectName, realRoot);
 
-    const store = new CodeUnitStore();
-    await store.loadFromDb(project.id, context.repo);
-    context.stores.set(project.id, store);
-    context.setCurrentProjectId(project.id);
-
-    if (summarize) {
+    try {
       throwIfAborted(signal);
-      await generateAndStoreSummary(project.id, projectName, units, context.repo);
-    }
+      const units = await parseRepository(realRoot, signal);
+      throwIfAborted(signal);
+      await indexRepository(units, project.id, signal);
+      throwIfAborted(signal);
+      context.repo.insertCodeUnits(project.id, units);
 
-    const timeSeconds = (Date.now() - start) / 1000;
-    return { projectId: project.id, unitCount: store.size, timeSeconds };
-  } catch (err) {
-    context.repo.deleteProject(project.id);
-    context.stores.delete(project.id);
-    if (context.getCurrentProjectId() === project.id) {
-      context.setCurrentProjectId(null);
+      const edges = extractDependencyEdges(units);
+      if (edges.length > 0) {
+        context.repo.insertDependencyEdges(project.id, edges);
+      }
+
+      const filesSet = new Set(units.map((unit) => unit.filePath));
+      context.repo.updateProjectStats(project.id, units.length, filesSet.size);
+
+      const store = new CodeUnitStore();
+      await store.loadFromDb(project.id, context.repo);
+      context.stores.set(project.id, store);
+      context.setCurrentProjectId(project.id);
+
+      if (summarize) {
+        throwIfAborted(signal);
+        await generateAndStoreSummary(project.id, projectName, units, context.repo);
+      }
+
+      const timeSeconds = (Date.now() - start) / 1000;
+      return { projectId: project.id, unitCount: store.size, timeSeconds };
+    } catch (err) {
+      context.repo.deleteProject(project.id);
+      context.stores.delete(project.id);
+      if (context.getCurrentProjectId() === project.id) {
+        context.setCurrentProjectId(null);
+      }
+      throw err;
     }
-    throw err;
+  } finally {
+    activeIndexingRoots.delete(realRoot);
   }
 }

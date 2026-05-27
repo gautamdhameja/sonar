@@ -8,6 +8,7 @@ import { ensureFileModuleUnits } from "./file-units";
 import { CodeUnit } from "./types";
 import { logger } from "../utils/logger";
 import { throwIfAborted } from "../utils/abort";
+import { CONFIG } from "../config";
 
 export { CodeUnit, CodeUnitKind } from "./types";
 
@@ -19,8 +20,11 @@ export async function parseRepository(repoRoot: string, signal?: AbortSignal): P
   throwIfAborted(signal);
   const walkedFiles = await walkRepository(repoRoot);
   const allUnits: CodeUnit[] = [];
+  const sourceByFile = new Map<string, string>();
 
   let vendoredFileCount = 0;
+  let skippedOversizedFiles = 0;
+  let totalBytes = 0;
 
   for (let i = 0; i < walkedFiles.length; i++) {
     throwIfAborted(signal);
@@ -31,7 +35,20 @@ export async function parseRepository(repoRoot: string, signal?: AbortSignal): P
 
     try {
       const fullPath = path.resolve(repoRoot, filePath);
+      const stat = await fs.stat(fullPath);
+      if (stat.size > CONFIG.parser.maxFileBytes) {
+        skippedOversizedFiles++;
+        logger.warn(`Skipping ${filePath}: file exceeds ${CONFIG.parser.maxFileBytes} bytes`);
+        continue;
+      }
+      if (totalBytes + stat.size > CONFIG.parser.maxTotalBytes) {
+        skippedOversizedFiles++;
+        logger.warn(`Skipping ${filePath}: index byte budget exceeded`);
+        continue;
+      }
+      totalBytes += stat.size;
       const source = await fs.readFile(fullPath, "utf-8");
+      sourceByFile.set(filePath, source);
       throwIfAborted(signal);
       const ext = path.extname(filePath);
 
@@ -66,13 +83,13 @@ export async function parseRepository(repoRoot: string, signal?: AbortSignal): P
     if (u.isVendored) vendoredUnitCount++;
   }
 
-  const enrichedUnits = ensureFileModuleUnits(allUnits);
+  const enrichedUnits = ensureFileModuleUnits(allUnits, sourceByFile);
   const addedFileUnits = enrichedUnits.length - allUnits.length;
 
   logger.info(
     `Parsed ${walkedFiles.length} files (${vendoredFileCount} vendored), extracted ${allUnits.length} code units ` +
       `(${counts.function} functions, ${counts.class} classes, ${counts.method} methods, ${counts.module} modules, ` +
-      `${vendoredUnitCount} vendored, ${addedFileUnits} file anchors added)`,
+      `${vendoredUnitCount} vendored, ${addedFileUnits} file anchors added, ${skippedOversizedFiles} skipped)`,
   );
 
   return enrichedUnits;

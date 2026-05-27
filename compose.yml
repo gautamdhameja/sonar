@@ -13,7 +13,7 @@ services:
       SONAR_DB_PATH: /data/projects.db
       SONAR_ALLOWED_REPO_ROOTS: /workspace/repos
       SONAR_MEILI_HOST: http://meilisearch:7700
-      SONAR_MEILI_API_KEY: masterKey
+      SONAR_MEILI_API_KEY: ${SONAR_MEILI_MASTER_KEY:-dev-only-master-key}
       SONAR_QDRANT_HOST: qdrant
       SONAR_QDRANT_PORT: 6333
       SONAR_QDRANT_VECTOR_SIZE: 768
@@ -36,7 +36,7 @@ services:
 
   meilisearch:
     image: getmeili/meilisearch:v1.13
-    command: ["meilisearch", "--master-key", "masterKey", "--http-addr", "0.0.0.0:7700"]
+    command: ["meilisearch", "--master-key", "${SONAR_MEILI_MASTER_KEY:-dev-only-master-key}", "--http-addr", "0.0.0.0:7700"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:7700:7700"
@@ -54,13 +54,13 @@ services:
 
 models:
   chat_model:
-    model: hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL
+    model: ${SONAR_CHAT_MODEL:-hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL}
     context_size: 8192
     runtime_flags:
       - "--temp"
       - "0.1"
   embedding_model:
-    model: hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M
+    model: ${SONAR_EMBEDDING_MODEL:-hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M}
     context_size: 2048
     runtime_flags:
       - "--embeddings"

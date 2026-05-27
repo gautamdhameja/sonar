@@ -42,3 +42,22 @@ test("ensureFileModuleUnits does not duplicate existing module anchors", () => {
 
   assert.equal(units.filter((candidate) => candidate.kind === "module").length, 1);
 });
+
+test("ensureFileModuleUnits uses original source when available", () => {
+  const source = [
+    "import { db } from './db.js';",
+    "const TABLE = 'orders';",
+    "export function createOrder() {",
+    "  return db.insert(TABLE);",
+    "}",
+  ].join("\n");
+  const units = ensureFileModuleUnits(
+    [unit("createOrder", { startLine: 3, endLine: 5 })],
+    new Map([["src/orders.ts", source]]),
+  );
+  const module = units.find((candidate) => candidate.kind === "module");
+
+  assert.ok(module);
+  assert.match(module.code, /const TABLE = 'orders'/);
+  assert.equal(module.endLine, 5);
+});

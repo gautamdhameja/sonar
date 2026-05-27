@@ -93,6 +93,8 @@ export function packContext(units: CodeUnit[], retrieved: RetrievedUnit[], optio
   const bounded = truncateLargeUnits(
     scored.map((entry) => entry.unit),
     options.maxTokens,
+    0.4,
+    options.query,
   );
   const byId = new Map(bounded.map((unit) => [unit.id, unit]));
   const scoreById = new Map(scored.map((entry) => [entry.unit.id, entry.score]));

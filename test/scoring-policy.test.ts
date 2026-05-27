@@ -60,7 +60,9 @@ test("workflowEvidenceBonus rewards pipeline stage evidence with diagnostics", (
 
 test("testFilePenalty only demotes tests when tests are not requested", () => {
   const testUnit = unit("config-test", { filePath: "test/config.test.ts" });
+  const pythonTestUnit = unit("python-config-test", { filePath: "src/llama/test_config.py" });
 
   assert.equal(testFilePenalty(testUnit, "Create an onboarding overview", 30).score, -30);
+  assert.equal(testFilePenalty(pythonTestUnit, "Create an onboarding overview", 30).score, -30);
   assert.equal(testFilePenalty(testUnit, "How is config validated in tests?", 30).score, 0);
 });

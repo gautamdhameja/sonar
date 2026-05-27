@@ -8,7 +8,7 @@ import {
   writeEmbeddingCache,
 } from "./embedding-cache";
 import { logger } from "../utils/logger";
-import { throwIfAborted } from "../utils/abort";
+import { throwIfAborted, withTimeout } from "../utils/abort";
 
 // nomic-embed-text has 8192 token context. Code averages ~2-3 chars/token,
 // so 4000 chars ≈ 1300-2000 tokens — safe margin for all code types.
@@ -61,6 +61,21 @@ function averageVectors(vectors: number[][]): number[] {
   return avg;
 }
 
+function validateEmbedding(vector: unknown, source: string): number[] {
+  if (!Array.isArray(vector)) {
+    throw new Error(`${source} embedding response did not include a vector`);
+  }
+  if (vector.length !== CONFIG.qdrant.vectorSize) {
+    throw new Error(
+      `${source} embedding dimension ${vector.length} did not match expected ${CONFIG.qdrant.vectorSize}`,
+    );
+  }
+  if (!vector.every((value) => typeof value === "number" && Number.isFinite(value))) {
+    throw new Error(`${source} embedding response included non-finite values`);
+  }
+  return vector;
+}
+
 async function embedSingleChunk(text: string, signal?: AbortSignal): Promise<number[]> {
   if (CONFIG.embedding.provider === "openai") {
     return embedOpenAiChunk(text, signal);
@@ -69,32 +84,36 @@ async function embedSingleChunk(text: string, signal?: AbortSignal): Promise<num
 }
 
 async function embedOllamaChunk(text: string, signal?: AbortSignal): Promise<number[]> {
-  const response = await fetch(`${CONFIG.ollama.baseUrl}/api/embed`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: CONFIG.ollama.embeddingModel, input: text }),
-    signal,
-  });
+  const response = await withTimeout(signal, 60_000, (timeoutSignal) =>
+    fetch(`${CONFIG.ollama.baseUrl}/api/embed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: CONFIG.ollama.embeddingModel, input: text }),
+      signal: timeoutSignal,
+    }),
+  );
 
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`Ollama embedding failed (${response.status}): ${body.slice(0, 200)}`);
   }
 
-  const data = (await response.json()) as { embeddings: number[][] };
-  return data.embeddings[0];
+  const data = (await response.json()) as { embeddings?: unknown[] };
+  return validateEmbedding(data.embeddings?.[0], "Ollama");
 }
 
 async function embedOpenAiChunk(text: string, signal?: AbortSignal): Promise<number[]> {
-  const response = await fetch(`${CONFIG.embedding.baseUrl}/embeddings`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${CONFIG.embedding.apiKey}`,
-    },
-    body: JSON.stringify({ model: CONFIG.embedding.model, input: text }),
-    signal,
-  });
+  const response = await withTimeout(signal, 60_000, (timeoutSignal) =>
+    fetch(`${CONFIG.embedding.baseUrl}/embeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${CONFIG.embedding.apiKey}`,
+      },
+      body: JSON.stringify({ model: CONFIG.embedding.model, input: text }),
+      signal: timeoutSignal,
+    }),
+  );
 
   if (!response.ok) {
     const body = await response.text();
@@ -106,7 +125,7 @@ async function embedOpenAiChunk(text: string, signal?: AbortSignal): Promise<num
   if (!embedding) {
     throw new Error("OpenAI-compatible embedding response did not include data[0].embedding");
   }
-  return embedding;
+  return validateEmbedding(embedding, "OpenAI-compatible");
 }
 
 export async function generateEmbedding(text: string, signal?: AbortSignal): Promise<number[]> {
@@ -130,7 +149,7 @@ export async function generateEmbedding(text: string, signal?: AbortSignal): Pro
   } else {
     // Embed each chunk and mean-pool the vectors
     const chunkVectors = await Promise.all(chunks.map((chunk) => embedSingleChunk(chunk, signal)));
-    embedding = averageVectors(chunkVectors);
+    embedding = validateEmbedding(averageVectors(chunkVectors), "Pooled");
   }
 
   embeddingCache.set(key, embedding);
@@ -170,8 +189,8 @@ export async function generateEmbeddings(texts: string[], signal?: AbortSignal):
           return await generateEmbedding(text, signal);
         } catch (err) {
           throwIfAborted(signal);
-          logger.warn(`Embedding failed for item ${i * batchSize + j}, using zero vector: ${err}`);
-          return new Array(CONFIG.qdrant.vectorSize).fill(0);
+          logger.error(`Embedding failed for item ${i * batchSize + j}: ${err}`);
+          throw err;
         }
       }),
     );
