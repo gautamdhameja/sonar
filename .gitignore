@@ -8,6 +8,7 @@ dist/
 dist-ui/
 build/
 coverage/
+docs/book/
 *.tsbuildinfo
 
 # Local environment and secrets

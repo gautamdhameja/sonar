@@ -1,0 +1,9 @@
+[book]
+title = "Sonar Documentation"
+description = "Detailed setup, usage, API, retrieval, and development documentation for Sonar."
+authors = ["Sonar contributors"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "book"

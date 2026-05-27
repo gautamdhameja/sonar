@@ -1,6 +1,7 @@
 node_modules
 dist
 dist-ui
+docs/book
 src-tauri/target
 src-tauri/gen
 .git
