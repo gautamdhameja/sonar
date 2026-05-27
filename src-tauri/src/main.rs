@@ -674,6 +674,20 @@ async fn save_model_config(config: DesktopModelConfig) -> Result<ServiceSnapshot
     Ok(service_snapshot().await)
 }
 
+#[tauri::command]
+fn export_markdown(path: String, contents: String) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("Choose a file path before exporting.".to_string());
+    }
+
+    let target = PathBuf::from(path);
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("Unable to create export directory: {err}"))?;
+    }
+    fs::write(&target, contents).map_err(|err| format!("Unable to export briefing: {err}"))
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -684,6 +698,7 @@ fn main() {
             prepare_repository_for_indexing,
             get_model_config,
             save_model_config,
+            export_markdown,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Sonar desktop app");
