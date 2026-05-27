@@ -16,34 +16,6 @@ Current V1 capabilities:
 
 Sonar is intended to produce strong source-grounded first drafts. It is not yet a replacement for human-reviewed technical, security, or compliance documentation.
 
-## Positioning
-
-Sonar overlaps with codebase-understanding tools such as [Understand Anything](https://github.com/Lum1104/Understand-Anything): both parse repositories, build structural context, support codebase questions, and can produce onboarding material. The difference is the product shape and the retrieval contract.
-
-Understand Anything is graph-first. It runs as an AI-agent/plugin workflow, builds a `.understand-anything/knowledge-graph.json`, and opens an interactive React Flow dashboard for exploring files, functions, classes, layers, tours, business domains, and diff impact. It is a strong fit when the user wants to see and navigate the whole architecture graph, commit the graph JSON, or use an existing Claude Code/Codex/Copilot/Gemini-style agent environment.
-
-Sonar is briefing-first and local-runtime-first. It is designed for a new joiner, product manager, designer, support lead, or engineer who wants a concise first-week document and grounded follow-up answers without learning an agent command workflow. The desktop app imports only the selected repository, indexes it into local services, and produces a readable onboarding brief with cited evidence.
-
-Sonar's differentiators:
-
-- **Retrieval-first, not graph-dashboard-first.** Sonar uses exact symbol/path lookup, grep-like lexical retrieval, Meilisearch BM25, Qdrant vector retrieval, dependency graph expansion, reranking, and query routing. The goal is to retrieve a small, high-signal context pack for each question rather than ask the model to reason from an entire graph JSON.
-- **Built for medium local models.** Sonar assumes laptop-scale models, including Docker Model Runner or any OpenAI-compatible endpoint. It spends engineering effort on query classification, context packing, source diversity, and token budgets so a 7B-20B-ish local model has a realistic chance of answering well.
-- **Source-grounded briefing workflow.** Sonar asks for concrete citations, returns source lists, verifies citation ranges, and can run a repair pass when citations are weak. This is aimed at trustable onboarding summaries, not only visual exploration.
-- **Persistent sessions.** Projects, code units, dependency edges, embeddings, onboarding sessions, messages, source files, and rolling conversation summaries live in SQLite. Follow-up questions reuse the onboarding session and boost previously cited material.
-- **Native desktop UX.** Sonar's V1 interface is a Tauri app with GitHub URL import, local-folder selection, readiness checks, model endpoint settings, stop controls, follow-up Q&A, and Markdown export.
-- **Explicit local privacy boundary.** Docker does not mount the user's home directory. Local folders are copied into Sonar's internal repository volume only after the user selects them.
-- **API-first internals.** The desktop app is backed by an HTTP API, so the same indexing, retrieval, onboarding, graph, health, and stats capabilities can be automated or tested outside the UI.
-
-Where graph-dashboard tools are stronger today:
-
-- Whole-architecture visual navigation.
-- Guided graph tours and layer visualization.
-- Diff impact visualization.
-- Multi-platform plugin distribution across coding agents.
-- Committable graph artifacts that teams can share as docs-as-code.
-
-Sonar can add some of those later, but the V1 promise is narrower: a calm local desktop app that turns a repository into first-week onboarding documentation and grounded subsequent answers.
-
 ## Architecture
 
 - **parser/** — tree-sitter code parsing into symbols and imports
