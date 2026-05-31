@@ -42,19 +42,21 @@ The desktop app uses the same HTTP API that can be used for automation and devel
 Index a repository:
 
 ```bash
-curl --json '{
+export SONAR_API_TOKEN="${SONAR_API_TOKEN:-$(openssl rand -hex 32)}"
+
+curl -H "X-Sonar-Token: $SONAR_API_TOKEN" --json '{
   "repoRoot": "/Users/you/code/example-product",
   "name": "Example Product",
   "summarize": true
 }' http://localhost:3001/projects/index
 ```
 
-If `SONAR_API_TOKEN` is configured, add `-H 'X-Sonar-Token: <token>'` to API requests.
+If `SONAR_API_HOST` is not a loopback address, `SONAR_API_TOKEN` is required. A token is recommended for local API mode as well.
 
 Create an onboarding session:
 
 ```bash
-curl --json '{
+curl -H "X-Sonar-Token: $SONAR_API_TOKEN" --json '{
   "audience": "A product manager joining the team in their first week",
   "focus": [
     "what the product does",
@@ -77,7 +79,7 @@ curl --json '{
 Ask a follow-up question in the session:
 
 ```bash
-curl --json '{
+curl -H "X-Sonar-Token: $SONAR_API_TOKEN" --json '{
   "question": "How does collaboration and sharing work at a product level, and what should I ask engineering about it?"
 }' http://localhost:3001/projects/<project-id>/onboarding/sessions/<session-id>/messages
 ```

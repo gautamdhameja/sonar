@@ -2,23 +2,33 @@ import type { FollowupResponse, OnboardingSessionResponse, Project } from "./typ
 
 export const apiBaseUrl = "http://127.0.0.1:3001";
 
+let apiToken = "";
+
+export function setApiToken(token: string | null | undefined): void {
+  apiToken = token?.trim() ?? "";
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(apiToken ? { "X-Sonar-Token": apiToken } : {}),
       ...init?.headers,
     },
   });
 
   const text = await response.text();
-  const body = text ? (JSON.parse(text) as unknown) : {};
+  const contentType = response.headers.get("content-type") ?? "";
+  const body = text && contentType.includes("application/json") ? (JSON.parse(text) as unknown) : {};
 
   if (!response.ok) {
     const message =
       body && typeof body === "object" && "error" in body
         ? String((body as { error: unknown }).error)
-        : `Request failed with ${response.status}`;
+        : text.trim()
+          ? `Request failed with ${response.status}: ${text.trim().slice(0, 300)}`
+          : `Request failed with ${response.status}`;
     throw new Error(message);
   }
 

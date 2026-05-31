@@ -1,6 +1,6 @@
 import { CodeUnit } from "../parser/types";
-import { indexToMeilisearch } from "./meilisearch-indexer";
-import { indexToQdrant } from "./qdrant-indexer";
+import { deleteMeilisearchIndex, indexToMeilisearch } from "./meilisearch-indexer";
+import { deleteQdrantCollection, indexToQdrant } from "./qdrant-indexer";
 import { generateEmbeddings } from "./embedder";
 import { buildContextualEmbeddingTexts } from "./contextual-text";
 import { logger } from "../utils/logger";
@@ -40,4 +40,13 @@ export async function indexRepository(units: CodeUnit[], projectId: string, sign
   logger.info(`Qdrant indexing: ${((Date.now() - start) / 1000).toFixed(1)}s`);
 
   logger.info(`Indexing complete in ${((Date.now() - totalStart) / 1000).toFixed(1)}s`);
+}
+
+export async function deleteProjectIndexes(projectId: string): Promise<void> {
+  const results = await Promise.allSettled([deleteMeilisearchIndex(projectId), deleteQdrantCollection(projectId)]);
+  for (const result of results) {
+    if (result.status === "rejected") {
+      logger.warn(`Unable to clean external index for project ${projectId}: ${String(result.reason)}`);
+    }
+  }
 }

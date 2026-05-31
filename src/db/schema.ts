@@ -15,24 +15,7 @@ export function getDatabase(): Database.Database {
 }
 
 function initSchema(db: Database.Database): void {
-  const addColumnIfMissing = (sql: string): void => {
-    try {
-      db.exec(sql);
-    } catch (err) {
-      const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
-      if (message.includes("duplicate column name") || message.includes("no such table")) return;
-      throw err;
-    }
-  };
-
-  addColumnIfMissing("ALTER TABLE projects ADD COLUMN summary TEXT");
-  addColumnIfMissing("ALTER TABLE projects ADD COLUMN summary_generated_at TEXT");
-  addColumnIfMissing("ALTER TABLE code_units ADD COLUMN is_vendored INTEGER NOT NULL DEFAULT 0");
-  addColumnIfMissing("ALTER TABLE dependency_edges ADD COLUMN edge_type TEXT NOT NULL DEFAULT 'imports'");
-
   db.exec(`
-    PRAGMA user_version = 1;
-
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -124,4 +107,43 @@ function initSchema(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_onboarding_messages_session ON onboarding_messages(session_id, created_at);
   `);
+
+  migrateSchema(db);
+  db.pragma("user_version = 2");
+}
+
+function migrateSchema(db: Database.Database): void {
+  addColumnIfMissing(db, "projects", "summary", "ALTER TABLE projects ADD COLUMN summary TEXT");
+  addColumnIfMissing(
+    db,
+    "projects",
+    "summary_generated_at",
+    "ALTER TABLE projects ADD COLUMN summary_generated_at TEXT",
+  );
+  addColumnIfMissing(
+    db,
+    "code_units",
+    "is_vendored",
+    "ALTER TABLE code_units ADD COLUMN is_vendored INTEGER NOT NULL DEFAULT 0",
+  );
+  addColumnIfMissing(
+    db,
+    "dependency_edges",
+    "edge_type",
+    "ALTER TABLE dependency_edges ADD COLUMN edge_type TEXT NOT NULL DEFAULT 'imports'",
+  );
+}
+
+function addColumnIfMissing(db: Database.Database, table: string, column: string, sql: string): void {
+  if (columnExists(db, table, column)) return;
+  db.exec(sql);
+}
+
+function columnExists(db: Database.Database, table: string, column: string): boolean {
+  const rows = db.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all() as Array<{ name: string }>;
+  return rows.some((row) => row.name === column);
+}
+
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
 }

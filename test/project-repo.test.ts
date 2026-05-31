@@ -52,6 +52,34 @@ test("ProjectRepo tolerates corrupt JSON array fields in code units", async () =
   assert.deepEqual(loaded!.calledFunctions, []);
 });
 
+test("ProjectRepo replaces an indexed project in a single repository transaction", async () => {
+  const { ProjectRepo } = await import("../src/db/project-repo");
+  const repo = new ProjectRepo();
+
+  const first = repo.replaceProjectIndex({
+    id: "project-replace-1",
+    name: "Repo",
+    repoPath: "/tmp/repo-replace",
+    units: [unit({ id: "replace-unit-1", filePath: "src/old.ts" })],
+    edges: [],
+  });
+  const second = repo.replaceProjectIndex({
+    id: "project-replace-2",
+    name: "Repo",
+    repoPath: "/tmp/repo-replace",
+    units: [unit({ id: "replace-unit-2", filePath: "src/new.ts" })],
+    edges: [{ sourceFile: "src/new.ts", targetFile: "src/util.ts", importStatement: "./util" }],
+  });
+
+  assert.equal(repo.getProject(first.id), undefined);
+  assert.equal(repo.getProjectByPath("/tmp/repo-replace")?.id, second.id);
+  assert.deepEqual(
+    repo.getCodeUnitsByProject(second.id).map((item) => item.filePath),
+    ["src/new.ts"],
+  );
+  assert.equal(repo.getDependencyEdges(second.id).length, 1);
+});
+
 test("ProjectRepo persists onboarding sessions and messages", async () => {
   const { ProjectRepo } = await import("../src/db/project-repo");
   const { DEFAULT_PERSONA } = await import("../src/persona/types");

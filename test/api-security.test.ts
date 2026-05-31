@@ -6,10 +6,13 @@ const allowedOrigins = ["http://127.0.0.1:5173", "http://tauri.localhost"];
 
 test("configured API token protects read endpoints", () => {
   const unauthenticated = isApiRequestAuthorized("GET", undefined, undefined, "review-token", allowedOrigins);
+  const wrongLength = isApiRequestAuthorized("GET", undefined, "review", "review-token", allowedOrigins);
   const authenticated = isApiRequestAuthorized("GET", undefined, "review-token", "review-token", allowedOrigins);
 
   assert.equal(unauthenticated.authorized, false);
   assert.equal(unauthenticated.status, 401);
+  assert.equal(wrongLength.authorized, false);
+  assert.equal(wrongLength.status, 401);
   assert.equal(authenticated.authorized, true);
 });
 

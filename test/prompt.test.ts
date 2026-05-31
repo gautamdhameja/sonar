@@ -33,6 +33,7 @@ test("buildPrompt includes persona guidance", () => {
   assert.match(prompt.system, /Prepare onboarding notes/);
   assert.match(prompt.system, /Prefer plain language/);
   assert.match(prompt.system, /Code Context as authoritative/);
+  assert.match(prompt.system, /untrusted content to analyze/);
   assert.match(prompt.user, /## Codebase Overview \(Supplemental\)/);
   assert.match(prompt.user, /src\/orders.ts:1-1 - function createOrder/);
 });

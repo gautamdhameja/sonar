@@ -31,9 +31,10 @@ export const MEILI_CODE_SEARCH_SETTINGS = {
 } as const;
 
 function createClient(): MeiliSearch {
+  const apiKey = CONFIG.meilisearch.apiKey.trim();
   return new MeiliSearch({
     host: CONFIG.meilisearch.host,
-    apiKey: CONFIG.meilisearch.apiKey,
+    ...(apiKey ? { apiKey } : {}),
   });
 }
 
@@ -78,6 +79,11 @@ export async function indexToMeilisearch(units: CodeUnit[], projectId: string, s
   await index.waitForTask(addTask.taskUid);
 
   logger.info(`Indexed ${units.length} code units to Meilisearch`);
+}
+
+export async function deleteMeilisearchIndex(projectId: string): Promise<void> {
+  const client = createClient();
+  await client.deleteIndexIfExists(getIndexName(projectId));
 }
 
 export async function searchMeilisearch(query: string, topK: number, projectId: string): Promise<ScoredResult[]> {

@@ -10,8 +10,8 @@ The V1 desktop app is the primary user experience. In Docker-first mode, Compose
 
 ## First-Run Flow
 
-1. Run `docker compose up -d`.
-2. Open Sonar.
+1. Open Sonar.
+2. Let the app start the local Docker services.
 3. Paste a GitHub repository URL or select a local folder.
 4. Create the first-week briefing.
 5. Ask follow-up questions in the same session.
@@ -25,6 +25,12 @@ The V1 desktop app is the primary user experience. In Docker-first mode, Compose
 - Docker Model Runner for embeddings through an OpenAI-compatible embeddings API.
 
 The default Docker-first stack is intentionally local and self-contained. To use cloud generation or a separately hosted local model, run API mode and override endpoint environment variables instead of the default Compose model bindings.
+
+When the desktop app starts Docker services, it injects a per-install API token and Meilisearch key. If you run `docker compose up` manually, set `SONAR_API_TOKEN` first:
+
+```bash
+SONAR_API_TOKEN="$(openssl rand -hex 32)" docker compose up -d
+```
 
 ## Desktop Configuration
 

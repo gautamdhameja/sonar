@@ -7,6 +7,75 @@ export interface ScoreReason {
   reasons: string[];
 }
 
+export const ONBOARDING_WORKFLOW_TERMS = [
+  "collab",
+  "collaboration",
+  "share",
+  "sharing",
+  "export",
+  "import",
+  "save",
+  "storage",
+  "localstorage",
+  "indexeddb",
+  "encrypt",
+  "decrypt",
+  "room",
+  "socket",
+  "sync",
+  "backend",
+  "auth",
+  "login",
+  "settings",
+  "onboarding",
+] as const;
+
+export const ONBOARDING_PRODUCT_TERMS = [
+  "product",
+  "user",
+  "customer",
+  "workflow",
+  "feature",
+  "offline",
+  "privacy",
+  "security",
+  "risk",
+  "roadmap",
+  "overview",
+] as const;
+
+export function normalizedUnitText(unit: CodeUnit): string {
+  return [
+    unit.filePath,
+    unit.name,
+    unit.kind,
+    unit.docstring ?? "",
+    unit.exportedNames.join(" "),
+    unit.calledFunctions.join(" "),
+    unit.code,
+  ]
+    .join("\n")
+    .toLowerCase();
+}
+
+export function isPackageBoundary(unit: CodeUnit): boolean {
+  return (
+    /(^|\/)(index|main|app|server|client)\.(ts|tsx|js|jsx|py)$/.test(unit.filePath) ||
+    /^packages\/[^/]+\/src\/index\.(ts|tsx|js|jsx|py)$/.test(unit.filePath) ||
+    /^packages\/[^/]+\/index\.(ts|tsx|js|jsx|py)$/.test(unit.filePath)
+  );
+}
+
+export function unitLengthPenalty(unit: CodeUnit): number {
+  const lineCount = unit.endLine - unit.startLine + 1;
+  if (isDocumentationFile(unit.filePath) && /(^|\/)readme\.mdx?$/i.test(unit.filePath)) return 0;
+  if (isDocumentationFile(unit.filePath) && lineCount > 1000) return -30;
+  if (lineCount > 1200) return -32;
+  if (lineCount > 600) return -20;
+  if (lineCount > 300) return -8;
+  return 0;
+}
+
 function unitSearchText(unit: CodeUnit): string {
   return [unit.filePath, unit.name, unit.code, unit.imports.join("\n"), unit.exportedNames.join("\n")]
     .join("\n")
@@ -91,22 +160,18 @@ export function workflowEvidenceBonus(unit: CodeUnit, query: string, scale: "pac
   let score = 0;
   const weight =
     scale === "packer"
-      ? { daily: 18, runner: 14, components: 12, stageFile: 14, db: 18, collect: 10, stage: 18, digest: 8 }
-      : { daily: 8, runner: 6, components: 5, stageFile: 4, db: 3, collect: 4, stage: 5, digest: 3 };
+      ? { entry: 18, stageFile: 14, db: 18, collect: 10, stage: 18, digest: 8 }
+      : { entry: 8, stageFile: 4, db: 3, collect: 4, stage: 5, digest: 3 };
 
-  if (/src\/daily\/pipeline\.(ts|tsx|js|jsx|py)$/.test(filePath)) {
-    score += weight.daily;
-    reasons.push("daily pipeline file");
+  if (/(^|\/)(pipeline|workflow|flow|runner|orchestrator|processor)\.(ts|tsx|js|jsx|py)$/.test(filePath)) {
+    score += weight.entry;
+    reasons.push("workflow entry file");
   }
-  if (/src\/framework\/pipeline\/runner\.(ts|tsx|js|jsx|py)$/.test(filePath)) {
-    score += weight.runner;
-    reasons.push("pipeline runner file");
-  }
-  if (/src\/framework\/pipeline\/defaultcomponents\.(ts|tsx|js|jsx|py)$/.test(filePath)) {
-    score += weight.components;
-    reasons.push("default pipeline components");
-  }
-  if (/src\/daily\/(classification|scoring|digest)\.(ts|tsx|js|jsx|py)$/.test(filePath)) {
+  if (
+    /(^|\/)(classification|classify|scoring|ranking|digest|collector|collection|sync)\.(ts|tsx|js|jsx|py)$/.test(
+      filePath,
+    )
+  ) {
     score += weight.stageFile;
     reasons.push("workflow stage file");
   }
@@ -157,15 +222,17 @@ export function overviewEvidenceBonus(unit: CodeUnit, intent: QueryIntent): Scor
     score += 8;
     reasons.push("documentation overview source");
   }
-  if (/src\/(main|runPipeline)\.(ts|tsx|js|jsx|py)$/.test(unit.filePath)) {
+  const filePath = unit.filePath.toLowerCase();
+
+  if (/(^|\/)(main|index|app|server|client|run|runner)\.(ts|tsx|js|jsx|py)$/.test(filePath)) {
     score += 7;
     reasons.push("entry point source");
   }
-  if (/src\/framework\/pipeline\/(runner|defaultComponents)\.(ts|tsx|js|jsx|py)$/.test(unit.filePath)) {
+  if (/(^|\/)(pipeline|workflow|flow|orchestrator|processor)\.(ts|tsx|js|jsx|py)$/.test(filePath)) {
     score += 6;
-    reasons.push("central pipeline source");
+    reasons.push("central workflow source");
   }
-  if (/src\/(config|db|llama)\//.test(unit.filePath)) {
+  if (/(^|\/)(config|db|database|storage|model|llm|ai)\//.test(filePath)) {
     score += 3;
     reasons.push("core subsystem source");
   }

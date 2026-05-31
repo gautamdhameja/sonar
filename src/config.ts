@@ -216,7 +216,7 @@ export function loadConfig(env: Env = process.env): SonarConfig {
     },
     meilisearch: {
       host: getUrl(env, "SONAR_MEILI_HOST", "http://localhost:7700"),
-      apiKey: getString(env, "SONAR_MEILI_API_KEY", "dev-only-master-key"),
+      apiKey: getString(env, "SONAR_MEILI_API_KEY", env.SONAR_API_TOKEN ?? ""),
     },
     qdrant: {
       host: getString(env, "SONAR_QDRANT_HOST", "localhost"),

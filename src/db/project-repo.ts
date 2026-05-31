@@ -235,6 +235,71 @@ export class ProjectRepo {
     return { id, name, repoPath, indexedAt, unitCount: 0, fileCount: 0, summary: null, summaryGeneratedAt: null };
   }
 
+  replaceProjectIndex(input: {
+    id: string;
+    name: string;
+    repoPath: string;
+    units: CodeUnit[];
+    edges: Array<{ sourceFile: string; targetFile: string; importStatement: string; edgeType?: string }>;
+  }): Project {
+    const indexedAt = new Date().toISOString();
+    const filesSet = new Set(input.units.map((unit) => unit.filePath));
+    const insertProject = this.db.prepare(
+      `INSERT INTO projects
+        (id, name, repo_path, indexed_at, unit_count, file_count)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    const insertUnit = this.db.prepare(
+      `INSERT INTO code_units
+        (id, project_id, file_path, language, kind, name, code, start_line, end_line, parent_name, imports, docstring, exported_names, called_functions, is_vendored)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    const insertEdge = this.db.prepare(
+      `INSERT INTO dependency_edges (project_id, source_file, target_file, import_statement, edge_type)
+       VALUES (?, ?, ?, ?, ?)`,
+    );
+
+    const replace = this.db.transaction(() => {
+      this.db.prepare("DELETE FROM projects WHERE repo_path = ?").run(input.repoPath);
+      insertProject.run(input.id, input.name, input.repoPath, indexedAt, input.units.length, filesSet.size);
+      for (const unit of input.units) {
+        insertUnit.run(
+          unit.id,
+          input.id,
+          unit.filePath,
+          unit.language,
+          unit.kind,
+          unit.name,
+          unit.code,
+          unit.startLine,
+          unit.endLine,
+          unit.parentName,
+          JSON.stringify(unit.imports),
+          unit.docstring,
+          JSON.stringify(unit.exportedNames),
+          JSON.stringify(unit.calledFunctions),
+          unit.isVendored ? 1 : 0,
+        );
+      }
+      for (const edge of input.edges) {
+        insertEdge.run(input.id, edge.sourceFile, edge.targetFile, edge.importStatement, edge.edgeType ?? "imports");
+      }
+    });
+
+    replace();
+
+    return {
+      id: input.id,
+      name: input.name,
+      repoPath: input.repoPath,
+      indexedAt,
+      unitCount: input.units.length,
+      fileCount: filesSet.size,
+      summary: null,
+      summaryGeneratedAt: null,
+    };
+  }
+
   getProject(id: string): Project | undefined {
     const row = this.db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
     return row ? rowToProject(row) : undefined;

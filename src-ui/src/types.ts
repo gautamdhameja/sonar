@@ -33,7 +33,10 @@ export interface DesktopModelConfig {
   chatBaseUrl: string;
   chatModel: string;
   chatApiKey: string;
+  embeddingBaseUrl: string;
   embeddingModel: string;
+  embeddingApiKey: string;
+  apiToken: string;
 }
 
 export interface Project {

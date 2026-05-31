@@ -53,7 +53,7 @@ test("workflowEvidenceBonus rewards pipeline stage evidence with diagnostics", (
   );
 
   assert.ok(result.score > 0);
-  assert.ok(result.reasons.includes("daily pipeline file"));
+  assert.ok(result.reasons.includes("workflow entry file"));
   assert.ok(result.reasons.includes("classification stage match"));
   assert.ok(result.reasons.includes("persistence stage match"));
 });

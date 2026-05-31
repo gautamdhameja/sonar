@@ -1,13 +1,15 @@
 import fs from "fs";
 import path from "path";
+import { v4 as uuidv4 } from "uuid";
 import { CONFIG } from "../config";
 import { ProjectRepo } from "../db/project-repo";
-import { indexRepository } from "../indexer";
+import { deleteProjectIndexes, indexRepository } from "../indexer";
 import { parseRepository } from "../parser";
 import { extractDependencyEdges } from "../parser/dependency-resolver";
 import { CodeUnitStore } from "../retriever/unit-store";
 import { generateAndStoreSummary } from "../summary";
 import { throwIfAborted } from "../utils/abort";
+import { logger } from "../utils/logger";
 import { HttpError } from "./errors";
 
 export interface ProjectIndexContext {
@@ -85,48 +87,50 @@ export async function indexProject(
     await assertRepoRootAllowed(realRoot);
 
     const existing = context.repo.getProjectByPath(realRoot);
-    if (existing) {
-      context.repo.deleteProject(existing.id);
-      context.stores.delete(existing.id);
-      if (context.getCurrentProjectId() === existing.id) {
-        context.setCurrentProjectId(null);
-      }
-    }
-
-    const project = context.repo.createProject(projectName, realRoot);
+    const projectId = uuidv4();
 
     try {
       throwIfAborted(signal);
       const units = await parseRepository(realRoot, signal);
       throwIfAborted(signal);
-      await indexRepository(units, project.id, signal);
+      await indexRepository(units, projectId, signal);
       throwIfAborted(signal);
-      context.repo.insertCodeUnits(project.id, units);
-
       const edges = extractDependencyEdges(units);
-      if (edges.length > 0) {
-        context.repo.insertDependencyEdges(project.id, edges);
-      }
-
-      const filesSet = new Set(units.map((unit) => unit.filePath));
-      context.repo.updateProjectStats(project.id, units.length, filesSet.size);
+      const project = context.repo.replaceProjectIndex({
+        id: projectId,
+        name: projectName,
+        repoPath: realRoot,
+        units,
+        edges,
+      });
 
       const store = new CodeUnitStore();
       await store.loadFromDb(project.id, context.repo);
       context.stores.set(project.id, store);
       context.setCurrentProjectId(project.id);
+      if (existing) {
+        context.stores.delete(existing.id);
+        if (existing.id !== project.id) {
+          await deleteProjectIndexes(existing.id);
+        }
+      }
 
       if (summarize) {
         throwIfAborted(signal);
-        await generateAndStoreSummary(project.id, projectName, units, context.repo);
+        try {
+          await generateAndStoreSummary(project.id, projectName, units, context.repo);
+        } catch (err) {
+          logger.warn(`Summary generation failed after indexing ${project.id}: ${String(err)}`);
+        }
       }
 
       const timeSeconds = (Date.now() - start) / 1000;
       return { projectId: project.id, unitCount: store.size, timeSeconds };
     } catch (err) {
-      context.repo.deleteProject(project.id);
-      context.stores.delete(project.id);
-      if (context.getCurrentProjectId() === project.id) {
+      await deleteProjectIndexes(projectId);
+      context.repo.deleteProject(projectId);
+      context.stores.delete(projectId);
+      if (context.getCurrentProjectId() === projectId) {
         context.setCurrentProjectId(null);
       }
       throw err;

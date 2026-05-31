@@ -35,6 +35,10 @@ function getCollectionName(projectId: string): string {
   return `code-embeddings-${projectId}`;
 }
 
+export async function deleteQdrantCollection(projectId: string, signal?: AbortSignal): Promise<void> {
+  await qdrantFetch(`/collections/${getCollectionName(projectId)}`, { method: "DELETE", signal }, true);
+}
+
 export async function indexToQdrant(
   units: { unitId: string; name: string; filePath: string; kind: string; isVendored: boolean }[],
   embeddings: number[][],
@@ -44,7 +48,7 @@ export async function indexToQdrant(
   const collectionName = getCollectionName(projectId);
 
   throwIfAborted(signal);
-  await qdrantFetch(`/collections/${collectionName}`, { method: "DELETE", signal }, true);
+  await deleteQdrantCollection(projectId, signal);
 
   await qdrantFetch(`/collections/${collectionName}`, {
     method: "PUT",

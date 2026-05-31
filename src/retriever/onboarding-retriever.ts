@@ -2,6 +2,13 @@ import { CodeUnit } from "../parser/types";
 import { CodeUnitStore } from "./unit-store";
 import { RetrievedUnit } from "./hybrid-retriever";
 import { isDocumentationFile, isTestFile } from "./source-classifier";
+import {
+  isPackageBoundary,
+  normalizedUnitText,
+  ONBOARDING_PRODUCT_TERMS,
+  ONBOARDING_WORKFLOW_TERMS,
+  unitLengthPenalty,
+} from "./scoring-policy";
 
 export interface OnboardingRetrievalOptions {
   query: string;
@@ -20,75 +27,6 @@ export interface OnboardingRetrievalDiagnostic {
 export interface OnboardingRetrievalResult {
   retrieved: RetrievedUnit[];
   diagnostics: OnboardingRetrievalDiagnostic[];
-}
-
-const WORKFLOW_TERMS = [
-  "collab",
-  "collaboration",
-  "share",
-  "sharing",
-  "export",
-  "import",
-  "save",
-  "storage",
-  "localstorage",
-  "indexeddb",
-  "encrypt",
-  "decrypt",
-  "room",
-  "socket",
-  "sync",
-  "backend",
-  "auth",
-  "login",
-  "settings",
-  "onboarding",
-];
-
-const PRODUCT_TERMS = [
-  "product",
-  "user",
-  "customer",
-  "workflow",
-  "feature",
-  "offline",
-  "privacy",
-  "security",
-  "risk",
-  "roadmap",
-  "overview",
-];
-
-function normalizedUnitText(unit: CodeUnit): string {
-  return [
-    unit.filePath,
-    unit.name,
-    unit.kind,
-    unit.docstring ?? "",
-    unit.exportedNames.join(" "),
-    unit.calledFunctions.join(" "),
-    unit.code,
-  ]
-    .join("\n")
-    .toLowerCase();
-}
-
-function isPackageBoundary(unit: CodeUnit): boolean {
-  return (
-    /(^|\/)(index|main|app|server|client)\.(ts|tsx|js|jsx|py)$/.test(unit.filePath) ||
-    /^packages\/[^/]+\/src\/index\.(ts|tsx|js|jsx|py)$/.test(unit.filePath) ||
-    /^packages\/[^/]+\/index\.(ts|tsx|js|jsx|py)$/.test(unit.filePath)
-  );
-}
-
-function unitLengthPenalty(unit: CodeUnit): number {
-  const lineCount = unit.endLine - unit.startLine + 1;
-  if (isDocumentationFile(unit.filePath) && /(^|\/)readme\.mdx?$/i.test(unit.filePath)) return 0;
-  if (isDocumentationFile(unit.filePath) && lineCount > 1000) return -30;
-  if (lineCount > 1200) return -32;
-  if (lineCount > 600) return -20;
-  if (lineCount > 300) return -8;
-  return 0;
 }
 
 function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; reasons: string[] } {
@@ -129,7 +67,7 @@ function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; re
     score += 3;
   }
 
-  for (const term of WORKFLOW_TERMS) {
+  for (const term of ONBOARDING_WORKFLOW_TERMS) {
     if (filePath.includes(term) || unit.name.toLowerCase().includes(term)) {
       score += 10;
       reasons.push(`workflow term in path/name: ${term}`);
@@ -138,7 +76,7 @@ function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; re
     }
   }
 
-  for (const term of PRODUCT_TERMS) {
+  for (const term of ONBOARDING_PRODUCT_TERMS) {
     if (queryText.includes(term) && text.includes(term)) {
       score += 4;
     }

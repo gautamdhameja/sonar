@@ -26,19 +26,17 @@ Prerequisites:
 - Git, if you want Sonar to clone GitHub repositories from the desktop app
 - Rust toolchain, if you are running or packaging the Tauri app locally
 
-Start the local runtime:
-
-```bash
-docker compose up -d
-```
-
-This starts the Sonar API, Meilisearch, Qdrant, and Docker Model Runner-backed generation and embedding models.
-
-Run the desktop app in development:
+Install dependencies and run the desktop app in development:
 
 ```bash
 npm install
 npm run desktop:dev
+```
+
+The desktop app starts the local Docker services with a per-install API token. To run Compose manually, provide an explicit token:
+
+```bash
+SONAR_API_TOKEN="$(openssl rand -hex 32)" docker compose up -d
 ```
 
 Then paste a GitHub repository URL or select a local repository folder in the desktop UI and create a briefing.

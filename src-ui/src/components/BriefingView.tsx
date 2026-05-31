@@ -1,0 +1,158 @@
+import {
+  AlertTriangle,
+  BookOpen,
+  CheckCircle2,
+  ChevronRight,
+  Clipboard,
+  Download,
+  FileText,
+  RefreshCw,
+  Search,
+} from "lucide-react";
+import { suggestedQuestions } from "../app/constants";
+import type { ActiveTask } from "../app/types";
+import { formatMs } from "../app/format";
+import type { CitationVerification, FollowupResponse, OnboardingSessionResponse, Project, SourceRef } from "../types";
+
+interface BriefingViewProps {
+  activeTask: ActiveTask | null;
+  citation?: CitationVerification;
+  followups: FollowupResponse[];
+  latestSources: SourceRef[];
+  question: string;
+  selectedProject: Project | null;
+  session: OnboardingSessionResponse;
+  sourceFileCount: number;
+  onCopyBriefing: () => void;
+  onCreateOnboarding: () => void;
+  onExportBriefing: () => void;
+  onFollowup: () => void;
+  onOpenEvidence: () => void;
+  onQuestionChange: (value: string) => void;
+}
+
+export function BriefingView({
+  activeTask,
+  citation,
+  followups,
+  latestSources,
+  question,
+  selectedProject,
+  session,
+  sourceFileCount,
+  onCopyBriefing,
+  onCreateOnboarding,
+  onExportBriefing,
+  onFollowup,
+  onOpenEvidence,
+  onQuestionChange,
+}: BriefingViewProps) {
+  return (
+    <div className="briefing-layout">
+      <article className="brief-document">
+        <div className="document-head">
+          <div>
+            <p className="eyebrow">First-Week Briefing</p>
+            <h2>{session.session.repoName}</h2>
+          </div>
+          <div className="document-actions">
+            <button className="secondary" onClick={onCopyBriefing} type="button">
+              <Clipboard size={16} />
+              Copy
+            </button>
+            <button className="secondary" onClick={onExportBriefing} type="button">
+              <Download size={16} />
+              Export
+            </button>
+            <button className="secondary" onClick={onOpenEvidence} type="button">
+              <Search size={16} />
+              Evidence
+            </button>
+            <button className="secondary" onClick={onCreateOnboarding} type="button">
+              <RefreshCw size={16} />
+              Regenerate
+            </button>
+          </div>
+        </div>
+
+        <div className="confidence-row">
+          <span>
+            <BookOpen size={15} />
+            {sourceFileCount} source files
+          </span>
+          <span>
+            <FileText size={15} />
+            {latestSources.length} cited units
+          </span>
+          {citation && (
+            <span className={citation.valid ? "confidence-good" : "confidence-warn"}>
+              {citation.valid ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+              {citation.valid ? "Grounded" : `${citation.uncitedClaims.length} open claims`}
+            </span>
+          )}
+        </div>
+
+        <div className="markdownish briefing-text">{session.brief.brief}</div>
+
+        <section className="followup-card">
+          <div>
+            <p className="eyebrow">Ask Next</p>
+            <h3>Continue from this briefing</h3>
+          </div>
+          <div className="suggestion-row">
+            {suggestedQuestions.map((item) => (
+              <button key={item} onClick={() => onQuestionChange(item)} type="button">
+                {item}
+              </button>
+            ))}
+          </div>
+          <div className="question-row">
+            <textarea value={question} onChange={(event) => onQuestionChange(event.target.value)} />
+            <button
+              className="primary"
+              disabled={!session || activeTask?.kind === "followup"}
+              onClick={onFollowup}
+              type="button"
+            >
+              Ask
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <div className="answers">
+            {followups.map((item) => (
+              <article
+                className="answer"
+                key={`${item.intent}-${item.retrievalTime}-${item.generationTime}-${item.answer.slice(0, 48)}`}
+              >
+                <div className="answer-meta">
+                  <span>{item.intent.replaceAll("_", " ")}</span>
+                  <span>
+                    {formatMs(item.retrievalTime)} retrieval · {formatMs(item.generationTime)} generation
+                  </span>
+                </div>
+                <div className="markdownish">{item.answer}</div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </article>
+
+      <aside className="brief-aside">
+        <section>
+          <p className="eyebrow">Confidence</p>
+          <h3>{citation?.valid ? "Evidence looks grounded" : "Review suggested"}</h3>
+          <p>
+            {citation?.valid
+              ? "The briefing cites concrete files from the repository."
+              : "Some summary language may need a human check before sharing."}
+          </p>
+        </section>
+        <section>
+          <p className="eyebrow">Selected Repository</p>
+          <h3>{selectedProject?.name ?? session.session.repoName}</h3>
+          <p>{selectedProject?.fileCount ?? 0} files indexed locally.</p>
+        </section>
+      </aside>
+    </div>
+  );
+}
