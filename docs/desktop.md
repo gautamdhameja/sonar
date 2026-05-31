@@ -26,11 +26,13 @@ The V1 desktop app is the primary user experience. In Docker-first mode, Compose
 
 The default Docker-first stack is intentionally local and self-contained. To use cloud generation or a separately hosted local model, run API mode and override endpoint environment variables instead of the default Compose model bindings.
 
-When the desktop app starts Docker services, it injects a per-install API token and Meilisearch key. If you run `docker compose up` manually, set `SONAR_API_TOKEN` first:
+When the desktop app starts Docker services, it injects a per-install API token and Meilisearch key. If you run `docker compose up` manually, Compose uses a local-only development token by default:
 
 ```bash
-SONAR_API_TOKEN="$(openssl rand -hex 32)" docker compose up -d
+docker compose up -d
 ```
+
+For shared machines or any custom network exposure, set your own token with `SONAR_API_TOKEN`.
 
 ## Desktop Configuration
 

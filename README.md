@@ -33,11 +33,13 @@ npm install
 npm run desktop:dev
 ```
 
-The desktop app starts the local Docker services with a per-install API token. To run Compose manually, provide an explicit token:
+The desktop app starts the local Docker services with a per-install API token. Direct Compose startup also works without an env file and uses a local-only development token by default:
 
 ```bash
-SONAR_API_TOKEN="$(openssl rand -hex 32)" docker compose up -d
+docker compose up -d
 ```
+
+For shared machines or any custom network exposure, set your own token with `SONAR_API_TOKEN`.
 
 Then paste a GitHub repository URL or select a local repository folder in the desktop UI and create a briefing.
 

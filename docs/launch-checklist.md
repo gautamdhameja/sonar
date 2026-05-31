@@ -11,8 +11,6 @@ npm run test:integration
 npm run build
 npm run build:ui
 mdbook build docs
-export SONAR_API_TOKEN="$(openssl rand -hex 32)"
-export SONAR_MEILI_MASTER_KEY="$(openssl rand -hex 32)"
 docker compose -f compose.yml config
 docker compose -f docker-compose.sonar.yml config
 npm audit --audit-level=moderate
@@ -22,10 +20,9 @@ npm audit --audit-level=moderate
 ## Docker End-To-End
 
 ```bash
-export SONAR_API_TOKEN="$(openssl rand -hex 32)"
 docker compose up -d
-curl -H "X-Sonar-Token: $SONAR_API_TOKEN" http://127.0.0.1:3001/health
-curl -H "X-Sonar-Token: $SONAR_API_TOKEN" http://127.0.0.1:3001/health/dependencies
+curl -H "X-Sonar-Token: ${SONAR_API_TOKEN:-sonar-local-dev-token}" http://127.0.0.1:3001/health
+curl -H "X-Sonar-Token: ${SONAR_API_TOKEN:-sonar-local-dev-token}" http://127.0.0.1:3001/health/dependencies
 ```
 
 Acceptance criteria:
@@ -34,7 +31,8 @@ Acceptance criteria:
 - Sonar API, Meilisearch, Qdrant, chat model, and embedding model are healthy.
 - Docker does not mount the user's home directory.
 - A selected repository is copied into Sonar's internal Docker volume before indexing.
-- Direct Compose startup fails closed when `SONAR_API_TOKEN` is missing.
+- Direct Compose startup works without an env file on loopback-only ports.
+- Shared-machine or custom-network startup sets explicit `SONAR_API_TOKEN` and `SONAR_MEILI_MASTER_KEY` values.
 
 ## Dependency Audit Notes
 

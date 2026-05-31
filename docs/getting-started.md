@@ -31,11 +31,13 @@ This starts or connects to:
 
 The first run downloads model artifacts and can take a while. The app uses the Compose-managed API on `http://127.0.0.1:3001`.
 
-If you run Compose directly instead of through the desktop app, set an API token explicitly:
+If you run Compose directly instead of through the desktop app, it uses a local-only development token by default:
 
 ```bash
-SONAR_API_TOKEN="$(openssl rand -hex 32)" docker compose up -d
+docker compose up -d
 ```
+
+For shared machines or any custom network exposure, set your own token with `SONAR_API_TOKEN`.
 
 ## Privacy Boundary
 
@@ -66,11 +68,10 @@ Everything else has a code default for local development. Advanced settings such
 The infra-only Compose file can start just the retrieval dependencies for API mode. Use this when you want to run the API with your own generation and embedding endpoints:
 
 ```bash
-export SONAR_API_TOKEN="$(openssl rand -hex 32)"
-export SONAR_MEILI_MASTER_KEY="$(openssl rand -hex 32)"
-export SONAR_MEILI_API_KEY="$SONAR_MEILI_MASTER_KEY"
 docker compose -f docker-compose.sonar.yml up -d meilisearch qdrant
 ```
+
+For shared machines or any custom network exposure, set `SONAR_MEILI_MASTER_KEY` and `SONAR_MEILI_API_KEY` explicitly.
 
 Start the API:
 
@@ -83,6 +84,6 @@ npm start
 ## Health Checks
 
 ```bash
-curl -H "X-Sonar-Token: $SONAR_API_TOKEN" http://localhost:3001/health
-curl -H "X-Sonar-Token: $SONAR_API_TOKEN" http://localhost:3001/health/dependencies
+curl -H "X-Sonar-Token: ${SONAR_API_TOKEN:-sonar-local-dev-token}" http://localhost:3001/health
+curl -H "X-Sonar-Token: ${SONAR_API_TOKEN:-sonar-local-dev-token}" http://localhost:3001/health/dependencies
 ```

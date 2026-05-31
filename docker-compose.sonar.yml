@@ -1,7 +1,7 @@
 services:
   meilisearch:
     image: getmeili/meilisearch:v1.13
-    command: ["meilisearch", "--master-key", "${SONAR_MEILI_MASTER_KEY:?Set SONAR_MEILI_MASTER_KEY before running the infra-only Compose file.}", "--http-addr", "0.0.0.0:7700"]
+    command: ["meilisearch", "--master-key", "${SONAR_MEILI_MASTER_KEY:-sonar-local-dev-token}", "--http-addr", "0.0.0.0:7700"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:7700:7700"
