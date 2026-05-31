@@ -49,6 +49,37 @@ test("verifyCitations rejects broad file-only citations", () => {
   assert.deepEqual(result.invalidCitations, ["src/llama/config.ts"]);
 });
 
+test("verifyCitations expands combined citation ranges", () => {
+  const result = verifyCitations(
+    "The configuration logic reads one setting and validates another [src/llama/config.ts:4-8, src/llama/config.ts:9-12].",
+    [{ ...unit, startLine: 4, endLine: 12 }],
+  );
+
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.citations, ["src/llama/config.ts:4-8", "src/llama/config.ts:9-12"]);
+});
+
+test("verifyCitations expands repeated ranges for the same file", () => {
+  const result = verifyCitations(
+    "The configuration logic reads one setting and validates another [src/llama/config.ts:4-8, 9-12].",
+    [{ ...unit, startLine: 4, endLine: 12 }],
+  );
+
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.citations, ["src/llama/config.ts:4-8", "src/llama/config.ts:9-12"]);
+});
+
+test("verifyCitations accepts bare file-line citations from small local models", () => {
+  const result = verifyCitations(
+    "The function `getLlamaConfig` in src/llama/config.ts:4-16 retrieves the value from the environment.",
+    [unit],
+  );
+
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.citations, ["src/llama/config.ts:4-16"]);
+  assert.deepEqual(result.uncitedClaims, []);
+});
+
 test("verifyCitations rejects broad summary labels", () => {
   const result = verifyCitations("The workflow validates local model configuration before execution [Data Flow].", [
     unit,
@@ -66,6 +97,16 @@ test("verifyCitations flags uncited factual claims", () => {
 
   assert.equal(result.valid, false);
   assert.equal(result.uncitedClaims.length, 1);
+});
+
+test("verifyCitations allows unsupported-context gap statements without citations", () => {
+  const result = verifyCitations(
+    "The provided context does not contain the runtime validation code. To answer this completely, the missing implementation would be needed. To answer this, the code that performs the validation would need to be provided. To answer this question, the code would need to include validation logic.",
+    [unit],
+  );
+
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.uncitedClaims, []);
 });
 
 test("verifyCitations ignores markdown links as citations", () => {

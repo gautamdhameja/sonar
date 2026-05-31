@@ -9,6 +9,10 @@ export interface CitationVerification {
   sourceKeys: string[];
 }
 
+const bracketCitationPattern = /\[([^\]\n]{2,240})\](?!\()/g;
+const bareCitationPattern =
+  /\b((?:[A-Za-z0-9_.@-]+\/)*[A-Za-z0-9_.@-]+\.(?:c|cc|cpp|cs|css|go|h|hpp|html|java|js|jsx|json|kt|kts|md|mjs|php|py|rb|rs|scss|sql|swift|toml|ts|tsx|yaml|yml):\d+(?:-\d+)?)\b/g;
+
 function splitClaims(answer: string): string[] {
   return answer
     .split(/\n+/)
@@ -19,6 +23,13 @@ function splitClaims(answer: string): string[] {
         line.length > 40 &&
         !/^#{1,6}\s/.test(line) &&
         !/^\|/.test(line) &&
+        !/:$/.test(line) &&
+        !/^\*\*[^*]+:\*\*:?$/.test(line) &&
+        !/^["“].+\?["”]?$/.test(line) &&
+        !/\?["”]?$/.test(line) &&
+        !/\b(not found|not supported|does not contain|do not contain|does not include|does not show|what is missing|would be needed|would need to (?:show|be provided|include)|is needed|could not determine)\b/i.test(
+          line,
+        ) &&
         !/^(purpose|main components|how work moves|questions|what this means)\b/i.test(line),
     );
 }
@@ -45,10 +56,46 @@ function parseCitation(value: string): { filePath: string; startLine?: number; e
   };
 }
 
+function expandCitationGroup(value: string): string[] {
+  const parts = value
+    .split(/\s*,\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) return [value.trim()];
+
+  const expanded: string[] = [];
+  let currentFilePath: string | null = null;
+  for (const part of parts) {
+    const withFile = part.match(/^(.+?):(\d+(?:-\d+)?)$/);
+    if (withFile) {
+      currentFilePath = withFile[1];
+      expanded.push(part);
+      continue;
+    }
+    if (currentFilePath && /^\d+(?:-\d+)?$/.test(part)) {
+      expanded.push(`${currentFilePath}:${part}`);
+      continue;
+    }
+    expanded.push(part);
+  }
+
+  return expanded;
+}
+
+function hasCitation(value: string): boolean {
+  bracketCitationPattern.lastIndex = 0;
+  bareCitationPattern.lastIndex = 0;
+  return bracketCitationPattern.test(value) || bareCitationPattern.test(value);
+}
+
 export function verifyCitations(answer: string, contextUnits: CodeUnit[]): CitationVerification {
-  const citations = [
-    ...new Set(Array.from(answer.matchAll(/\[([^\]\n]{2,160})\](?!\()/g), (match) => match[1].trim())),
-  ];
+  bracketCitationPattern.lastIndex = 0;
+  const bracketCitations = Array.from(answer.matchAll(bracketCitationPattern), (match) => match[1].trim()).flatMap(
+    expandCitationGroup,
+  );
+  bareCitationPattern.lastIndex = 0;
+  const bareCitations = Array.from(answer.matchAll(bareCitationPattern), (match) => match[1].trim());
+  const citations = [...new Set([...bracketCitations, ...bareCitations])];
   const sourceKeys = new Set<string>();
   const basenameCounts = new Map<string, number>();
 
@@ -91,7 +138,7 @@ export function verifyCitations(answer: string, contextUnits: CodeUnit[]): Citat
       return parsed.startLine >= range.startLine && citationEnd <= range.endLine;
     });
   });
-  const uncitedClaims = splitClaims(answer).filter((claim) => !/\[[^\]\n]{2,160}\](?!\()/.test(claim));
+  const uncitedClaims = splitClaims(answer).filter((claim) => !hasCitation(claim));
 
   return {
     valid: invalidCitations.length === 0 && uncitedClaims.length === 0,

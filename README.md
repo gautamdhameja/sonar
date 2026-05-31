@@ -64,6 +64,9 @@ Detailed documentation lives in [docs/](docs/README.md).
 - [API Reference](docs/api.md)
 - [Retrieval And Quality](docs/retrieval.md)
 - [Development](docs/development.md)
+- [Launch Checklist](docs/launch-checklist.md)
+
+Release notes live in [CHANGELOG.md](CHANGELOG.md).
 
 The docs directory is structured as a small mdBook-style book with [docs/SUMMARY.md](docs/SUMMARY.md).
 

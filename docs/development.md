@@ -18,11 +18,10 @@ Run the API in development:
 npm run dev
 ```
 
-Start local retrieval and embedding dependencies:
+Start local retrieval dependencies:
 
 ```bash
-docker compose -f docker-compose.sonar.yml up -d meilisearch qdrant ollama
-docker compose -f docker-compose.sonar.yml exec ollama ollama pull nomic-embed-text
+docker compose -f docker-compose.sonar.yml up -d meilisearch qdrant
 ```
 
 ## Checks

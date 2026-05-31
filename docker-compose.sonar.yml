@@ -17,15 +17,6 @@ services:
     volumes:
       - sonar-qdrant:/qdrant/storage
 
-  ollama:
-    image: ollama/ollama:0.12.10
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:11434:11434"
-    volumes:
-      - sonar-ollama:/root/.ollama
-
 volumes:
   sonar-meili:
   sonar-qdrant:
-  sonar-ollama:

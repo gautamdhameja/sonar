@@ -9,3 +9,4 @@ Use these chapters:
 - [API Reference](api.md) for indexing, onboarding, follow-up, graph, health, and stats endpoints.
 - [Retrieval And Quality](retrieval.md) for session behavior, query routing, citation verification, and known limitations.
 - [Development](development.md) for architecture, local commands, checks, and integration notes.
+- [Launch Checklist](launch-checklist.md) for release-candidate validation.

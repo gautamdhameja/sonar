@@ -27,8 +27,6 @@ COPY --from=build /app/grammars ./grammars
 RUN mkdir -p /data \
   && chown -R node:node /app /data
 
-USER node
-
 EXPOSE 3001
 
-CMD ["node", "dist/index.js", "--port", "3001"]
+CMD ["sh", "-c", "chown -R node:node /data /workspace/repos 2>/dev/null || true; exec su node -s /bin/sh -c 'node dist/index.js --port 3001'"]

@@ -27,12 +27,12 @@ The desktop app uses the same HTTP API that can be used for automation and devel
 - `GET /projects/:id/graph` — file-level dependency graph.
 - `GET /projects/:id/graph/directory` — directory-level dependency graph.
 - `GET /health` — API health and current project status.
-- `GET /health/dependencies` — SQLite, Meilisearch, Qdrant, Ollama, and chat endpoint status.
+- `GET /health/dependencies` — SQLite, Meilisearch, Qdrant, embedding endpoint, and chat endpoint status.
 - `GET /stats` — current project index statistics.
 
 ## Typical API Flow
 
-1. Start Meilisearch, Qdrant, and embeddings, using Docker Compose or your own services.
+1. Start Meilisearch, Qdrant, and an embedding endpoint, using Docker Compose or your own services.
 2. Start Sonar API mode.
 3. Ensure a generation endpoint is reachable at `SONAR_CHAT_BASE_URL`.
 4. Index a local repository.

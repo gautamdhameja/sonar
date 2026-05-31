@@ -27,11 +27,12 @@ export function buildOnboardingBriefPrompt(
     "RULES:",
     "1. Use only the provided source context.",
     "2. Every factual bullet or sentence must include a citation in the form [file:start-end].",
-    "3. If a topic is not supported by the provided source context, write 'Not found in provided context' for that topic.",
-    "4. Prefer product language: users, workflows, promises, data, ownership, risks, and questions to ask.",
-    "5. Avoid low-level implementation details unless they explain product behavior or risk.",
-    "6. Mark inferences with '(inferred)' and cite the source that supports the inference.",
-    "7. Keep the result concise enough to read in one sitting.",
+    "3. Do not combine multiple sources inside one citation bracket; write separate citations like [file:start-end] [file:start-end].",
+    "4. If a topic is not supported by the provided source context, write 'Not found in provided context' for that topic.",
+    "5. Prefer product language: users, workflows, promises, data, ownership, risks, and questions to ask.",
+    "6. Avoid low-level implementation details unless they explain product behavior or risk.",
+    "7. Mark inferences with '(inferred)' and cite the source that supports the inference.",
+    "8. Keep the result concise enough to read in one sitting.",
   ].join("\n");
 
   const parts: string[] = [
@@ -70,6 +71,7 @@ export function buildCitationRepairPrompt(answer: string, units: CodeUnit[]): { 
     "You repair source grounding in an onboarding brief.",
     "Use only the listed sources. Do not add new facts.",
     "Every factual bullet or sentence must include a valid citation in the form [file:start-end].",
+    "Do not combine multiple sources inside one citation bracket; write separate citations like [file:start-end] [file:start-end].",
     "Remove unsupported claims instead of leaving them uncited.",
     "Keep the same overall structure.",
   ].join("\n");
