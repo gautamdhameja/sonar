@@ -59,27 +59,12 @@ export function HomeScreen({
 
   return (
     <article className="start-card">
-      <div className="start-copy">
-        <p className="eyebrow">Local Onboarding</p>
-        <h2>Prepare a briefing for your first week in this codebase.</h2>
-        <p>
-          Sonar reads the selected repository locally, builds a compact evidence map, and turns it into a
-          source-grounded onboarding document.
-        </p>
-        <ReadinessCard
-          activeTask={activeTask}
-          onOpenSettings={onOpenSettings}
-          onStart={onStartRuntime}
-          runtime={runtime}
-          snapshot={snapshot}
-        />
-      </div>
-
       <div className="repo-card">
         <div className="repo-card-head">
           <div>
-            <p className="eyebrow">Repository</p>
-            <h3>Choose what Sonar should brief</h3>
+            <p className="eyebrow">Get started</p>
+            <h2>Analyze a repository</h2>
+            <p>Create a concise, cited onboarding brief from a GitHub repository or a local folder on this machine.</p>
           </div>
           <button className="secondary compact-button" onClick={onUseDemoRepository} type="button">
             Try Excalidraw
@@ -149,40 +134,56 @@ export function HomeScreen({
           <Lock size={15} />
           <span>
             {runtimeReady
-              ? "Only the selected repository is imported into Sonar's local workspace."
-              : "Start the local runtime first. Sonar will only import the repository you choose."}
+              ? "Only the repository you choose is imported into Sonar's local workspace."
+              : "Start the local runtime first. Sonar will import only the repository you choose."}
           </span>
         </div>
       </div>
 
-      {projects.length > 0 && (
-        <div className="recent-projects">
-          <span>Recent briefings</span>
-          <div>
-            {projects.slice(0, 3).map((project) => (
+      <aside className="start-copy">
+        <div className="intro-panel">
+          <p className="eyebrow">Sonar</p>
+          <h2>First-week context, grounded in source.</h2>
+          <p>Generate onboarding notes that stay close to the code, the docs, and the product flow.</p>
+        </div>
+
+        <ReadinessCard
+          activeTask={activeTask}
+          onOpenSettings={onOpenSettings}
+          onStart={onStartRuntime}
+          runtime={runtime}
+          snapshot={snapshot}
+        />
+
+        {projects.length > 0 && (
+          <div className="recent-projects">
+            <span>Recent briefings</span>
+            <div>
+              {projects.slice(0, 3).map((project) => (
+                <button
+                  className={project.id === selectedProjectId ? "recent-project active" : "recent-project"}
+                  key={project.id}
+                  onClick={() => onSelectProject(project)}
+                  type="button"
+                >
+                  {project.name}
+                </button>
+              ))}
+            </div>
+            {selectedProjectId && !canAnalyze && (
               <button
-                className={project.id === selectedProjectId ? "recent-project active" : "recent-project"}
-                key={project.id}
-                onClick={() => onSelectProject(project)}
+                className="secondary compact-button"
+                disabled={isCreatingBriefing || runtimeBusy || !runtimeReady}
+                onClick={onCreateBriefing}
                 type="button"
               >
-                {project.name}
+                <BookOpen size={15} />
+                Use selected
               </button>
-            ))}
+            )}
           </div>
-          {selectedProjectId && !canAnalyze && (
-            <button
-              className="secondary compact-button"
-              disabled={isCreatingBriefing || runtimeBusy || !runtimeReady}
-              onClick={onCreateBriefing}
-              type="button"
-            >
-              <BookOpen size={15} />
-              Use selected
-            </button>
-          )}
-        </div>
-      )}
+        )}
+      </aside>
     </article>
   );
 }

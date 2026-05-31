@@ -18,19 +18,19 @@ export function ReadinessCard({ snapshot, runtime, activeTask, onStart, onOpenSe
   const isStarting = activeTask?.kind === "bootstrap";
   const title =
     runtime === "ready"
-      ? "Local runtime is ready"
+      ? "Runtime ready"
       : runtime === "unknown" || runtime === "starting"
-        ? "Checking local runtime"
-        : "Finish local setup";
+        ? "Checking runtime"
+        : "Runtime needs attention";
   const body =
     runtime === "ready"
-      ? "Sonar can index a selected repository and ask the configured model for a grounded briefing."
-      : "Sonar uses Docker for search, vectors, embeddings, and the API. The first run can download models in Docker Desktop and may take several minutes.";
+      ? "Search, vectors, API, and model endpoints are available."
+      : "Start the local services before creating a briefing. First run can take several minutes while Docker prepares models.";
 
   return (
     <section className={`readiness-card ${runtime}`}>
       <div>
-        <p className="eyebrow">Readiness</p>
+        <p className="eyebrow">Status</p>
         <h3>{title}</h3>
         <p>{body}</p>
       </div>
@@ -54,7 +54,7 @@ export function ReadinessCard({ snapshot, runtime, activeTask, onStart, onOpenSe
           {runtime === "ready" ? "Check again" : "Start local runtime"}
         </button>
         <button className="secondary" onClick={onOpenSettings} type="button">
-          Details
+          Settings
         </button>
       </div>
     </section>
