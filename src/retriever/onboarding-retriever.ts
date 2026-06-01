@@ -106,6 +106,38 @@ function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; re
   }
 
   if (
+    /\b(input|keypress|keyboard|command|editor|buffer|document|state)\b/.test(queryText) &&
+    /\b(input|keypress|keyboard|keydown|keyup|command|editor|buffer|document|state|dispatch|update)\b/.test(text)
+  ) {
+    score += 14;
+    reasons.push("input/editor state evidence");
+  }
+
+  if (
+    /\b(render|display|terminal|output|screen|view)\b/.test(queryText) &&
+    /\b(render|display|terminal|output|screen|view|paint|draw|stdout|write)\b/.test(text)
+  ) {
+    score += 14;
+    reasons.push("render/output evidence");
+  }
+
+  if (
+    /\b(save|persist|persistence|disk|file|write|storage)\b/.test(queryText) &&
+    /\b(save|persist|write|disk|file|storage|fs\.|writefile|localstorage|indexeddb|database)\b/.test(text)
+  ) {
+    score += 14;
+    reasons.push("persistence evidence");
+  }
+
+  if (
+    /\b(language|lsp|tree-sitter|parser|grammar|integration)\b/.test(queryText) &&
+    /\b(language|lsp|tree-sitter|treesitter|parser|grammar|syntax|diagnostic|completion)\b/.test(text)
+  ) {
+    score += 14;
+    reasons.push("language feature evidence");
+  }
+
+  if (
     /\b(collab|collaboration|share|room|privacy|encrypt)\b/.test(queryText) &&
     /\b(collab|socket|room|backend|encrypt|decrypt|share|sync)\b/.test(text)
   ) {

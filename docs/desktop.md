@@ -51,3 +51,9 @@ This file is generated locally and ignored by git.
 
 - Paste a GitHub repository URL. Sonar clones it locally, imports that selected repository into Docker's private Sonar repository volume, and indexes the imported copy.
 - Select an existing local repository with the native folder picker. Only that selected repository is copied into Docker's private Sonar repository volume.
+
+## Language Coverage Warning
+
+When Sonar indexes a repository, it scans for common source file extensions outside the supported parser set. If it finds unsupported languages, the desktop app shows a warning with file counts. You can still create the briefing, but unsupported source files are not part of the code index.
+
+Supported code parsers today cover TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, and C#. Markdown and MDX are indexed as documentation.

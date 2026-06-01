@@ -1,4 +1,5 @@
-import type { FollowupResponse, OnboardingSessionResponse, Project } from "./types";
+import { invoke } from "@tauri-apps/api/core";
+import type { FollowupResponse, IndexProjectResponse, OnboardingSessionResponse, Project } from "./types";
 import { briefingRoleProfiles } from "./app/constants";
 import type { BriefingRole } from "./app/types";
 
@@ -6,11 +7,34 @@ export const apiBaseUrl = "http://127.0.0.1:3001";
 
 let apiToken = "";
 
+interface DesktopTokenConfig {
+  apiToken?: string | null;
+}
+
 export function setApiToken(token: string | null | undefined): void {
   apiToken = token?.trim() ?? "";
 }
 
+function isTauriRuntime(): boolean {
+  return typeof window !== "undefined" && window.__TAURI_INTERNALS__ !== undefined;
+}
+
+async function hydrateApiToken(): Promise<void> {
+  if (apiToken || !isTauriRuntime()) return;
+  const config = await invoke<DesktopTokenConfig>("get_model_config");
+  setApiToken(config.apiToken);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  await hydrateApiToken();
+  return requestWithToken<T>(path, init, true);
+}
+
+async function requestWithToken<T>(
+  path: string,
+  init: RequestInit | undefined,
+  allowTokenRefresh: boolean,
+): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers: {
@@ -23,6 +47,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const text = await response.text();
   const contentType = response.headers.get("content-type") ?? "";
   const body = text && contentType.includes("application/json") ? (JSON.parse(text) as unknown) : {};
+
+  if (response.status === 401 && allowTokenRefresh && isTauriRuntime()) {
+    apiToken = "";
+    await hydrateApiToken();
+    if (apiToken) return requestWithToken<T>(path, init, false);
+  }
 
   if (!response.ok) {
     const message =
@@ -45,7 +75,7 @@ export async function indexProject(
   repoRoot: string,
   name: string,
   signal?: AbortSignal,
-): Promise<{ projectId: string; unitCount: number; timeSeconds: number }> {
+): Promise<IndexProjectResponse> {
   return request("/projects/index", {
     method: "POST",
     signal,

@@ -42,6 +42,12 @@ The embedding vector size must match the embedding model output. For example, Do
 
 After setup, paste a GitHub repository URL or select a local repository folder, then create a briefing.
 
+## Supported Repositories
+
+Sonar has the best code coverage for repositories written in TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, and C#. Markdown and MDX files are indexed as documentation.
+
+If a repository contains other source languages, Sonar shows a warning after indexing with the unsupported language names and file counts. Unsupported source files are skipped from code indexing, so the generated briefing may be incomplete or rely more heavily on docs.
+
 ## Privacy Boundary
 
 The Docker-first stack does not mount your home directory. Docker can only see repositories imported into Sonar's private `/workspace/repos` volume. When you select a local folder in the desktop UI, Sonar copies that selected repository into the volume and indexes the copied path.

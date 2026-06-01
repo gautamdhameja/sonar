@@ -2,19 +2,7 @@ import fs from "fs";
 import path from "path";
 import { CONFIG } from "../config";
 import { detectVendoredPaths } from "./vendored-detector";
-
-const VALID_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".md", ".mdx"]);
-const EXCLUDED_DIRS = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "build",
-  "__pycache__",
-  ".next",
-  ".venv",
-  "venv",
-  "coverage",
-]);
+import { EXCLUDED_REPOSITORY_DIRS, SUPPORTED_INDEX_EXTENSIONS } from "./language-support";
 
 export interface WalkedFile {
   relativePath: string;
@@ -33,11 +21,11 @@ export async function walkRepository(repoRoot: string): Promise<WalkedFile[]> {
       if (results.length >= CONFIG.parser.maxFiles) return;
 
       if (entry.isDirectory()) {
-        if (!EXCLUDED_DIRS.has(entry.name)) {
+        if (!EXCLUDED_REPOSITORY_DIRS.has(entry.name)) {
           await walk(path.join(dir, entry.name), depth + 1);
         }
       } else if (entry.isFile()) {
-        if (VALID_EXTENSIONS.has(path.extname(entry.name))) {
+        if (SUPPORTED_INDEX_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
           const relativePath = path.relative(repoRoot, path.join(dir, entry.name));
           const isVendored = isUnderVendoredPath(relativePath, vendoredPaths);
           results.push({ relativePath, isVendored });

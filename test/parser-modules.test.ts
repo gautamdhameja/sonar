@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { parseRepository } from "../src/parser";
 import { parseTypeScript } from "../src/parser/ts-parser";
 import { parsePython } from "../src/parser/py-parser";
+import { parseGenericSource } from "../src/parser/generic-parser";
+import { detectUnsupportedSourceLanguages } from "../src/parser/language-support";
 
 test("parseTypeScript creates a module unit for schema-only files", async () => {
   const units = await parseTypeScript(
@@ -89,4 +95,113 @@ test("parsePython extracts decorated class methods", async () => {
   const method = units.find((unit) => unit.kind === "method" && unit.name === "server_url");
   assert.ok(method);
   assert.match(method.code, /@property/);
+});
+
+test("parseGenericSource extracts Rust functions and type units", async () => {
+  const units = await parseGenericSource(
+    [
+      "use std::fs;",
+      "pub struct DocumentBuffer { text: String }",
+      "impl DocumentBuffer {",
+      "    pub fn save(&self, path: &str) { fs::write(path, &self.text).unwrap(); }",
+      "}",
+      "pub fn handle_keypress(input: char, buffer: &mut DocumentBuffer) {",
+      "    if input == 's' { buffer.save(\"notes.txt\"); }",
+      "}",
+    ].join("\n"),
+    "src/editor.rs",
+  );
+
+  assert.ok(units.some((unit) => unit.language === "rust" && unit.name === "DocumentBuffer"));
+  assert.ok(units.some((unit) => unit.language === "rust" && unit.name === "handle_keypress"));
+  assert.ok(units.some((unit) => unit.imports.some((line) => line.includes("use std::fs"))));
+});
+
+test("parseGenericSource extracts Go, Java, and C# code units", async () => {
+  const [goUnits, javaUnits, csharpUnits] = await Promise.all([
+    parseGenericSource(
+      [
+        'import "os"',
+        "type Store struct { Path string }",
+        "func (s Store) Save(data []byte) error { return os.WriteFile(s.Path, data, 0644) }",
+        "func NewStore(path string) Store { return Store{Path: path} }",
+      ].join("\n"),
+      "store/store.go",
+    ),
+    parseGenericSource(
+      [
+        "import java.nio.file.Files;",
+        "class Workspace {",
+        '  void render() { System.out.println("ready"); }',
+        "}",
+      ].join("\n"),
+      "src/Workspace.java",
+    ),
+    parseGenericSource(
+      ["using System;", "class Workspace {", '  void Render() { Console.WriteLine("ready"); }', "}"].join("\n"),
+      "src/Workspace.cs",
+    ),
+  ]);
+
+  assert.ok(goUnits.some((unit) => unit.language === "go" && unit.name === "NewStore"));
+  assert.ok(goUnits.some((unit) => unit.language === "go" && unit.imports.some((line) => line.includes("os"))));
+  assert.ok(javaUnits.some((unit) => unit.language === "java" && unit.name === "Workspace"));
+  assert.ok(javaUnits.some((unit) => unit.language === "java" && unit.name === "render"));
+  assert.ok(csharpUnits.some((unit) => unit.language === "csharp" && unit.name === "Workspace"));
+  assert.ok(csharpUnits.some((unit) => unit.language === "csharp" && unit.name === "Render"));
+});
+
+test("parseRepository indexes common non-JS source files", async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), "sonar-parser-"));
+  try {
+    await writeFile(
+      path.join(repoRoot, "main.rs"),
+      ["pub struct AppState { value: String }", 'pub fn run(state: AppState) { println!("{}", state.value); }'].join(
+        "\n",
+      ),
+    );
+    await writeFile(
+      path.join(repoRoot, "server.go"),
+      ["package main", 'import "fmt"', 'func StartServer() { fmt.Println("ready") }'].join("\n"),
+    );
+
+    const units = await parseRepository(repoRoot);
+    assert.ok(units.some((unit) => unit.filePath === "main.rs" && unit.language === "rust" && unit.name === "run"));
+    assert.ok(
+      units.some((unit) => unit.filePath === "server.go" && unit.language === "go" && unit.name === "StartServer"),
+    );
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test("detectUnsupportedSourceLanguages reports unsupported source files without flagging supported files", async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), "sonar-language-support-"));
+  try {
+    await writeFile(path.join(repoRoot, "app.ts"), "export function run() { return true; }");
+    await writeFile(path.join(repoRoot, "main.rs"), "pub fn run() {}");
+    await writeFile(path.join(repoRoot, "README.md"), "# Supported docs");
+    await writeFile(path.join(repoRoot, "legacy.php"), "<?php function legacy() {}");
+    await writeFile(path.join(repoRoot, "native.cpp"), "int main() { return 0; }");
+    await mkdir(path.join(repoRoot, "node_modules"));
+    await writeFile(path.join(repoRoot, "node_modules", "ignored.rb"), "def ignored; end");
+
+    const unsupported = await detectUnsupportedSourceLanguages(repoRoot);
+
+    assert.deepEqual(
+      unsupported.map((item) => item.extension),
+      [".cpp", ".php"],
+    );
+    assert.equal(unsupported.find((item) => item.extension === ".php")?.fileCount, 1);
+    assert.equal(
+      unsupported.some((item) => item.extension === ".ts" || item.extension === ".rs"),
+      false,
+    );
+    assert.equal(
+      unsupported.some((item) => item.extension === ".rb"),
+      false,
+    );
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
 });

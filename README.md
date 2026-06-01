@@ -17,6 +17,12 @@ Sonar indexes a repository, retrieves the most relevant code and docs, and asks 
 
 Sonar is intended to produce strong source-grounded first drafts. It is not a replacement for human-reviewed technical or compliance documentation.
 
+## Language Support
+
+Sonar currently indexes TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C#, and Markdown/MDX. Repositories that mainly use other source languages can still be imported, but unsupported source files are skipped from code indexing. In those cases, briefings may be incomplete or more dependent on README and documentation files.
+
+See [Language Support and Limits](docs/language-support.md) for the current parser coverage and known limitations.
+
 ## Quick Start
 
 Prerequisites for running from source:
@@ -53,5 +59,6 @@ Detailed documentation lives in [docs/](docs/README.md).
 
 - [Getting Started](docs/getting-started.md)
 - [Desktop App](docs/desktop.md)
+- [Language Support and Limits](docs/language-support.md)
 
 Release notes live in [CHANGELOG.md](CHANGELOG.md).

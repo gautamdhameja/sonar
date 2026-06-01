@@ -4,6 +4,7 @@ import { walkRepository } from "./file-walker";
 import { parseTypeScript } from "./ts-parser";
 import { parsePython } from "./py-parser";
 import { parseMarkdown } from "./markdown-parser";
+import { isGenericSourceFile, parseGenericSource } from "./generic-parser";
 import { ensureFileModuleUnits } from "./file-units";
 import { CodeUnit } from "./types";
 import { logger } from "../utils/logger";
@@ -59,6 +60,8 @@ export async function parseRepository(repoRoot: string, signal?: AbortSignal): P
         units = await parsePython(source, filePath);
       } else if (DOC_EXTENSIONS.has(ext)) {
         units = parseMarkdown(source, filePath);
+      } else if (isGenericSourceFile(filePath)) {
+        units = await parseGenericSource(source, filePath);
       } else {
         continue;
       }

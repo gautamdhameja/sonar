@@ -99,3 +99,51 @@ test("onboardingRetrieval penalizes giant modules in favor of targeted workflow 
 
   assert.equal(result.retrieved[0].unitId, "portal");
 });
+
+test("onboardingRetrieval finds editor data-flow evidence for briefing sections", async () => {
+  const store = await storeWithUnits([
+    unit("input", {
+      id: "input",
+      filePath: "src/input/keyboard.ts",
+      name: "handleKeypress",
+      kind: "function",
+      code: "export function handleKeypress(event, editorState) { return dispatchCommand(event.key, editorState.buffer); }",
+    }),
+    unit("render", {
+      id: "render",
+      filePath: "src/terminal/render.ts",
+      name: "renderScreen",
+      kind: "function",
+      code: "export function renderScreen(buffer) { terminal.write(drawDocument(buffer)); }",
+    }),
+    unit("persistence", {
+      id: "persistence",
+      filePath: "src/storage/save-file.ts",
+      name: "saveDocument",
+      kind: "function",
+      code: "export async function saveDocument(path, buffer, fs) { await fs.writeFile(path, buffer.text); }",
+    }),
+    unit("language", {
+      id: "language",
+      filePath: "src/language/tree-sitter.ts",
+      name: "configureLanguageFeatures",
+      kind: "function",
+      code: "export function configureLanguageFeatures(lsp, grammar) { return treeSitterParser(grammar).withDiagnostics(lsp); }",
+    }),
+  ]);
+
+  const result = onboardingRetrieval(store, {
+    query:
+      "Data flow briefing: input keypress editor state buffer render terminal output save persist disk file language server lsp tree-sitter parser.",
+    topK: 4,
+  });
+
+  assert.deepEqual(
+    new Set(result.retrieved.map((item) => item.unitId)),
+    new Set(["input", "render", "persistence", "language"]),
+  );
+  assert.ok(result.diagnostics.some((item) => item.reasons.includes("input/editor state evidence")));
+  assert.ok(result.diagnostics.some((item) => item.reasons.includes("render/output evidence")));
+  assert.ok(result.diagnostics.some((item) => item.reasons.includes("persistence evidence")));
+  assert.ok(result.diagnostics.some((item) => item.reasons.includes("language feature evidence")));
+});

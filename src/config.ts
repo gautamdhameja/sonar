@@ -35,7 +35,7 @@ export interface SonarConfig {
     vectorSize: number;
   };
   parser: {
-    supportedLanguages: readonly ["typescript", "python", "javascript"];
+    supportedLanguages: readonly string[];
     maxChunkTokens: number;
     maxFiles: number;
     maxFileBytes: number;
@@ -201,7 +201,7 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       vectorSize: getInteger(env, "SONAR_QDRANT_VECTOR_SIZE", 768),
     },
     parser: {
-      supportedLanguages: ["typescript", "python", "javascript"],
+      supportedLanguages: ["typescript", "python", "javascript", "rust", "go", "java", "csharp", "markdown"],
       maxChunkTokens: 2000,
       maxFiles: getInteger(env, "SONAR_MAX_INDEX_FILES", 5000),
       maxFileBytes: getInteger(env, "SONAR_MAX_INDEX_FILE_BYTES", 1_000_000),

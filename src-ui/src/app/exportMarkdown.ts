@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { isTauriRuntime } from "./runtime";
 
-export async function saveMarkdownFile(defaultPath: string, contents: string): Promise<void> {
+export async function saveMarkdownFile(defaultPath: string, contents: string): Promise<boolean> {
   if (isTauriRuntime()) {
     const target = await save({
       defaultPath,
@@ -10,8 +10,9 @@ export async function saveMarkdownFile(defaultPath: string, contents: string): P
     });
     if (typeof target === "string") {
       await invoke("export_markdown", { path: target, contents });
+      return true;
     }
-    return;
+    return false;
   }
 
   const url = URL.createObjectURL(new Blob([contents], { type: "text/markdown;charset=utf-8" }));
@@ -20,4 +21,5 @@ export async function saveMarkdownFile(defaultPath: string, contents: string): P
   anchor.download = defaultPath;
   anchor.click();
   URL.revokeObjectURL(url);
+  return true;
 }

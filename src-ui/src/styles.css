@@ -12,8 +12,9 @@
 
 body {
   margin: 0;
-  min-width: 1080px;
+  min-width: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   background: linear-gradient(180deg, #fbfdff 0%, #f5f8fc 100%);
 }
 
@@ -24,8 +25,15 @@ textarea {
 }
 
 button {
+  min-width: 0;
+  max-width: 100%;
   border: 0;
   cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+button svg {
+  flex-shrink: 0;
 }
 
 button:disabled {
@@ -42,6 +50,7 @@ button:disabled {
   top: 0;
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
@@ -54,14 +63,17 @@ button:disabled {
 
 .brand-block {
   display: flex;
+  flex: 1 1 360px;
   gap: 12px;
   align-items: center;
+  min-width: 0;
 }
 
 .brand-copy {
   display: grid;
   gap: 2px;
   align-content: center;
+  min-width: 0;
 }
 
 .brand-mark {
@@ -99,6 +111,7 @@ button:disabled {
   font-size: 12px;
   font-weight: 650;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .brand-block p,
@@ -123,7 +136,10 @@ button:disabled {
 }
 
 .header-actions {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .status-pill,
@@ -530,6 +546,24 @@ textarea:focus {
   line-height: 1.4;
 }
 
+.language-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  color: #7c4a03;
+  background: #fff7ed;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.language-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
 .recent-projects {
   display: grid;
   gap: 10px;
@@ -693,13 +727,18 @@ textarea:focus {
 }
 
 .document-head h2 {
+  min-width: 0;
   color: #0f2445;
   font-size: 34px;
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .document-actions {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .confidence-row {
@@ -946,6 +985,14 @@ textarea:focus {
 .brief-aside h3 {
   color: #123763;
   font-size: 17px;
+}
+
+.brief-navigation {
+  gap: 10px;
+}
+
+.brief-navigation button {
+  width: 100%;
 }
 
 .toast-alert {
@@ -1271,24 +1318,150 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .briefing-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .document-head {
+    display: grid;
+  }
+
+  .document-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .brief-aside {
+    position: static;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .role-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 720px) {
+  .app-header {
+    display: grid;
+    align-items: flex-start;
+    padding: 14px;
+  }
+
+  .brand-mark {
+    width: 38px;
+    height: 38px;
+  }
+
+  .brand-block p {
+    max-width: none;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 6px;
+  }
+
+  .status-pill,
+  .ghost-button,
+  .primary,
+  .secondary,
+  .quiet-danger,
+  .compact-button {
+    min-height: 38px;
+    padding: 0 11px;
+  }
+
   .start-shell,
   .briefing-shell {
     width: min(100% - 28px, 1180px);
     padding-top: 24px;
   }
 
-  .repo-card {
+  .start-shell {
+    min-height: auto;
+    align-items: start;
+  }
+
+  .repo-card,
+  .brief-document,
+  .brief-aside {
     padding: 20px;
   }
 
   .repo-card-head h2 {
     font-size: 24px;
+  }
+
+  .repo-picker,
+  .question-row,
+  .setup-actions {
+    display: grid;
+  }
+
+  .document-head h2 {
+    font-size: 26px;
+  }
+
+  .document-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brief-aside {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-composer {
+    margin-right: -4px;
+    margin-left: -4px;
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+
+  .suggestion-row button {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .answer-meta {
+    display: grid;
+    gap: 4px;
+  }
+
+  .progress-panel {
+    right: 14px;
+    bottom: 14px;
+    width: calc(100vw - 28px);
+    max-height: calc(100vh - 28px);
+    overflow: auto;
+  }
+
+  .toast-alert {
+    top: 78px;
+    width: calc(100vw - 28px);
+  }
+
+  .drawer {
+    width: 100vw;
+    padding: 20px;
+  }
+
+  .setup-backdrop {
+    padding: 14px;
+  }
+
+  .setup-dialog {
+    width: 100%;
+    max-height: calc(100vh - 28px);
+    padding: 20px;
+  }
+
+  .readiness-actions {
+    grid-template-columns: 1fr;
   }
 
   .role-grid {
@@ -1299,8 +1472,68 @@ textarea:focus {
   .model-mode-grid {
     grid-template-columns: 1fr;
   }
+}
 
-  .setup-actions {
+@media (max-width: 520px) {
+  .app-header {
+    gap: 12px;
+  }
+
+  .start-shell,
+  .briefing-shell {
+    width: min(100% - 20px, 1180px);
+    padding: 18px 0 40px;
+  }
+
+  .repo-card,
+  .brief-document,
+  .brief-aside,
+  .readiness-card,
+  .persona-card {
+    padding: 16px;
+    border-radius: 9px;
+  }
+
+  .segmented {
     display: grid;
+  }
+
+  .document-actions button {
+    width: 100%;
+  }
+
+  .document-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .confidence-row span {
+    flex: 1 1 100%;
+  }
+
+  .markdown-content pre {
+    margin-right: -4px;
+    margin-left: -4px;
+    padding: 12px;
+  }
+
+  .setup-actions .primary,
+  .preset-row .primary {
+    width: 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .brand-block p {
+    display: none;
+  }
+
+  .status-pill,
+  .ghost-button,
+  .primary,
+  .secondary,
+  .quiet-danger,
+  .compact-button {
+    gap: 6px;
+    padding: 0 9px;
   }
 }

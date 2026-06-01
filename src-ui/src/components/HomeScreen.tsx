@@ -1,4 +1,4 @@
-import { BookOpen, FolderOpen, GitBranch, HardDrive, Loader2, Lock, Sparkles } from "lucide-react";
+import { AlertTriangle, BookOpen, FolderOpen, GitBranch, HardDrive, Loader2, Lock, Sparkles } from "lucide-react";
 import { briefingRoleProfiles } from "../app/constants";
 import type { ActiveTask, BriefingRole, RepositorySource } from "../app/types";
 import type { DesktopModelConfig, Project, ServiceSnapshot, ServiceState } from "../types";
@@ -144,6 +144,14 @@ export function HomeScreen({
             {runtimeReady
               ? "Only the repository you choose is imported into Sonar's local workspace."
               : "Start the local runtime first. Sonar will import only the repository you choose."}
+          </span>
+        </div>
+
+        <div className="language-note">
+          <AlertTriangle size={15} />
+          <span>
+            Best coverage today: TypeScript, JavaScript, Python, Rust, Go, Java, C#, and Markdown. Other source
+            languages may be skipped, so the briefing can be incomplete.
           </span>
         </div>
 

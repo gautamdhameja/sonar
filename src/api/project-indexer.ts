@@ -6,6 +6,7 @@ import { ProjectRepo } from "../db/project-repo";
 import { deleteProjectIndexes, indexRepository } from "../indexer";
 import { parseRepository } from "../parser";
 import { extractDependencyEdges } from "../parser/dependency-resolver";
+import { UnsupportedLanguageSummary, detectUnsupportedSourceLanguages } from "../parser/language-support";
 import { CodeUnitStore } from "../retriever/unit-store";
 import { generateAndStoreSummary } from "../summary";
 import { throwIfAborted } from "../utils/abort";
@@ -17,6 +18,13 @@ export interface ProjectIndexContext {
   stores: Map<string, CodeUnitStore>;
   getCurrentProjectId(): string | null;
   setCurrentProjectId(projectId: string | null): void;
+}
+
+export interface ProjectIndexResult {
+  projectId: string;
+  unitCount: number;
+  timeSeconds: number;
+  unsupportedLanguages: UnsupportedLanguageSummary[];
 }
 
 const activeIndexingRoots = new Set<string>();
@@ -53,7 +61,7 @@ export async function indexProject(
   summarize: boolean,
   context: ProjectIndexContext,
   signal?: AbortSignal,
-): Promise<{ projectId: string; unitCount: number; timeSeconds: number }> {
+): Promise<ProjectIndexResult> {
   throwIfAborted(signal);
   const resolved = path.resolve(repoRoot);
   let realRoot: string;
@@ -91,6 +99,8 @@ export async function indexProject(
 
     try {
       throwIfAborted(signal);
+      const unsupportedLanguages = await detectUnsupportedSourceLanguages(realRoot);
+      throwIfAborted(signal);
       const units = await parseRepository(realRoot, signal);
       throwIfAborted(signal);
       await indexRepository(units, projectId, signal);
@@ -125,7 +135,7 @@ export async function indexProject(
       }
 
       const timeSeconds = (Date.now() - start) / 1000;
-      return { projectId: project.id, unitCount: store.size, timeSeconds };
+      return { projectId: project.id, unitCount: store.size, timeSeconds, unsupportedLanguages };
     } catch (err) {
       await deleteProjectIndexes(projectId);
       context.repo.deleteProject(projectId);

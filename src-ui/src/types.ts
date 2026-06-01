@@ -53,6 +53,20 @@ export interface Project {
   summaryGeneratedAt: string | null;
 }
 
+export interface UnsupportedLanguageSummary {
+  extension: string;
+  label: string;
+  fileCount: number;
+  sampleFiles: string[];
+}
+
+export interface IndexProjectResponse {
+  projectId: string;
+  unitCount: number;
+  timeSeconds: number;
+  unsupportedLanguages?: UnsupportedLanguageSummary[];
+}
+
 export interface CitationVerification {
   valid: boolean;
   citations: string[];

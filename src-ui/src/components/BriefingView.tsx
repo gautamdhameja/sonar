@@ -6,6 +6,7 @@ import {
   Clipboard,
   Download,
   FileText,
+  Home,
   RefreshCw,
   Search,
 } from "lucide-react";
@@ -14,6 +15,9 @@ import type { ActiveTask } from "../app/types";
 import { formatMs } from "../app/format";
 import type { CitationVerification, FollowupResponse, OnboardingSessionResponse, Project, SourceRef } from "../types";
 import { MarkdownContent } from "./MarkdownContent";
+
+const maxVisibleSuggestions = 4;
+const normalizeQuestion = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
 
 interface BriefingViewProps {
   activeTask: ActiveTask | null;
@@ -29,6 +33,7 @@ interface BriefingViewProps {
   onExportBriefing: () => void;
   onFollowup: () => void;
   onOpenEvidence: () => void;
+  onStartNewBriefing: () => void;
   onQuestionChange: (value: string) => void;
 }
 
@@ -46,8 +51,14 @@ export function BriefingView({
   onExportBriefing,
   onFollowup,
   onOpenEvidence,
+  onStartNewBriefing,
   onQuestionChange,
 }: BriefingViewProps) {
+  const answeredQuestions = new Set(followups.map((item) => normalizeQuestion(item.question)));
+  const visibleSuggestions = suggestedQuestions
+    .filter((item) => !answeredQuestions.has(normalizeQuestion(item)))
+    .slice(0, maxVisibleSuggestions);
+
   return (
     <div className="briefing-layout">
       <article className="brief-document">
@@ -132,13 +143,15 @@ export function BriefingView({
             ))}
           </div>
           <div className="chat-composer">
-            <div className="suggestion-row">
-              {suggestedQuestions.map((item) => (
-                <button key={item} onClick={() => onQuestionChange(item)} type="button">
-                  {item}
-                </button>
-              ))}
-            </div>
+            {visibleSuggestions.length > 0 && (
+              <div className="suggestion-row">
+                {visibleSuggestions.map((item) => (
+                  <button key={item} onClick={() => onQuestionChange(item)} type="button">
+                    {item}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="question-row">
               <textarea
                 value={question}
@@ -173,6 +186,13 @@ export function BriefingView({
           <p className="eyebrow">Selected Repository</p>
           <h3>{selectedProject?.name ?? session.session.repoName}</h3>
           <p>{selectedProject?.fileCount ?? 0} files indexed locally.</p>
+        </section>
+        <section className="brief-navigation">
+          <p className="eyebrow">Next</p>
+          <button className="secondary" disabled={activeTask !== null} onClick={onStartNewBriefing} type="button">
+            <Home size={16} />
+            Start another briefing
+          </button>
         </section>
       </aside>
     </div>

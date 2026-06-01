@@ -4,6 +4,7 @@ import { CodeUnit } from "../parser/types";
 import { DEFAULT_PERSONA, Persona } from "../persona/types";
 import { onboardingRetrieval, OnboardingRetrievalDiagnostic } from "../retriever/onboarding-retriever";
 import { QueryPlan } from "../retriever/query-router";
+import { isDocumentationFile } from "../retriever/source-classifier";
 import { CodeUnitStore } from "../retriever/unit-store";
 import { removeUncitedClaims, verifyCitations, CitationVerification } from "./citation-verifier";
 import { generateCompletion } from "./llm-client";
@@ -49,6 +50,21 @@ const BRIEFING_PARTS = [
 
 const COMPLETE_LINE_PATTERN = /(?:[.!?)]|]|\|)$/;
 
+const SECTION_RETRIEVAL_HINTS: Record<string, string> = {
+  "Product In One Paragraph": "README docs overview purpose product users feature value proposition",
+  "Who Uses It And Why": "README docs users customer persona workflow value use case",
+  "Codebase Product Map": "app main index package boundary module component route service architecture map",
+  "Top User Workflows": "workflow flow entry point user action command input process pipeline save export import",
+  "Main Systems And Ownership Areas":
+    "architecture subsystem owner module service state manager backend frontend storage api",
+  "Data, Privacy, And Operational Notes":
+    "data flow input editor state buffer render display output save persist disk file storage config environment auth privacy security language server lsp tree-sitter parser grammar integration",
+  "Risks Or Open Questions":
+    "risk security privacy persistence error fallback validation configuration dependency operational failure",
+  "Glossary For A Non-Deeply-Technical Reader":
+    "README docs concept terminology glossary domain model workflow component service",
+};
+
 function defaultFocus(): string[] {
   return [
     "what the product does",
@@ -61,12 +77,46 @@ function defaultFocus(): string[] {
 }
 
 function sourceList(units: CodeUnit[]) {
-  return units.map((unit) => ({
+  return orderEvidenceSources(uniqueUnits(units)).map((unit) => ({
     filePath: unit.filePath,
     name: unit.name,
     kind: unit.kind,
     lines: `${unit.startLine}-${unit.endLine}`,
   }));
+}
+
+function isCodeUnit(unit: CodeUnit): boolean {
+  return !isDocumentationFile(unit.filePath);
+}
+
+function orderEvidenceSources(units: CodeUnit[]): CodeUnit[] {
+  return [...units].sort((a, b) => {
+    const codeDelta = Number(isCodeUnit(b)) - Number(isCodeUnit(a));
+    if (codeDelta !== 0) return codeDelta;
+    return a.filePath.localeCompare(b.filePath) || a.startLine - b.startLine;
+  });
+}
+
+function uniqueUnits(units: CodeUnit[]): CodeUnit[] {
+  const seen = new Set<string>();
+  const output: CodeUnit[] = [];
+  for (const unit of units) {
+    if (seen.has(unit.id)) continue;
+    seen.add(unit.id);
+    output.push(unit);
+  }
+  return output;
+}
+
+function uniqueDiagnostics(diagnostics: OnboardingRetrievalDiagnostic[]): OnboardingRetrievalDiagnostic[] {
+  const seen = new Set<string>();
+  const output: OnboardingRetrievalDiagnostic[] = [];
+  for (const item of diagnostics) {
+    if (seen.has(item.unitId)) continue;
+    seen.add(item.unitId);
+    output.push(item);
+  }
+  return output;
 }
 
 function selectOnboardingContext(units: CodeUnit[], maxTokens: number): CodeUnit[] {
@@ -82,6 +132,54 @@ function selectOnboardingContext(units: CodeUnit[], maxTokens: number): CodeUnit
   }
 
   return selected;
+}
+
+function selectBalancedOnboardingContext(units: CodeUnit[], maxTokens: number, preferCode: boolean): CodeUnit[] {
+  const unique = uniqueUnits(units);
+  const docs = unique.filter((unit) => !isCodeUnit(unit));
+  const code = unique.filter(isCodeUnit);
+  const balanced = preferCode
+    ? [...code.slice(0, 16), ...docs.slice(0, 6), ...code.slice(16), ...docs.slice(6)]
+    : [...docs.slice(0, 6), ...code.slice(0, 12), ...docs.slice(6), ...code.slice(12)];
+  return selectOnboardingContext(balanced, maxTokens);
+}
+
+function buildSectionQuery(baseQuery: string, sections: string[]): string {
+  const sectionHints = sections.map((section) => SECTION_RETRIEVAL_HINTS[section]).filter(Boolean);
+  return [baseQuery, `Sections: ${sections.join(", ")}.`, `Evidence to retrieve: ${sectionHints.join(" ")}.`].join(" ");
+}
+
+function retrieveContextForSections(
+  store: CodeUnitStore,
+  query: string,
+  sections: string[],
+): {
+  contextUnits: CodeUnit[];
+  diagnostics: OnboardingRetrievalDiagnostic[];
+} {
+  const sectionQuery = buildSectionQuery(query, sections);
+  const retrieved = onboardingRetrieval(store, {
+    query: sectionQuery,
+    topK: 24,
+    maxPerFile: 3,
+  });
+
+  const candidateUnits = retrieved.retrieved
+    .map((result) => store.getUnit(result.unitId))
+    .filter((unit): unit is CodeUnit => Boolean(unit));
+  const preferCode = sections.some(
+    (section) =>
+      !["Product In One Paragraph", "Who Uses It And Why", "Glossary For A Non-Deeply-Technical Reader"].includes(
+        section,
+      ),
+  );
+  const contextUnits = selectBalancedOnboardingContext(
+    candidateUnits,
+    Math.max(1200, Math.floor(CONFIG.generator.maxContextTokens * ONBOARDING_QUERY_PLAN.maxContextRatio)),
+    preferCode,
+  );
+
+  return { contextUnits, diagnostics: retrieved.diagnostics };
 }
 
 function sectionPattern(section: string): RegExp {
@@ -187,32 +285,26 @@ export async function generateOnboardingBrief(
   ].join(" ");
 
   const retrievalStart = Date.now();
-  const retrieved = onboardingRetrieval(store, {
-    query,
-    topK: 30,
-    maxPerFile: 2,
-  });
-
-  const candidateUnits = retrieved.retrieved
-    .map((result) => store.getUnit(result.unitId))
-    .filter((unit): unit is CodeUnit => Boolean(unit));
-
-  const contextUnits = selectOnboardingContext(
-    candidateUnits,
-    Math.max(1400, Math.floor(CONFIG.generator.maxContextTokens * ONBOARDING_QUERY_PLAN.maxContextRatio)),
+  const sectionContexts = BRIEFING_PARTS.map((sections) => ({
+    sections,
+    ...retrieveContextForSections(store, query, sections),
+  }));
+  const contextUnits = uniqueUnits(sectionContexts.flatMap((sectionContext) => sectionContext.contextUnits));
+  const retrievalDiagnostics = uniqueDiagnostics(
+    sectionContexts.flatMap((sectionContext) => sectionContext.diagnostics),
   );
   const retrievalTime = Date.now() - retrievalStart;
 
   const generationStart = Date.now();
   const generatedParts = [];
-  for (const sections of BRIEFING_PARTS) {
+  for (const sectionContext of sectionContexts) {
     generatedParts.push(
-      await generateBriefingPart(contextUnits, {
+      await generateBriefingPart(sectionContext.contextUnits, {
         repoName: options.repoName,
         audience,
         focus,
         persona,
-        sections,
+        sections: sectionContext.sections,
       }),
     );
   }
@@ -267,6 +359,6 @@ export async function generateOnboardingBrief(
     generationTruncated,
     citationVerification,
     repaired,
-    retrievalDiagnostics: retrieved.diagnostics,
+    retrievalDiagnostics,
   };
 }

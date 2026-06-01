@@ -163,4 +163,10 @@ export const suggestedQuestions = [
   "Where does the main workflow start?",
   "What is risky or unclear?",
   "What should I ask engineering?",
+  "How does data move through this app?",
+  "What are the main user-facing features?",
+  "Where are the configuration boundaries?",
+  "What would break first in production?",
+  "Which files explain the product best?",
+  "What should a non-technical teammate know?",
 ];

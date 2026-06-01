@@ -35,7 +35,18 @@ import type {
   OnboardingSessionResponse,
   Project,
   ServiceSnapshot,
+  UnsupportedLanguageSummary,
 } from "./types";
+
+function unsupportedLanguageNotice(languages: UnsupportedLanguageSummary[] | undefined): string | null {
+  if (!languages?.length) return null;
+  const topLanguages = languages
+    .slice(0, 4)
+    .map((item) => `${item.label} (${item.fileCount})`)
+    .join(", ");
+  const suffix = languages.length > 4 ? ` and ${languages.length - 4} more` : "";
+  return `Limited language coverage: ${topLanguages}${suffix}. Sonar indexes TypeScript, JavaScript, Python, Rust, Go, Java, C#, and Markdown today; unsupported source files are skipped, so this briefing may be incomplete.`;
+}
 
 export function App() {
   const [snapshot, setSnapshot] = useState<ServiceSnapshot | null>(null);
@@ -76,14 +87,26 @@ export function App() {
   const briefingMarkdown = session ? buildBriefingMarkdown(session, followups, selectedProject) : "";
 
   async function refreshServices() {
-    const result = await serviceCommand("service_snapshot");
-    setSnapshot(result);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await serviceCommand("service_snapshot");
+      setSnapshot(result);
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    }
   }
 
   async function refreshProjects() {
-    const next = await listProjects();
-    setProjects(next);
-    if (!selectedProjectId && next[0]) setSelectedProjectId(next[0].id);
+    setError(null);
+    setNotice(null);
+    try {
+      const next = await listProjects();
+      setProjects(next);
+      if (!selectedProjectId && next[0]) setSelectedProjectId(next[0].id);
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    }
   }
 
   async function refreshModelConfig(): Promise<DesktopModelConfig> {
@@ -152,10 +175,16 @@ export function App() {
   }
 
   async function chooseDirectory() {
-    const selected = await open({ directory: true, multiple: false });
-    if (typeof selected === "string") {
-      setRepoPath(selected);
-      setProjectName(selected.split(/[\\/]/).filter(Boolean).at(-1) ?? "Local Project");
+    setError(null);
+    setNotice(null);
+    try {
+      const selected = await open({ directory: true, multiple: false });
+      if (typeof selected === "string") {
+        setRepoPath(selected);
+        setProjectName(selected.split(/[\\/]/).filter(Boolean).at(-1) ?? "Local Project");
+      }
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
     }
   }
 
@@ -204,6 +233,8 @@ export function App() {
     stopIfRequested();
     await refreshProjects();
     setSelectedProjectId(indexed.projectId);
+    const languageNotice = unsupportedLanguageNotice(indexed.unsupportedLanguages);
+    if (languageNotice) setNotice(languageNotice);
     return indexed.projectId;
   }
 
@@ -330,6 +361,8 @@ export function App() {
   }
 
   function handleSelectProject(project: Project) {
+    setError(null);
+    setNotice(null);
     setSelectedProjectId(project.id);
     setProjectName(project.name);
     setGithubRepository("");
@@ -343,9 +376,24 @@ export function App() {
     setAdvancedOpen(false);
   }
 
+  function handleStartNewBriefing() {
+    setError(null);
+    setNotice(null);
+    setSession(null);
+    setFollowups([]);
+    setQuestion(defaultQuestion);
+    setEvidenceOpen(false);
+    setGithubRepository("");
+    setRepoPath("");
+    setProjectName("");
+    setSelectedProjectId("");
+    setRepositorySource("github");
+  }
+
   async function handleCopyBriefing() {
     if (!briefingMarkdown) return;
     setError(null);
+    setNotice(null);
     try {
       await navigator.clipboard.writeText(briefingMarkdown);
       setNotice("Briefing copied as Markdown.");
@@ -357,9 +405,13 @@ export function App() {
   async function handleExportBriefing() {
     if (!session || !briefingMarkdown) return;
     setError(null);
+    setNotice(null);
     try {
-      await saveMarkdownFile(`${safeFileName(session.session.repoName)}-sonar-briefing.md`, briefingMarkdown);
-      setNotice("Briefing exported as Markdown.");
+      const exported = await saveMarkdownFile(
+        `${safeFileName(session.session.repoName)}-sonar-briefing.md`,
+        briefingMarkdown,
+      );
+      if (exported) setNotice("Briefing exported as Markdown.");
     } catch (err) {
       setError(friendlyErrorMessage(err));
     }
@@ -392,6 +444,7 @@ export function App() {
             onExportBriefing={() => void handleExportBriefing()}
             onFollowup={() => void handleFollowup()}
             onOpenEvidence={() => setEvidenceOpen(true)}
+            onStartNewBriefing={handleStartNewBriefing}
             onQuestionChange={setQuestion}
             question={question}
             selectedProject={selectedProject}

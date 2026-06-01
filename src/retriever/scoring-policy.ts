@@ -8,6 +8,21 @@ export interface ScoreReason {
 }
 
 export const ONBOARDING_WORKFLOW_TERMS = [
+  "app",
+  "command",
+  "document",
+  "editor",
+  "file",
+  "input",
+  "keyboard",
+  "keypress",
+  "render",
+  "display",
+  "terminal",
+  "output",
+  "buffer",
+  "state",
+  "write",
   "collab",
   "collaboration",
   "share",
@@ -28,6 +43,10 @@ export const ONBOARDING_WORKFLOW_TERMS = [
   "login",
   "settings",
   "onboarding",
+  "language",
+  "lsp",
+  "tree-sitter",
+  "parser",
 ] as const;
 
 export const ONBOARDING_PRODUCT_TERMS = [
