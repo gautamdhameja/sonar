@@ -2,6 +2,8 @@
 
 Sonar runs as a desktop app backed by local indexing services. The app manages those services for you.
 
+The product goal is simple: create a useful, cited briefing from a repository using a local or modest model. Sonar is best for high-level project understanding: what the project does, who it serves, the main workflows, important systems, risks, and questions to ask the team. It is not meant to replace deep code review, debugging, refactoring, or implementation work.
+
 Prerequisites:
 
 - Docker Desktop
@@ -15,10 +17,10 @@ npm install
 npm run desktop:dev
 ```
 
-On first launch, Sonar starts the non-model local services first and asks you to choose a model source:
+On first launch, Sonar asks you to choose a model source:
 
-- **Local Docker model** starts Docker Model Runner for generation and embeddings.
-- **API endpoint** skips Docker Model Runner and uses your configured OpenAI-compatible cloud or self-hosted endpoints.
+- **Local Docker model** starts Docker Model Runner for generation.
+- **API endpoint** uses your configured OpenAI-compatible cloud or self-hosted generation endpoint.
 
 After you save the model source, future launches use the saved choice automatically.
 
@@ -26,21 +28,16 @@ The local services are:
 
 - Sonar API on `http://localhost:3001`
 - Meilisearch on `http://localhost:7700`
-- Qdrant on `localhost:6333`
 
 If you choose **Local Docker model**, Docker Model Runner also starts:
 
 - a chat model, defaulting to `hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`
-- an embedding model, defaulting to `hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M`
 
 If you choose **API endpoint**, configure:
 
 - Generation API endpoint, model, and API key
-- Embedding API endpoint, model, API key, and vector size
 
-The embedding vector size must match the embedding model output. For example, Docker's default local embedding model uses `768`, while OpenAI `text-embedding-3-small` uses `1536` unless a compatible server is configured to return a different dimension.
-
-After setup, paste a GitHub repository URL or select a local repository folder, then create a briefing.
+After setup, paste a GitHub repository URL or select a local repository folder, choose the closest briefing audience, then create a briefing.
 
 ## Supported Repositories
 

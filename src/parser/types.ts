@@ -1,7 +1,7 @@
 export interface CodeUnit {
   id: string; // UUID
   filePath: string; // relative to repo root, e.g. "src/utils/helper.ts"
-  language: string; // e.g. "typescript", "python", "rust", "go", "java", "csharp", "markdown"
+  language: string; // e.g. "typescript", "python", "rust", "go", "java", "csharp", "markdown", "json", "prisma"
   kind: CodeUnitKind; // function, class, method, module
   name: string; // function/class/method name, or filename for module
   code: string; // full source code of the unit

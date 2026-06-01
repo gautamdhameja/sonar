@@ -14,7 +14,6 @@ const API_BASE_URL: &str = "http://127.0.0.1:3001";
 const API_HEALTH_URL: &str = "http://127.0.0.1:3001/health";
 const API_DEPENDENCIES_URL: &str = "http://127.0.0.1:3001/health/dependencies";
 const MEILI_HEALTH_URL: &str = "http://127.0.0.1:7700/health";
-const QDRANT_READY_URL: &str = "http://127.0.0.1:6333/readyz";
 
 #[derive(Clone, Copy)]
 enum ModelRuntimeMode {
@@ -37,7 +36,6 @@ pub async fn service_snapshot() -> ServiceSnapshot {
         )
         .await,
         service("meilisearch", "Meilisearch", MEILI_HEALTH_URL, true, None).await,
-        service("qdrant", "Qdrant", QDRANT_READY_URL, true, None).await,
     ];
 
     if model_setup_complete {
@@ -48,18 +46,8 @@ pub async fn service_snapshot() -> ServiceSnapshot {
         };
         services.push(
             service(
-                "models",
-                model_label,
-                API_DEPENDENCIES_URL,
-                true,
-                Some(&model_config.api_token),
-            )
-            .await,
-        );
-        services.push(
-            service(
                 "chat",
-                "Chat model server",
+                model_label,
                 API_DEPENDENCIES_URL,
                 true,
                 Some(&model_config.api_token),
@@ -92,16 +80,12 @@ pub async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
         && before
             .services
             .iter()
-            .any(|service| matches!(service.id, "models" | "chat") && service.state != "ready");
+            .any(|service| service.id == "chat" && service.state != "ready");
 
     if before
         .services
         .iter()
         .any(|service| service.id == "meilisearch" && service.state != "ready")
-        || before
-            .services
-            .iter()
-            .any(|service| service.id == "qdrant" && service.state != "ready")
         || before
             .services
             .iter()
@@ -203,27 +187,15 @@ fn compose_command(
         .current_dir(root)
         .env("SONAR_CHAT_MODEL", &model_config.chat_model)
         .env("SONAR_CHAT_API_KEY", &model_config.chat_api_key)
-        .env("SONAR_EMBEDDING_PROVIDER", "openai")
-        .env("SONAR_EMBEDDING_MODEL", &model_config.embedding_model)
-        .env("SONAR_EMBEDDING_API_KEY", &model_config.embedding_api_key)
-        .env(
-            "SONAR_QDRANT_VECTOR_SIZE",
-            model_config.embedding_vector_size.to_string(),
-        )
         .env("SONAR_API_TOKEN", api_token)
         .env("SONAR_MEILI_MASTER_KEY", meili_master_key)
         .env("SONAR_MEILI_API_KEY", meili_master_key)
         .env("MEILI_MASTER_KEY", meili_master_key);
     if matches!(runtime_mode, ModelRuntimeMode::ApiEndpoints) {
-        command
-            .env(
-                "SONAR_CHAT_BASE_URL",
-                docker_reachable_url(&model_config.chat_base_url),
-            )
-            .env(
-                "SONAR_EMBEDDING_BASE_URL",
-                docker_reachable_url(&model_config.embedding_base_url),
-            );
+        command.env(
+            "SONAR_CHAT_BASE_URL",
+            docker_reachable_url(&model_config.chat_base_url),
+        );
     }
     command
 }

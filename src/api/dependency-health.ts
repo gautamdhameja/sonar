@@ -34,13 +34,19 @@ export async function checkDependencies(): Promise<DependencyHealth[]> {
   const meili = checkFetch("meilisearch", `${CONFIG.meilisearch.host}/health`, {
     headers: { Authorization: `Bearer ${CONFIG.meilisearch.apiKey}` },
   });
-  const qdrant = checkFetch("qdrant", `http://${CONFIG.qdrant.host}:${CONFIG.qdrant.port}/collections`);
-  const embedding = checkFetch("embeddings", `${CONFIG.embedding.baseUrl}/models`, {
-    headers: { Authorization: `Bearer ${CONFIG.embedding.apiKey}` },
-  });
   const chat = checkFetch("chat", `${CONFIG.chat.baseUrl}/models`, {
     headers: { Authorization: `Bearer ${CONFIG.chat.apiKey}` },
   });
+  const checks = [meili, chat];
 
-  return [dbCheck, ...(await Promise.all([meili, qdrant, embedding, chat]))];
+  if (CONFIG.qdrant.enabled) {
+    checks.push(checkFetch("qdrant", `http://${CONFIG.qdrant.host}:${CONFIG.qdrant.port}/collections`));
+    checks.push(
+      checkFetch("embeddings", `${CONFIG.embedding.baseUrl}/models`, {
+        headers: { Authorization: `Bearer ${CONFIG.embedding.apiKey}` },
+      }),
+    );
+  }
+
+  return [dbCheck, ...(await Promise.all(checks))];
 }

@@ -4,7 +4,12 @@ import { CONFIG } from "../config";
 
 export const SUPPORTED_CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".cs"]);
 export const SUPPORTED_DOC_EXTENSIONS = new Set([".md", ".mdx"]);
-export const SUPPORTED_INDEX_EXTENSIONS = new Set([...SUPPORTED_CODE_EXTENSIONS, ...SUPPORTED_DOC_EXTENSIONS]);
+export const SUPPORTED_TEXT_EXTENSIONS = new Set([".json", ".prisma"]);
+export const SUPPORTED_INDEX_EXTENSIONS = new Set([
+  ...SUPPORTED_CODE_EXTENSIONS,
+  ...SUPPORTED_DOC_EXTENSIONS,
+  ...SUPPORTED_TEXT_EXTENSIONS,
+]);
 
 export const EXCLUDED_REPOSITORY_DIRS = new Set([
   "node_modules",
@@ -70,8 +75,16 @@ export interface UnsupportedLanguageSummary {
   sampleFiles: string[];
 }
 
+function isIgnoredUnsupportedSourcePath(relativePath: string): boolean {
+  const normalized = relativePath.replace(/\\/g, "/").toLowerCase();
+  return (
+    /^prisma\/migrations\/[^/]+\/migration\.sql$/.test(normalized) ||
+    /(^|\/)(migrations?|schema-migrations?)\/[^/]+\.sql$/.test(normalized)
+  );
+}
+
 export function supportedLanguageDescription(): string {
-  return "TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C#, and Markdown/MDX";
+  return "TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C#, Markdown/MDX, and selected JSON/Prisma schema text";
 }
 
 export async function detectUnsupportedSourceLanguages(repoRoot: string): Promise<UnsupportedLanguageSummary[]> {
@@ -98,6 +111,8 @@ export async function detectUnsupportedSourceLanguages(repoRoot: string): Promis
       if (!label || SUPPORTED_INDEX_EXTENSIONS.has(extension)) continue;
 
       const relativePath = path.relative(repoRoot, fullPath);
+      if (isIgnoredUnsupportedSourcePath(relativePath)) continue;
+
       const summary = counts.get(extension) ?? { label, fileCount: 0, sampleFiles: [] };
       summary.fileCount += 1;
       if (summary.sampleFiles.length < 3) summary.sampleFiles.push(relativePath);

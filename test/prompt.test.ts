@@ -21,7 +21,7 @@ const unit: CodeUnit = {
 };
 
 test("buildPrompt includes persona guidance", () => {
-  const prompt = buildPrompt("What does this app do?", [unit], "sonar", "A local code explainer.", {
+  const prompt = buildPrompt("What does this app do?", [unit], "sonar", "A local briefing assistant.", {
     role: "product_manager",
     technicalBackground: "basic",
     avoidJargon: true,

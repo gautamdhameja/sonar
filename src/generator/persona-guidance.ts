@@ -14,7 +14,7 @@ const ROLE_GUIDANCE: Record<Persona["role"], string> = {
   executive:
     "Frame the answer around business purpose, major capabilities, strategic risks, and decisions that need technical confirmation.",
   engineer:
-    "Use precise technical language, but keep claims grounded in the supplied source context and cite each code-backed point.",
+    "Use precise technical language for architecture and source landmarks, but keep the answer at orientation depth unless the user explicitly needs a source pointer.",
   other:
     "Use a general stakeholder-friendly explanation focused on what the system does, how the pieces relate, and what is directly supported by the code.",
 };
@@ -46,7 +46,8 @@ export function buildPersonaGuidance(persona: Persona): string {
   lines.push(
     "",
     "EXPLANATION STYLE:",
-    "- Prefer plain language and tie code details to product or workflow meaning.",
+    "- Prefer plain language and tie code details to product, workflow, ownership, or risk meaning.",
+    "- Stay at briefing depth: explain what matters and where to look, not line-by-line implementation mechanics.",
     '- Separate what the code proves from reasonable inferences; mark inferences with "(inferred)".',
     "- Do not invent customers, market positioning, security claims, or performance claims unless the supplied context supports them.",
     "- Define unavoidable technical terms in one short phrase the first time they appear.",

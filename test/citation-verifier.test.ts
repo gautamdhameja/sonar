@@ -31,6 +31,25 @@ test("verifyCitations accepts cited claims with real source citations", () => {
   assert.deepEqual(result.uncitedClaims, []);
 });
 
+test("verifyCitations accepts citations for routes with square-bracket path params", () => {
+  const result = verifyCitations(
+    "Team limits are exposed through a route handler [pages/api/teams/[teamId]/limits.ts:1-4].",
+    [
+      {
+        ...unit,
+        id: "route-unit",
+        filePath: "pages/api/teams/[teamId]/limits.ts",
+        name: "limits",
+        startLine: 1,
+        endLine: 4,
+      },
+    ],
+  );
+
+  assert.equal(result.invalidCitations.length, 0);
+  assert.deepEqual(result.citations, ["pages/api/teams/[teamId]/limits.ts:1-4"]);
+});
+
 test("verifyCitations rejects citations outside the supplied line range", () => {
   const result = verifyCitations("The configuration function validates runtime settings [src/llama/config.ts:4-999].", [
     unit,

@@ -30,6 +30,7 @@ export interface SonarConfig {
     apiKey: string;
   };
   qdrant: {
+    enabled: boolean;
     host: string;
     port: number;
     vectorSize: number;
@@ -196,12 +197,24 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       apiKey: getString(env, "SONAR_MEILI_API_KEY", env.SONAR_API_TOKEN ?? ""),
     },
     qdrant: {
+      enabled: getBoolean(env, "SONAR_VECTOR_SEARCH_ENABLED", false),
       host: getString(env, "SONAR_QDRANT_HOST", "localhost"),
       port: getInteger(env, "SONAR_QDRANT_PORT", 6333),
       vectorSize: getInteger(env, "SONAR_QDRANT_VECTOR_SIZE", 768),
     },
     parser: {
-      supportedLanguages: ["typescript", "python", "javascript", "rust", "go", "java", "csharp", "markdown"],
+      supportedLanguages: [
+        "typescript",
+        "python",
+        "javascript",
+        "rust",
+        "go",
+        "java",
+        "csharp",
+        "markdown",
+        "json",
+        "prisma",
+      ],
       maxChunkTokens: 2000,
       maxFiles: getInteger(env, "SONAR_MAX_INDEX_FILES", 5000),
       maxFileBytes: getInteger(env, "SONAR_MAX_INDEX_FILE_BYTES", 1_000_000),

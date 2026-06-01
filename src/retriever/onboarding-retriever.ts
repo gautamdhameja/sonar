@@ -1,7 +1,7 @@
 import { CodeUnit } from "../parser/types";
 import { CodeUnitStore } from "./unit-store";
 import { RetrievedUnit } from "./hybrid-retriever";
-import { isDocumentationFile, isTestFile } from "./source-classifier";
+import { isBriefingNoiseFile, isDocumentationFile, isTestFile } from "./source-classifier";
 import {
   isPackageBoundary,
   normalizedUnitText,
@@ -37,6 +37,7 @@ function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; re
   let score = 0;
 
   if (unit.isVendored) return { score: 0, reasons: [] };
+  if (isBriefingNoiseFile(unit.filePath)) return { score: 0, reasons: [] };
   if (isTestFile(unit.filePath)) score -= 30;
   if (
     /(^|\/)changelog\.mdx?$/i.test(unit.filePath) &&

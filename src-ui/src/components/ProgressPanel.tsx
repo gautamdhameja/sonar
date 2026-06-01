@@ -71,10 +71,10 @@ export function ProgressPanel({ activeTask, onStop, stopDisabled }: ProgressPane
           </div>
         ))}
       </div>
-      {activeTask.kind === "analyze" && (
+      {(activeTask.kind === "analyze" || activeTask.kind === "brief") && (
         <button className="quiet-danger" disabled={stopDisabled} onClick={onStop} type="button">
           <StopCircle size={16} />
-          Stop analysis
+          {activeTask.kind === "brief" ? "Cancel generation" : "Stop analysis"}
         </button>
       )}
     </section>

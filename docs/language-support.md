@@ -1,6 +1,6 @@
 # Language Support and Limits
 
-Sonar indexes source code with tree-sitter parsers where available, then combines exact lookup, lexical search, vector search, and graph expansion to build briefings and answer follow-up questions.
+Sonar indexes source code with tree-sitter parsers where available, then combines exact lookup, lexical search, BM25, graph expansion, and workflow planning to build high-level briefings and answer orientation questions.
 
 ## Supported Today
 
@@ -19,16 +19,23 @@ Documentation:
 - Markdown
 - MDX
 
+Text evidence for briefings:
+
+- JSON manifests and configuration files, excluding lockfiles
+- Prisma schema files
+
 ## What Happens With Other Languages
 
 Repositories can still be imported if they contain other languages. Sonar scans for common source extensions and shows a warning when it finds unsupported source languages.
 
-Unsupported source files are skipped from code indexing. Documentation files may still be indexed, and supported source files in the same repository are still analyzed. The resulting briefing can be useful, but it may be incomplete or docs-heavy if the unsupported language is central to the project.
+Unsupported source files are skipped from code indexing. Documentation files, selected configuration files, and Prisma schema files may still be indexed, and supported source files in the same repository are still analyzed. The resulting briefing can be useful, but it may be incomplete or docs-heavy if the unsupported language is central to the project.
 
 ## Current Limits
 
 - Dependency and graph expansion are strongest for TypeScript and JavaScript. Other supported languages provide parsed source units, imports, and best-effort call names, but cross-file dependency resolution is more limited.
-- Generated briefings are source-grounded first drafts. They should be reviewed before being used as official onboarding, compliance, or architecture documentation.
+- JSON and Prisma files are indexed as text modules for briefing evidence. Sonar does not currently build full dependency graphs from them.
+- Generated briefings are source-grounded first drafts for project orientation. They should be reviewed before being used as official onboarding, compliance, security, or architecture documentation.
+- Sonar intentionally stays at briefing depth. For low-level debugging, refactoring, line-by-line code explanation, or implementation decisions, use an engineer or a dedicated coding agent with full repository context.
 - Very large files, generated files, vendored dependencies, and deeply nested directories may be skipped or down-ranked to keep indexing practical on a laptop.
 - If a repository has little documentation and most of its code is in an unsupported language, Sonar should be treated as a partial overview rather than a complete codebase explanation.
 

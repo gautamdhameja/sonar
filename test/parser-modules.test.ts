@@ -175,6 +175,27 @@ test("parseRepository indexes common non-JS source files", async () => {
   }
 });
 
+test("parseRepository indexes manifest and schema text modules for briefing evidence", async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), "sonar-text-modules-"));
+  try {
+    await mkdir(path.join(repoRoot, "prisma"));
+    await writeFile(path.join(repoRoot, "package.json"), '{"dependencies":{"next":"latest"}}');
+    await writeFile(path.join(repoRoot, "package-lock.json"), '{"lockfileVersion":3}');
+    await writeFile(path.join(repoRoot, "prisma", "schema.prisma"), "model Link { id String @id }");
+
+    const units = await parseRepository(repoRoot);
+
+    assert.ok(units.some((unit) => unit.filePath === "package.json" && unit.language === "json"));
+    assert.ok(units.some((unit) => unit.filePath === "prisma/schema.prisma" && unit.language === "prisma"));
+    assert.equal(
+      units.some((unit) => unit.filePath === "package-lock.json"),
+      false,
+    );
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test("detectUnsupportedSourceLanguages reports unsupported source files without flagging supported files", async () => {
   const repoRoot = await mkdtemp(path.join(os.tmpdir(), "sonar-language-support-"));
   try {
@@ -183,6 +204,11 @@ test("detectUnsupportedSourceLanguages reports unsupported source files without 
     await writeFile(path.join(repoRoot, "README.md"), "# Supported docs");
     await writeFile(path.join(repoRoot, "legacy.php"), "<?php function legacy() {}");
     await writeFile(path.join(repoRoot, "native.cpp"), "int main() { return 0; }");
+    await mkdir(path.join(repoRoot, "prisma", "migrations", "20260101000000_init"), { recursive: true });
+    await writeFile(
+      path.join(repoRoot, "prisma", "migrations", "20260101000000_init", "migration.sql"),
+      "CREATE TABLE users (id text primary key);",
+    );
     await mkdir(path.join(repoRoot, "node_modules"));
     await writeFile(path.join(repoRoot, "node_modules", "ignored.rb"), "def ignored; end");
 

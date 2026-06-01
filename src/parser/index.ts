@@ -5,6 +5,7 @@ import { parseTypeScript } from "./ts-parser";
 import { parsePython } from "./py-parser";
 import { parseMarkdown } from "./markdown-parser";
 import { isGenericSourceFile, parseGenericSource } from "./generic-parser";
+import { parseTextModule } from "./text-module-parser";
 import { ensureFileModuleUnits } from "./file-units";
 import { CodeUnit } from "./types";
 import { logger } from "../utils/logger";
@@ -16,6 +17,7 @@ export { CodeUnit, CodeUnitKind } from "./types";
 const TS_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 const PY_EXTENSIONS = new Set([".py"]);
 const DOC_EXTENSIONS = new Set([".md", ".mdx"]);
+const TEXT_MODULE_EXTENSIONS = new Set([".json", ".prisma"]);
 
 export async function parseRepository(repoRoot: string, signal?: AbortSignal): Promise<CodeUnit[]> {
   throwIfAborted(signal);
@@ -60,6 +62,8 @@ export async function parseRepository(repoRoot: string, signal?: AbortSignal): P
         units = await parsePython(source, filePath);
       } else if (DOC_EXTENSIONS.has(ext)) {
         units = parseMarkdown(source, filePath);
+      } else if (TEXT_MODULE_EXTENSIONS.has(ext)) {
+        units = parseTextModule(source, filePath);
       } else if (isGenericSourceFile(filePath)) {
         units = await parseGenericSource(source, filePath);
       } else {

@@ -22,7 +22,7 @@ type BriefingRoleProfile = {
 export const briefingRoleProfiles = {
   product_strategy: {
     label: "Product & Strategy",
-    description: "Users, workflows, value, roadmap questions.",
+    description: "Users, workflows, value, decision questions.",
     audience:
       "A product, strategy, or founder-type teammate who needs to understand users, product behavior, workflow value, and priority questions.",
     focus: [
@@ -43,10 +43,10 @@ export const briefingRoleProfiles = {
     },
   },
   engineering: {
-    label: "Engineering",
-    description: "Architecture, flows, modules, risks.",
+    label: "Technical Orientation",
+    description: "Architecture shape, data flow, systems, risks.",
     audience:
-      "An engineer joining the project who needs architecture, core workflows, source ownership areas, and implementation risks.",
+      "A technical teammate who needs the architecture shape, core workflows, source ownership areas, and implementation risks before deeper engineering work.",
     focus: [
       "architecture and major system boundaries",
       "core workflows and data flow",
@@ -56,12 +56,12 @@ export const briefingRoleProfiles = {
     ],
     persona: {
       role: "engineer",
-      roleDescription: "Engineering",
+      roleDescription: "Technical orientation",
       technicalBackground: "technical",
       avoidJargon: false,
-      explanationDepth: "deep",
+      explanationDepth: "standard",
       businessContext:
-        "Write a technical onboarding briefing. Include architecture, data flow, implementation tradeoffs, and concrete source navigation, while keeping every claim grounded in citations.",
+        "Write a technical orientation briefing. Include architecture, data flow, implementation tradeoffs, and concrete source navigation, but stay at briefing depth rather than line-by-line code analysis.",
     },
   },
   go_to_market: {
@@ -160,13 +160,13 @@ export const openAiCompatibleConfig: DesktopModelConfig = {
 
 export const suggestedQuestions = [
   "What should I read first?",
-  "Where does the main workflow start?",
+  "What are the main user workflows?",
   "What is risky or unclear?",
   "What should I ask engineering?",
   "How does data move through this app?",
   "What are the main user-facing features?",
-  "Where are the configuration boundaries?",
-  "What would break first in production?",
+  "What are the important systems?",
+  "What might break in production?",
   "Which files explain the product best?",
   "What should a non-technical teammate know?",
 ];

@@ -15,15 +15,11 @@ services:
       SONAR_DB_PATH: /data/projects.db
       SONAR_ALLOWED_REPO_ROOTS: /workspace/repos
       SONAR_MEILI_HOST: http://meilisearch:7700
-      SONAR_QDRANT_HOST: qdrant
-      SONAR_QDRANT_PORT: 6333
-      SONAR_QDRANT_VECTOR_SIZE: ${SONAR_QDRANT_VECTOR_SIZE:-768}
     volumes:
       - sonar-data:/data
       - sonar-repos:/workspace/repos
     depends_on:
       - meilisearch
-      - qdrant
 
   meilisearch:
     image: getmeili/meilisearch:v1.13
@@ -36,17 +32,7 @@ services:
     volumes:
       - sonar-meili:/meili_data
 
-  qdrant:
-    image: qdrant/qdrant:v1.14.1
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:6333:6333"
-      - "127.0.0.1:6334:6334"
-    volumes:
-      - sonar-qdrant:/qdrant/storage
-
 volumes:
   sonar-data:
   sonar-repos:
   sonar-meili:
-  sonar-qdrant:

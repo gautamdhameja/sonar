@@ -140,17 +140,10 @@ pub fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), Stri
     if config.chat_model.trim().is_empty() {
         return Err("Generation model is required.".to_string());
     }
-    if config.embedding_model.trim().is_empty() {
-        return Err("Embedding model is required.".to_string());
-    }
-    if config.embedding_vector_size == 0 {
-        return Err("Embedding vector size must be a positive integer.".to_string());
-    }
     if !is_valid_model_mode(&config.model_mode) {
         return Err("Model source must be local or api.".to_string());
     }
     validate_http_url(config.chat_base_url.trim(), "Generation API URL")?;
-    validate_http_url(config.embedding_base_url.trim(), "Embedding API URL")?;
 
     let normalized = DesktopModelConfig {
         model_setup_complete: true,
@@ -188,13 +181,7 @@ fn infer_model_mode(stored: &StoredDesktopModelConfig, fallback: &DesktopModelCo
         .chat_base_url
         .as_deref()
         .unwrap_or(&fallback.chat_base_url);
-    let embedding_base_url = stored
-        .embedding_base_url
-        .as_deref()
-        .unwrap_or(&fallback.embedding_base_url);
-    if normalize_url(chat_base_url) == normalize_url(DEFAULT_CHAT_BASE_URL)
-        && normalize_url(embedding_base_url) == normalize_url(DEFAULT_EMBEDDING_BASE_URL)
-    {
+    if normalize_url(chat_base_url) == normalize_url(DEFAULT_CHAT_BASE_URL) {
         "local".to_string()
     } else {
         "api".to_string()

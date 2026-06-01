@@ -33,8 +33,8 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
           <p className="eyebrow">First run</p>
           <h2>Choose your model source</h2>
           <p>
-            Sonar will start the right Docker stack after this choice. Local mode prepares the app services and models
-            together; API mode starts only the app services and validates your configured endpoints.
+            Sonar will start the right Docker stack after this choice. Local mode prepares the app services and
+            generation model together; API mode starts only the app services and validates your configured endpoint.
           </p>
         </div>
 
@@ -47,7 +47,7 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
             <Server size={18} />
             <span>
               <strong>Local Docker model</strong>
-              <small>Pull app images and local models in one startup. Best when this machine can run models.</small>
+              <small>Pull app images and the local generation model in one startup.</small>
             </span>
           </button>
           <button
@@ -58,7 +58,7 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
             <Cloud size={18} />
             <span>
               <strong>API endpoint</strong>
-              <small>Start only Sonar's local services and use an OpenAI-compatible API for models.</small>
+              <small>Start only Sonar's local services and use an OpenAI-compatible generation API.</small>
             </span>
           </button>
         </div>
@@ -93,49 +93,6 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
               />
             </label>
           )}
-          {modelConfig.modelMode === "api" && (
-            <label className="field">
-              <span>Embedding endpoint</span>
-              <input
-                value={modelConfig.embeddingBaseUrl}
-                onChange={(event) => updateModelConfig({ embeddingBaseUrl: event.target.value })}
-                placeholder="https://api.openai.com/v1"
-              />
-            </label>
-          )}
-          <label className="field">
-            <span>Embedding model</span>
-            <input
-              value={modelConfig.embeddingModel}
-              onChange={(event) => updateModelConfig({ embeddingModel: event.target.value })}
-              placeholder={
-                modelConfig.modelMode === "local" ? dockerModelRunnerConfig.embeddingModel : "text-embedding-3-small"
-              }
-            />
-          </label>
-          {modelConfig.modelMode === "api" && (
-            <label className="field">
-              <span>Embedding API key</span>
-              <input
-                value={modelConfig.embeddingApiKey}
-                onChange={(event) => updateModelConfig({ embeddingApiKey: event.target.value })}
-                placeholder="Usually the same key as generation"
-                type="password"
-              />
-            </label>
-          )}
-          <label className="field">
-            <span>Embedding vector size</span>
-            <input
-              min={1}
-              step={1}
-              type="number"
-              value={modelConfig.embeddingVectorSize}
-              onChange={(event) =>
-                updateModelConfig({ embeddingVectorSize: Number.parseInt(event.target.value, 10) || 768 })
-              }
-            />
-          </label>
         </div>
 
         <div className="setup-actions">

@@ -7,7 +7,7 @@ import {
   Download,
   FileText,
   Home,
-  RefreshCw,
+  RotateCcw,
   Search,
 } from "lucide-react";
 import { suggestedQuestions } from "../app/constants";
@@ -29,10 +29,10 @@ interface BriefingViewProps {
   session: OnboardingSessionResponse;
   sourceFileCount: number;
   onCopyBriefing: () => void;
-  onCreateOnboarding: () => void;
   onExportBriefing: () => void;
   onFollowup: () => void;
   onOpenEvidence: () => void;
+  onReindexCurrentProject: () => void;
   onStartNewBriefing: () => void;
   onQuestionChange: (value: string) => void;
 }
@@ -47,10 +47,10 @@ export function BriefingView({
   session,
   sourceFileCount,
   onCopyBriefing,
-  onCreateOnboarding,
   onExportBriefing,
   onFollowup,
   onOpenEvidence,
+  onReindexCurrentProject,
   onStartNewBriefing,
   onQuestionChange,
 }: BriefingViewProps) {
@@ -79,10 +79,6 @@ export function BriefingView({
             <button className="secondary" onClick={onOpenEvidence} type="button">
               <Search size={16} />
               Evidence
-            </button>
-            <button className="secondary" onClick={onCreateOnboarding} type="button">
-              <RefreshCw size={16} />
-              Regenerate
             </button>
           </div>
         </div>
@@ -115,7 +111,7 @@ export function BriefingView({
         <section className="followup-card">
           <div>
             <p className="eyebrow">Ask Next</p>
-            <h3>Continue from this briefing</h3>
+            <h3>Ask orientation questions</h3>
           </div>
           <div className="answers">
             {followups.map((item) => (
@@ -156,7 +152,7 @@ export function BriefingView({
               <textarea
                 value={question}
                 onChange={(event) => onQuestionChange(event.target.value)}
-                placeholder="Ask a follow-up about this codebase"
+                placeholder="Ask about workflows, risks, systems, or what to read next"
               />
               <button
                 className="primary"
@@ -189,6 +185,10 @@ export function BriefingView({
         </section>
         <section className="brief-navigation">
           <p className="eyebrow">Next</p>
+          <button className="secondary" disabled={activeTask !== null} onClick={onReindexCurrentProject} type="button">
+            <RotateCcw size={16} />
+            Fresh re-index + briefing
+          </button>
           <button className="secondary" disabled={activeTask !== null} onClick={onStartNewBriefing} type="button">
             <Home size={16} />
             Start another briefing

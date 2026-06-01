@@ -40,12 +40,34 @@ test("buildOnboardingBriefPartPrompt scopes output to requested sections", () =>
     audience: "A product manager joining the team",
     focus: ["sharing"],
     sections: ["Product In One Paragraph", "Who Uses It And Why"],
+    workflowPlanText: "## Internal Workflow Map\nProduct hypothesis: Acme shares documents.",
   });
 
   assert.match(prompt.system, /writing part of a source-grounded codebase briefing/);
-  assert.match(prompt.system, /at most 220 words total/);
+  assert.match(prompt.system, /at most 260 words total/);
   assert.match(prompt.system, /For business roles, emphasize product capability/);
+  assert.match(prompt.system, /Prioritize the central product workflows/);
+  assert.match(prompt.system, /prefer end-to-end product journeys/);
   assert.match(prompt.user, /Product In One Paragraph/);
   assert.match(prompt.user, /Who Uses It And Why/);
+  assert.match(prompt.user, /Internal Workflow Map/);
+  assert.match(prompt.user, /Product hypothesis: Acme shares documents/);
   assert.match(prompt.user, /Return only these requested sections/);
+});
+
+test("buildOnboardingBriefPartPrompt gives Top User Workflows a lifecycle contract", () => {
+  const prompt = buildOnboardingBriefPartPrompt([unit], {
+    repoName: "Acme",
+    audience: "A product manager joining the team",
+    focus: ["workflows"],
+    sections: ["Top User Workflows"],
+    workflowPlanText: "## Internal Workflow Map\nMandatory lifecycle evidence:\n- src/share.ts [src/share.ts:10-12]",
+  });
+
+  assert.match(prompt.system, /at most 420 words total/);
+  assert.match(prompt.user, /For `Top User Workflows`/);
+  assert.match(prompt.user, /create\/upload the core object/);
+  assert.match(prompt.user, /recipient\/user access/);
+  assert.match(prompt.user, /Do not list OAuth, generic authentication, or AI as top workflows before/);
+  assert.match(prompt.user, /Do not say implementation evidence is missing/);
 });

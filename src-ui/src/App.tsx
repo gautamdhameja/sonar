@@ -39,13 +39,17 @@ import type {
 } from "./types";
 
 function unsupportedLanguageNotice(languages: UnsupportedLanguageSummary[] | undefined): string | null {
-  if (!languages?.length) return null;
-  const topLanguages = languages
+  const meaningfulLanguages = (languages ?? []).filter((item) => {
+    if ((item.label === "Shell" || item.label === "SQL") && item.fileCount < 10) return false;
+    return true;
+  });
+  if (!meaningfulLanguages.length) return null;
+  const topLanguages = meaningfulLanguages
     .slice(0, 4)
     .map((item) => `${item.label} (${item.fileCount})`)
     .join(", ");
-  const suffix = languages.length > 4 ? ` and ${languages.length - 4} more` : "";
-  return `Limited language coverage: ${topLanguages}${suffix}. Sonar indexes TypeScript, JavaScript, Python, Rust, Go, Java, C#, and Markdown today; unsupported source files are skipped, so this briefing may be incomplete.`;
+  const suffix = meaningfulLanguages.length > 4 ? ` and ${meaningfulLanguages.length - 4} more` : "";
+  return `Limited language coverage: ${topLanguages}${suffix}. Sonar indexes TypeScript, JavaScript, Python, Rust, Go, Java, C#, Markdown, JSON config, and Prisma schema files today; unsupported source files are skipped, so this briefing may be incomplete.`;
 }
 
 export function App() {
@@ -226,7 +230,7 @@ export function App() {
     setActiveTask({
       kind: "analyze",
       label: "Indexing repository",
-      detail: "Parsing files, building lexical search, creating embeddings, and writing vector indexes.",
+      detail: "Parsing files, building the search index, and preparing workflow evidence.",
       progress: 48,
     });
     const indexed = await indexProject(pathToIndex, nameToIndex, controller.signal);
@@ -279,7 +283,7 @@ export function App() {
         detail: "Retrieving evidence and generating the initial role-aware briefing.",
         progress: canAnalyze ? 82 : 35,
       });
-      const result = await createOnboardingSession(projectId, briefingRole);
+      const result = await createOnboardingSession(projectId, briefingRole, controller.signal);
       setSession(result);
       setQuestion(defaultQuestion);
       setEvidenceOpen(false);
@@ -301,32 +305,61 @@ export function App() {
   function handleStopAnalysis() {
     analysisAbortController.current?.abort();
     setAnalysisStopRequested(true);
+    const currentKind = activeTask?.kind === "brief" ? "brief" : "analyze";
     setActiveTask({
-      kind: "analyze",
-      label: "Stopping analysis after the current step",
-      detail: "Waiting for the current repository operation to release cleanly.",
+      kind: currentKind,
+      label: currentKind === "brief" ? "Cancelling briefing generation" : "Stopping analysis after the current step",
+      detail:
+        currentKind === "brief"
+          ? "Cancelling the current generation request. Already saved briefings are not changed."
+          : "Waiting for the current repository operation to release cleanly.",
       progress: 92,
     });
   }
 
-  async function handleCreateOnboarding() {
-    if (!selectedProjectId) return;
+  async function handleReindexCurrentProject() {
+    if (!selectedProject || isCreatingBriefing) return;
     setError(null);
     setNotice(null);
-    setActiveTask({
-      kind: "brief",
-      label: "Writing codebase briefing",
-      detail: "Retrieving evidence and generating a refreshed role-aware briefing.",
-      progress: 35,
-    });
+    setAnalysisStopRequested(false);
+    const controller = new AbortController();
+    analysisAbortController.current = controller;
+
     try {
-      const result = await createOnboardingSession(selectedProjectId, briefingRole);
+      setActiveTask({
+        kind: "analyze",
+        label: "Re-indexing selected repository",
+        detail: "Parsing the current repository copy and rebuilding local search evidence.",
+        progress: 45,
+      });
+      const indexed = await indexProject(selectedProject.repoPath, selectedProject.name, controller.signal);
+      await refreshProjects();
+      setSelectedProjectId(indexed.projectId);
+      const languageNotice = unsupportedLanguageNotice(indexed.unsupportedLanguages);
+      if (languageNotice) setNotice(languageNotice);
+
+      setActiveTask({
+        kind: "brief",
+        label: "Writing fresh codebase briefing",
+        detail: "Retrieving evidence from the new index and generating a new briefing.",
+        progress: 82,
+      });
+      const result = await createOnboardingSession(indexed.projectId, briefingRole, controller.signal);
       setSession(result);
       setFollowups([]);
+      setQuestion(defaultQuestion);
       setEvidenceOpen(false);
     } catch (err) {
-      setError(friendlyErrorMessage(err));
+      if (err instanceof Error && err.name === "AbortError") {
+        setError("Fresh briefing cancelled. Any partial index data was discarded.");
+      } else {
+        setError(friendlyErrorMessage(err));
+      }
     } finally {
+      if (analysisAbortController.current === controller) {
+        analysisAbortController.current = null;
+      }
+      setAnalysisStopRequested(false);
       setActiveTask(null);
     }
   }
@@ -440,10 +473,10 @@ export function App() {
             followups={followups}
             latestSources={latestSources}
             onCopyBriefing={() => void handleCopyBriefing()}
-            onCreateOnboarding={() => void handleCreateOnboarding()}
             onExportBriefing={() => void handleExportBriefing()}
             onFollowup={() => void handleFollowup()}
             onOpenEvidence={() => setEvidenceOpen(true)}
+            onReindexCurrentProject={() => void handleReindexCurrentProject()}
             onStartNewBriefing={handleStartNewBriefing}
             onQuestionChange={setQuestion}
             question={question}
@@ -465,6 +498,7 @@ export function App() {
             onGithubRepositoryChange={handleGithubRepositoryChange}
             onOpenSettings={() => setAdvancedOpen(true)}
             onProjectNameChange={setProjectName}
+            onReindexSelectedProject={() => void handleReindexCurrentProject()}
             onRepositorySourceChange={setRepositorySource}
             onRepoPathChange={setRepoPath}
             onSelectProject={handleSelectProject}

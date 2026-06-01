@@ -2,6 +2,8 @@
 
 The Sonar desktop app lets you analyze either a GitHub repository URL or an already-cloned local repository.
 
+Sonar is built for high-level codebase briefings. It helps non-technical and semi-technical teammates understand the project, workflows, risks, and source landmarks using a local or OpenAI-compatible model. It is not designed to replace a frontier coding agent for debugging, refactoring, or fine-grained implementation analysis.
+
 ## Prerequisites
 
 - Docker Desktop
@@ -20,14 +22,11 @@ The Sonar desktop app lets you analyze either a GitHub repository URL or an alre
 ## Local Services
 
 - Meilisearch on `http://localhost:7700` for BM25 and keyword search.
-- Qdrant on `localhost:6333` for vector search.
 - Sonar API on `http://localhost:3001`.
 
-To use local generation and embeddings, choose **Local Docker model**. To use cloud generation, cloud embeddings, or a separately hosted OpenAI-compatible local model, choose **API endpoint**.
+To use local generation, choose **Local Docker model**. To use cloud generation or a separately hosted OpenAI-compatible local model, choose **API endpoint**.
 
 If the model server runs on the host machine and the API runs in Docker, the desktop app translates `localhost` and `127.0.0.1` model endpoints to `host.docker.internal` for the API container. Keep the URL shown in the UI as the normal desktop URL.
-
-Embedding vector size matters. Use `768` for Sonar's default Docker embedding model. Use `1536` for OpenAI `text-embedding-3-small` unless your compatible endpoint is configured to return another dimension.
 
 ## Desktop Configuration
 

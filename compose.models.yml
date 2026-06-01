@@ -2,15 +2,10 @@ services:
   api:
     environment:
       SONAR_CHAT_API_KEY: ${SONAR_CHAT_API_KEY:-not-needed}
-      SONAR_EMBEDDING_PROVIDER: openai
-      SONAR_EMBEDDING_API_KEY: ${SONAR_EMBEDDING_API_KEY:-not-needed}
     models:
       chat_model:
         endpoint_var: SONAR_CHAT_BASE_URL
         model_var: SONAR_CHAT_MODEL
-      embedding_model:
-        endpoint_var: SONAR_EMBEDDING_BASE_URL
-        model_var: SONAR_EMBEDDING_MODEL
 
 models:
   chat_model:
@@ -19,8 +14,3 @@ models:
     runtime_flags:
       - "--temp"
       - "0.1"
-  embedding_model:
-    model: ${SONAR_EMBEDDING_MODEL:-hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M}
-    context_size: 2048
-    runtime_flags:
-      - "--embeddings"

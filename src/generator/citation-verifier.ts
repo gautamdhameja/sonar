@@ -9,7 +9,7 @@ export interface CitationVerification {
   sourceKeys: string[];
 }
 
-const bracketCitationPattern = /\[([^\]\n]{2,240})\](?!\()/g;
+const bracketCitationPattern = /\[((?:[^[\]\n]|\[[^[\]\n]+\]){2,240})\](?!\()/g;
 const bareCitationPattern =
   /\b((?:[A-Za-z0-9_.@-]+\/)*[A-Za-z0-9_.@-]+\.(?:c|cc|cpp|cs|css|go|h|hpp|html|java|js|jsx|json|kt|kts|md|mjs|php|py|rb|rs|scss|sql|swift|toml|ts|tsx|yaml|yml):\d+(?:-\d+)?)\b/g;
 
@@ -109,7 +109,12 @@ export function verifyCitations(answer: string, contextUnits: CodeUnit[]): Citat
     expandCitationGroup,
   );
   bareCitationPattern.lastIndex = 0;
-  const bareCitations = Array.from(answer.matchAll(bareCitationPattern), (match) => match[1].trim());
+  const bareCitations = Array.from(answer.matchAll(bareCitationPattern), (match) => match[1].trim()).filter(
+    (citation) =>
+      !bracketCitations.some(
+        (bracketCitation) => bracketCitation === citation || bracketCitation.endsWith(`/${citation}`),
+      ),
+  );
   const citations = [...new Set([...bracketCitations, ...bareCitations])];
   const sourceKeys = new Set<string>();
   const basenameCounts = new Map<string, number>();

@@ -26,10 +26,7 @@ export function ReadinessCard({
   const api = serviceDetail(snapshot, "sonar");
   const model = serviceDetail(snapshot, "chat") ?? serviceDetail(snapshot, "models");
   const modelConfigured = modelConfig.modelSetupComplete;
-  const workspaceReady =
-    api?.state === "ready" &&
-    serviceDetail(snapshot, "meilisearch")?.state === "ready" &&
-    serviceDetail(snapshot, "qdrant")?.state === "ready";
+  const workspaceReady = api?.state === "ready" && serviceDetail(snapshot, "meilisearch")?.state === "ready";
   const isStarting = activeTask?.kind === "bootstrap";
   const isPreparingModel = activeTask?.kind === "settings";
   const isWorking = isStarting || isPreparingModel;
@@ -51,7 +48,7 @@ export function ReadinessCard({
             : "Runtime needs attention";
   const body = dockerUnavailable
     ? (runtimeBlocker ??
-      "Sonar needs Docker Desktop for the local API, search, and vector index. Install Docker Desktop, then restart Sonar.")
+      "Sonar needs Docker Desktop for the local API and search service. Install Docker Desktop, then restart Sonar.")
     : isPreparingModel
       ? (activeTask.detail ?? "Starting the selected Docker stack and validating model endpoints.")
       : !modelConfigured

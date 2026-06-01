@@ -109,7 +109,7 @@ export function SettingsDrawer({
               <Server size={18} />
               <span>
                 <strong>Local Docker model</strong>
-                <small>Use Docker Model Runner for generation and embeddings.</small>
+                <small>Use Docker Model Runner for generation.</small>
               </span>
             </button>
             <button
@@ -120,7 +120,7 @@ export function SettingsDrawer({
               <Cloud size={18} />
               <span>
                 <strong>API endpoint</strong>
-                <small>Use OpenAI-compatible cloud or self-hosted endpoints.</small>
+                <small>Use an OpenAI-compatible cloud or self-hosted generation API.</small>
               </span>
             </button>
           </div>
@@ -158,52 +158,6 @@ export function SettingsDrawer({
                 />
               </label>
             )}
-            {modelConfig.modelMode === "api" && (
-              <label className="field">
-                <span>Embedding endpoint</span>
-                <input
-                  value={modelConfig.embeddingBaseUrl}
-                  onChange={(event) => updateModelConfig({ embeddingBaseUrl: event.target.value })}
-                  placeholder="https://api.openai.com/v1 or http://localhost:12434/engines/v1"
-                />
-              </label>
-            )}
-            <label className="field">
-              <span>Embedding model</span>
-              <input
-                value={modelConfig.embeddingModel}
-                onChange={(event) => updateModelConfig({ embeddingModel: event.target.value })}
-                placeholder={
-                  modelConfig.modelMode === "local"
-                    ? "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M"
-                    : "text-embedding-3-small"
-                }
-              />
-            </label>
-            {modelConfig.modelMode === "api" && (
-              <label className="field">
-                <span>Embedding API key</span>
-                <input
-                  value={modelConfig.embeddingApiKey}
-                  onChange={(event) => updateModelConfig({ embeddingApiKey: event.target.value })}
-                  placeholder="Required for cloud APIs"
-                  type="password"
-                />
-              </label>
-            )}
-            <label className="field">
-              <span>Embedding vector size</span>
-              <input
-                min={1}
-                step={1}
-                type="number"
-                value={modelConfig.embeddingVectorSize}
-                onChange={(event) =>
-                  updateModelConfig({ embeddingVectorSize: Number.parseInt(event.target.value, 10) || 768 })
-                }
-                placeholder="768 for Docker local, 1536 for text-embedding-3-small"
-              />
-            </label>
           </div>
           <div className="preset-row">
             <button

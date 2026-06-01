@@ -15,6 +15,7 @@ test("loadConfig provides local defaults", () => {
   assert.equal(config.embedding.maxRetries, 2);
   assert.equal(config.embedding.fallbackOnFailure, true);
   assert.equal(config.embedding.maxFallbackRatio, 0.1);
+  assert.equal(config.qdrant.enabled, false);
   assert.equal(config.qdrant.port, 6333);
   assert.equal(config.qdrant.vectorSize, 768);
   assert.equal(config.storage.dbPath, "/tmp/sonar-home/.sonar/projects.db");
@@ -48,6 +49,7 @@ test("loadConfig reads environment overrides", () => {
     SONAR_EMBEDDING_MAX_RETRIES: "3",
     SONAR_EMBEDDING_FALLBACK_ON_FAILURE: "false",
     SONAR_EMBEDDING_MAX_FALLBACK_RATIO: "0.25",
+    SONAR_VECTOR_SEARCH_ENABLED: "true",
     SONAR_QDRANT_PORT: "6334",
     SONAR_QDRANT_VECTOR_SIZE: "1024",
     SONAR_DB_PATH: "/tmp/sonar.db",
@@ -72,6 +74,7 @@ test("loadConfig reads environment overrides", () => {
   assert.equal(config.embedding.maxRetries, 3);
   assert.equal(config.embedding.fallbackOnFailure, false);
   assert.equal(config.embedding.maxFallbackRatio, 0.25);
+  assert.equal(config.qdrant.enabled, true);
   assert.equal(config.qdrant.port, 6334);
   assert.equal(config.qdrant.vectorSize, 1024);
   assert.equal(config.storage.dbPath, "/tmp/sonar.db");

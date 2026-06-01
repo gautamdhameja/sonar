@@ -1,4 +1,5 @@
 import { CodeUnit } from "../parser/types";
+import { CONFIG } from "../config";
 import { deleteMeilisearchIndex, indexToMeilisearch } from "./meilisearch-indexer";
 import { deleteQdrantCollection, indexToQdrant } from "./qdrant-indexer";
 import { generateEmbeddings } from "./embedder";
@@ -18,6 +19,11 @@ export async function indexRepository(units: CodeUnit[], projectId: string, sign
   throwIfAborted(signal);
   await indexToMeilisearch(units, projectId, signal);
   logger.info(`Meilisearch indexing: ${((Date.now() - start) / 1000).toFixed(1)}s`);
+
+  if (!CONFIG.qdrant.enabled) {
+    logger.info(`Indexing complete in ${((Date.now() - totalStart) / 1000).toFixed(1)}s; vector search disabled`);
+    return;
+  }
 
   // Step 2: Generate embeddings
   start = Date.now();
@@ -43,7 +49,9 @@ export async function indexRepository(units: CodeUnit[], projectId: string, sign
 }
 
 export async function deleteProjectIndexes(projectId: string): Promise<void> {
-  const results = await Promise.allSettled([deleteMeilisearchIndex(projectId), deleteQdrantCollection(projectId)]);
+  const cleanupTasks: Array<Promise<void>> = [deleteMeilisearchIndex(projectId)];
+  if (CONFIG.qdrant.enabled) cleanupTasks.push(deleteQdrantCollection(projectId));
+  const results = await Promise.allSettled(cleanupTasks);
   for (const result of results) {
     if (result.status === "rejected") {
       logger.warn(`Unable to clean external index for project ${projectId}: ${String(result.reason)}`);

@@ -75,22 +75,25 @@ export async function indexProject(
   repoRoot: string,
   name: string,
   signal?: AbortSignal,
+  summarize = false,
 ): Promise<IndexProjectResponse> {
   return request("/projects/index", {
     method: "POST",
     signal,
-    body: JSON.stringify({ repoRoot, name, summarize: true }),
+    body: JSON.stringify({ repoRoot, name, summarize }),
   });
 }
 
 export async function createOnboardingSession(
   projectId: string,
   briefingRole: BriefingRole,
+  signal?: AbortSignal,
 ): Promise<OnboardingSessionResponse> {
   const profile = briefingRoleProfiles[briefingRole];
 
   return request<OnboardingSessionResponse>(`/projects/${projectId}/onboarding/sessions`, {
     method: "POST",
+    signal,
     body: JSON.stringify({
       audience: profile.audience,
       focus: profile.focus,

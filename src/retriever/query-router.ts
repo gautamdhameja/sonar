@@ -74,11 +74,11 @@ export function planQuery(query: string): QueryPlan {
       sourceBudget: { code: 6, docs: 0, tests: 2 },
       useLocalExact: false,
       useLexical: true,
-      useVector: true,
+      useVector: false,
       useGraph: false,
       includeSummary: false,
       maxContextRatio: 0.7,
-      reason: "literal/debug query should search exact text first and use embeddings only as backfill",
+      reason: "literal/debug query should search exact text and configuration-adjacent code first",
     };
   }
 
@@ -92,11 +92,11 @@ export function planQuery(query: string): QueryPlan {
       sourceBudget: { code: 6, docs: 3, tests: 0 },
       useLocalExact: false,
       useLexical: true,
-      useVector: true,
+      useVector: false,
       useGraph: true,
       includeSummary: true,
       maxContextRatio: 0.65,
-      reason: "overview query should use summaries and a compact set of supporting code",
+      reason: "overview query should use summaries, workflow planning, graph context, and compact supporting code",
     };
   }
 
@@ -113,11 +113,11 @@ export function planQuery(query: string): QueryPlan {
       sourceBudget: { code: 8, docs: 1, tests: 1 },
       useLocalExact: false,
       useLexical: true,
-      useVector: true,
+      useVector: false,
       useGraph: true,
       includeSummary: shouldIncludeSummaryForIntent(intent),
       maxContextRatio: 0.8,
-      reason: "workflow/dependency/risk query needs semantic seeds plus graph neighbors",
+      reason: "workflow/dependency/risk query needs lexical seeds plus graph neighbors",
     };
   }
 
@@ -130,10 +130,10 @@ export function planQuery(query: string): QueryPlan {
     sourceBudget: baseBudget(),
     useLocalExact: false,
     useLexical: true,
-    useVector: true,
+    useVector: false,
     useGraph: false,
     includeSummary: false,
     maxContextRatio: 1,
-    reason: "general code question uses lexical and vector retrieval",
+    reason: "general code question uses lexical retrieval with local code scoring",
   };
 }

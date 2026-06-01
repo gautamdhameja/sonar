@@ -1,4 +1,14 @@
-import { AlertTriangle, BookOpen, FolderOpen, GitBranch, HardDrive, Loader2, Lock, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  BookOpen,
+  FolderOpen,
+  GitBranch,
+  HardDrive,
+  Loader2,
+  Lock,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 import { briefingRoleProfiles } from "../app/constants";
 import type { ActiveTask, BriefingRole, RepositorySource } from "../app/types";
 import type { DesktopModelConfig, Project, ServiceSnapshot, ServiceState } from "../types";
@@ -27,6 +37,7 @@ interface HomeScreenProps {
   onGithubRepositoryChange: (value: string) => void;
   onOpenSettings: () => void;
   onProjectNameChange: (value: string) => void;
+  onReindexSelectedProject: () => void;
   onRepositorySourceChange: (value: RepositorySource) => void;
   onRepoPathChange: (value: string) => void;
   onSelectProject: (project: Project) => void;
@@ -56,13 +67,14 @@ export function HomeScreen({
   onGithubRepositoryChange,
   onOpenSettings,
   onProjectNameChange,
+  onReindexSelectedProject,
   onRepositorySourceChange,
   onRepoPathChange,
   onSelectProject,
   onStartRuntime,
 }: HomeScreenProps) {
   const createDisabled = (!canAnalyze && !selectedProjectId) || isCreatingBriefing || runtimeBusy || !runtimeReady;
-  const createLabel = !canAnalyze && selectedProjectId ? "Open briefing" : "Create briefing";
+  const createLabel = !canAnalyze && selectedProjectId ? "Open saved briefing" : "Create briefing";
   const briefingRoles = Object.entries(briefingRoleProfiles) as [
     BriefingRole,
     (typeof briefingRoleProfiles)[BriefingRole],
@@ -75,7 +87,10 @@ export function HomeScreen({
           <div>
             <p className="eyebrow">Get started</p>
             <h2>Analyze a repository</h2>
-            <p>Create a concise, cited briefing from a GitHub repository or a local folder on this machine.</p>
+            <p>
+              Create a cited project briefing for product, business, support, and leadership context. Sonar is tuned for
+              high-level understanding, not deep implementation work.
+            </p>
           </div>
         </div>
 
@@ -142,16 +157,16 @@ export function HomeScreen({
           <Lock size={15} />
           <span>
             {runtimeReady
-              ? "Only the repository you choose is imported into Sonar's local workspace."
-              : "Start the local runtime first. Sonar will import only the repository you choose."}
+              ? "Use a local model for a free local-first briefing, or configure your own API endpoint."
+              : "Start the local runtime first. Sonar imports only the repository you choose."}
           </span>
         </div>
 
         <div className="language-note">
           <AlertTriangle size={15} />
           <span>
-            Best coverage today: TypeScript, JavaScript, Python, Rust, Go, Java, C#, and Markdown. Other source
-            languages may be skipped, so the briefing can be incomplete.
+            Best coverage today: TypeScript, JavaScript, Python, Rust, Go, Java, C#, Markdown, JSON config, and Prisma
+            schema files. Other source languages may be skipped, so the briefing can be incomplete.
           </span>
         </div>
 
@@ -171,15 +186,26 @@ export function HomeScreen({
               ))}
             </div>
             {selectedProjectId && !canAnalyze && (
-              <button
-                className="secondary compact-button"
-                disabled={isCreatingBriefing || runtimeBusy || !runtimeReady}
-                onClick={onCreateBriefing}
-                type="button"
-              >
-                <BookOpen size={15} />
-                Use selected
-              </button>
+              <div className="recent-actions">
+                <button
+                  className="secondary compact-button"
+                  disabled={isCreatingBriefing || runtimeBusy || !runtimeReady}
+                  onClick={onCreateBriefing}
+                  type="button"
+                >
+                  <BookOpen size={15} />
+                  Open saved
+                </button>
+                <button
+                  className="secondary compact-button"
+                  disabled={isCreatingBriefing || runtimeBusy || !runtimeReady}
+                  onClick={onReindexSelectedProject}
+                  type="button"
+                >
+                  <RotateCcw size={15} />
+                  Fresh re-index
+                </button>
+              </div>
             )}
           </div>
         )}

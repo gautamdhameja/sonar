@@ -9,6 +9,13 @@ export interface WalkedFile {
   isVendored: boolean;
 }
 
+function isSkippedIndexedFile(fileName: string): boolean {
+  return (
+    /(^|\.)(lock|snap)\b/i.test(fileName) ||
+    /^(package-lock\.json|pnpm-lock\.ya?ml|yarn\.lock|bun\.lockb)$/i.test(fileName)
+  );
+}
+
 export async function walkRepository(repoRoot: string): Promise<WalkedFile[]> {
   const vendoredPaths = detectVendoredPaths(repoRoot);
   const results: WalkedFile[] = [];
@@ -25,7 +32,10 @@ export async function walkRepository(repoRoot: string): Promise<WalkedFile[]> {
           await walk(path.join(dir, entry.name), depth + 1);
         }
       } else if (entry.isFile()) {
-        if (SUPPORTED_INDEX_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        if (
+          !isSkippedIndexedFile(entry.name) &&
+          SUPPORTED_INDEX_EXTENSIONS.has(path.extname(entry.name).toLowerCase())
+        ) {
           const relativePath = path.relative(repoRoot, path.join(dir, entry.name));
           const isVendored = isUnderVendoredPath(relativePath, vendoredPaths);
           results.push({ relativePath, isVendored });

@@ -13,12 +13,10 @@ export interface RetrievedUnit {
 }
 
 export async function hybridSearch(query: string, projectId: string): Promise<RetrievedUnit[]> {
-  const [keywordResults, queryEmbedding] = await Promise.all([
-    searchMeilisearch(query, CONFIG.retriever.keywordTopK, projectId),
-    generateEmbedding(query),
-  ]);
-
-  const semanticResults = await searchQdrant(queryEmbedding, CONFIG.retriever.semanticTopK, projectId);
+  const keywordResults = await searchMeilisearch(query, CONFIG.retriever.keywordTopK, projectId);
+  const semanticResults = CONFIG.qdrant.enabled
+    ? await searchQdrant(await generateEmbedding(query), CONFIG.retriever.semanticTopK, projectId)
+    : [];
 
   const k = CONFIG.retriever.rrf_k;
   const vendoredPenalty = CONFIG.retriever.vendoredPenalty;

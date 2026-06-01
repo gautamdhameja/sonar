@@ -2,10 +2,22 @@ import { CONFIG } from "../config";
 import { estimateTokens, truncateLargeUnits } from "../context/token-budget";
 import { CodeUnit } from "../parser/types";
 import { DEFAULT_PERSONA, Persona } from "../persona/types";
+import { planBriefingEvidence } from "../retriever/briefing-evidence-planner";
+import {
+  BriefingWorkflowPlan,
+  buildBriefingWorkflowPlan,
+  workflowPlanToPrompt,
+} from "../retriever/briefing-workflow-planner";
 import { onboardingRetrieval, OnboardingRetrievalDiagnostic } from "../retriever/onboarding-retriever";
 import { QueryPlan } from "../retriever/query-router";
-import { isDocumentationFile } from "../retriever/source-classifier";
+import {
+  BriefingEvidenceBucket,
+  classifyBriefingEvidence,
+  isBriefingNoiseFile,
+  isDocumentationFile,
+} from "../retriever/source-classifier";
 import { CodeUnitStore } from "../retriever/unit-store";
+import { logger } from "../utils/logger";
 import { removeUncitedClaims, verifyCitations, CitationVerification } from "./citation-verifier";
 import { generateCompletion } from "./llm-client";
 import { buildCitationRepairPrompt, buildOnboardingBriefPartPrompt } from "./onboarding-prompt";
@@ -43,7 +55,8 @@ const ONBOARDING_QUERY_PLAN: QueryPlan = {
 
 const BRIEFING_PARTS = [
   ["Product In One Paragraph", "Who Uses It And Why"],
-  ["Codebase Product Map", "Top User Workflows"],
+  ["Codebase Product Map"],
+  ["Top User Workflows"],
   ["Main Systems And Ownership Areas", "Data, Privacy, And Operational Notes"],
   ["Risks Or Open Questions", "Glossary For A Non-Deeply-Technical Reader"],
 ];
@@ -54,7 +67,8 @@ const SECTION_RETRIEVAL_HINTS: Record<string, string> = {
   "Product In One Paragraph": "README docs overview purpose product users feature value proposition",
   "Who Uses It And Why": "README docs users customer persona workflow value use case",
   "Codebase Product Map": "app main index package boundary module component route service architecture map",
-  "Top User Workflows": "workflow flow entry point user action command input process pipeline save export import",
+  "Top User Workflows":
+    "workflow lifecycle create upload import process convert share invite access verify authorize view analytics event metric billing limit plan",
   "Main Systems And Ownership Areas":
     "architecture subsystem owner module service state manager backend frontend storage api",
   "Data, Privacy, And Operational Notes":
@@ -83,6 +97,40 @@ function sourceList(units: CodeUnit[]) {
     kind: unit.kind,
     lines: `${unit.startLine}-${unit.endLine}`,
   }));
+}
+
+function sourceListWithCitations(units: CodeUnit[], citations: string[], store: CodeUnitStore) {
+  const sources = sourceList(units);
+  const seen = new Set(sources.map((source) => `${source.filePath}:${source.lines}`));
+
+  for (const citation of citations) {
+    const match = citation.match(/^(.+):(\d+)(?:-(\d+))?$/);
+    if (!match) continue;
+    const filePath = match[1];
+    const startLine = Number.parseInt(match[2], 10);
+    const endLine = match[3] ? Number.parseInt(match[3], 10) : startLine;
+    if (!Number.isFinite(startLine) || !Number.isFinite(endLine)) continue;
+    const lines = `${startLine}-${endLine}`;
+    const key = `${filePath}:${lines}`;
+    if (seen.has(key)) continue;
+
+    const matchingUnit = store
+      .getUnitsByFile(filePath)
+      .find((unit) => startLine >= unit.startLine && endLine <= unit.endLine);
+    sources.push({
+      filePath,
+      name: matchingUnit?.name ?? filePath.split("/").at(-1) ?? filePath,
+      kind: matchingUnit?.kind ?? "module",
+      lines,
+    });
+    seen.add(key);
+  }
+
+  return sources.sort((a, b) => {
+    const codeDelta = Number(!isDocumentationFile(b.filePath)) - Number(!isDocumentationFile(a.filePath));
+    if (codeDelta !== 0) return codeDelta;
+    return a.filePath.localeCompare(b.filePath) || a.lines.localeCompare(b.lines);
+  });
 }
 
 function isCodeUnit(unit: CodeUnit): boolean {
@@ -119,8 +167,8 @@ function uniqueDiagnostics(diagnostics: OnboardingRetrievalDiagnostic[]): Onboar
   return output;
 }
 
-function selectOnboardingContext(units: CodeUnit[], maxTokens: number): CodeUnit[] {
-  const truncated = truncateLargeUnits(units, maxTokens, 0.18);
+function selectOnboardingContext(units: CodeUnit[], maxTokens: number, query: string, maxUnitRatio = 0.18): CodeUnit[] {
+  const truncated = truncateLargeUnits(units, maxTokens, maxUnitRatio, query);
   const selected: CodeUnit[] = [];
   let total = 0;
 
@@ -134,16 +182,6 @@ function selectOnboardingContext(units: CodeUnit[], maxTokens: number): CodeUnit
   return selected;
 }
 
-function selectBalancedOnboardingContext(units: CodeUnit[], maxTokens: number, preferCode: boolean): CodeUnit[] {
-  const unique = uniqueUnits(units);
-  const docs = unique.filter((unit) => !isCodeUnit(unit));
-  const code = unique.filter(isCodeUnit);
-  const balanced = preferCode
-    ? [...code.slice(0, 16), ...docs.slice(0, 6), ...code.slice(16), ...docs.slice(6)]
-    : [...docs.slice(0, 6), ...code.slice(0, 12), ...docs.slice(6), ...code.slice(12)];
-  return selectOnboardingContext(balanced, maxTokens);
-}
-
 function buildSectionQuery(baseQuery: string, sections: string[]): string {
   const sectionHints = sections.map((section) => SECTION_RETRIEVAL_HINTS[section]).filter(Boolean);
   return [baseQuery, `Sections: ${sections.join(", ")}.`, `Evidence to retrieve: ${sectionHints.join(" ")}.`].join(" ");
@@ -153,11 +191,13 @@ function retrieveContextForSections(
   store: CodeUnitStore,
   query: string,
   sections: string[],
+  workflowPlan: BriefingWorkflowPlan,
 ): {
   contextUnits: CodeUnit[];
   diagnostics: OnboardingRetrievalDiagnostic[];
 } {
   const sectionQuery = buildSectionQuery(query, sections);
+  const planned = planBriefingEvidence(store, sections);
   const retrieved = onboardingRetrieval(store, {
     query: sectionQuery,
     topK: 24,
@@ -166,20 +206,111 @@ function retrieveContextForSections(
 
   const candidateUnits = retrieved.retrieved
     .map((result) => store.getUnit(result.unitId))
-    .filter((unit): unit is CodeUnit => Boolean(unit));
-  const preferCode = sections.some(
-    (section) =>
-      !["Product In One Paragraph", "Who Uses It And Why", "Glossary For A Non-Deeply-Technical Reader"].includes(
-        section,
-      ),
-  );
-  const contextUnits = selectBalancedOnboardingContext(
-    candidateUnits,
+    .filter((unit): unit is CodeUnit => {
+      if (!unit) return false;
+      return !isBriefingNoiseFile(unit.filePath);
+    });
+  const workflowUnits = selectWorkflowPlanUnits(workflowPlan, sections);
+  const orderedCandidates = uniqueUnits([...workflowUnits, ...planned.units, ...candidateUnits]);
+  const contextUnits = selectOnboardingContext(
+    orderedCandidates,
     Math.max(1200, Math.floor(CONFIG.generator.maxContextTokens * ONBOARDING_QUERY_PLAN.maxContextRatio)),
-    preferCode,
+    sectionQuery,
+    sections.includes("Top User Workflows") ? 0.12 : 0.18,
+  );
+  const plannedDiagnostics: OnboardingRetrievalDiagnostic[] = planned.diagnostics.map((diagnostic) => ({
+    unitId: diagnostic.unitId,
+    filePath: diagnostic.filePath,
+    name: diagnostic.name,
+    score: diagnostic.score,
+    reasons: diagnostic.reasons,
+  }));
+
+  if (planned.missingBuckets.length > 0) {
+    logger.warn(`Briefing evidence for ${sections.join(", ")} missing buckets: ${planned.missingBuckets.join(", ")}`);
+  }
+  logger.info(
+    `Briefing evidence for ${sections.join(", ")} selected ${contextUnits.length} units from ` +
+      `${planned.census.usableUnits}/${planned.census.totalUnits} usable units; noise files excluded: ${planned.census.noiseFiles}`,
   );
 
-  return { contextUnits, diagnostics: retrieved.diagnostics };
+  return { contextUnits, diagnostics: [...plannedDiagnostics, ...retrieved.diagnostics] };
+}
+
+function selectWorkflowPlanUnits(plan: BriefingWorkflowPlan, sections: string[]): CodeUnit[] {
+  const sectionText = sections.join(" ").toLowerCase();
+  const units: CodeUnit[] = [];
+  const isTopWorkflowSection = sections.includes("Top User Workflows");
+  const lifecycleAvailable = plan.lifecycleEvidence.length > 0;
+
+  if (isTopWorkflowSection) {
+    units.push(...plan.lifecycleEvidence);
+  } else {
+    units.push(...plan.centralEvidence.slice(0, 12));
+  }
+
+  const workflows = isTopWorkflowSection
+    ? [...plan.workflows].sort(
+        (a, b) =>
+          Number(isSecondaryWorkflow(a, lifecycleAvailable)) - Number(isSecondaryWorkflow(b, lifecycleAvailable)),
+      )
+    : plan.workflows;
+
+  for (const workflow of workflows) {
+    const isWorkflowSection = /workflow|map|systems|data|privacy|risk|user/.test(sectionText);
+    const isRiskWorkflow =
+      /risk|privacy|operational/.test(sectionText) &&
+      hasWorkflowBucket(workflow, [
+        "auth_security",
+        "storage_files",
+        "analytics_tracking",
+        "billing_limits",
+        "workflow_jobs",
+        "ai_features",
+      ]);
+    const isProductSection = /product|who uses|glossary/.test(sectionText);
+
+    if (isWorkflowSection || isRiskWorkflow || isProductSection) {
+      units.push(...workflow.evidence);
+    }
+  }
+
+  if (isTopWorkflowSection) {
+    const secondaryFiles = new Set(
+      workflows
+        .filter((workflow) => isSecondaryWorkflow(workflow, lifecycleAvailable))
+        .flatMap((workflow) => workflow.evidence.map((unit) => unit.filePath)),
+    );
+    units.push(...plan.centralEvidence.filter((unit) => !secondaryFiles.has(unit.filePath)).slice(0, 6));
+  }
+
+  return uniqueUnits(units);
+}
+
+function hasWorkflowBucket(
+  workflow: BriefingWorkflowPlan["workflows"][number],
+  buckets: BriefingEvidenceBucket[],
+): boolean {
+  return workflow.evidence.some((unit) =>
+    classifyBriefingEvidence(unit.filePath).some((bucket) => buckets.includes(bucket)),
+  );
+}
+
+function isSecondaryWorkflow(
+  workflow: BriefingWorkflowPlan["workflows"][number],
+  lifecycleAvailable: boolean,
+): boolean {
+  if (!lifecycleAvailable) return false;
+  const hasSecondarySignal = hasWorkflowBucket(workflow, ["ai_features", "auth_security"]);
+  const hasPrimarySignal = hasWorkflowBucket(workflow, [
+    "routes_pages",
+    "api_handlers",
+    "storage_files",
+    "analytics_tracking",
+    "billing_limits",
+    "workflow_jobs",
+  ]);
+  return hasSecondarySignal && !hasPrimarySignal;
 }
 
 function sectionPattern(section: string): RegExp {
@@ -230,6 +361,7 @@ async function generateBriefingPart(
     focus: string[];
     persona: Persona;
     sections: string[];
+    workflowPlanText?: string;
   },
 ): Promise<{ content: string; generationTime: number; truncated: boolean }> {
   const prompt = buildOnboardingBriefPartPrompt(contextUnits, options);
@@ -279,15 +411,18 @@ export async function generateOnboardingBrief(
   const focus = options.focus && options.focus.length > 0 ? options.focus.slice(0, 10) : defaultFocus();
   const persona = options.persona ?? DEFAULT_PERSONA;
   const query = [
-    "Create a source-grounded codebase briefing for this product or repository.",
+    "Create a high-level, source-grounded codebase briefing for project orientation.",
+    "Prioritize product purpose, users, core workflows, important systems, risks, and source landmarks over low-level implementation detail.",
     `Audience: ${audience}.`,
     `Focus: ${focus.join(", ")}.`,
   ].join(" ");
 
   const retrievalStart = Date.now();
+  const workflowPlan = buildBriefingWorkflowPlan(store);
+  const workflowPlanText = workflowPlanToPrompt(workflowPlan);
   const sectionContexts = BRIEFING_PARTS.map((sections) => ({
     sections,
-    ...retrieveContextForSections(store, query, sections),
+    ...retrieveContextForSections(store, query, sections, workflowPlan),
   }));
   const contextUnits = uniqueUnits(sectionContexts.flatMap((sectionContext) => sectionContext.contextUnits));
   const retrievalDiagnostics = uniqueDiagnostics(
@@ -305,6 +440,7 @@ export async function generateOnboardingBrief(
         focus,
         persona,
         sections: sectionContext.sections,
+        workflowPlanText,
       }),
     );
   }
@@ -353,7 +489,7 @@ export async function generateOnboardingBrief(
     audience,
     focus,
     brief,
-    sources: sourceList(contextUnits),
+    sources: sourceListWithCitations(contextUnits, citationVerification.citations, store),
     retrievalTime,
     generationTime,
     generationTruncated,
