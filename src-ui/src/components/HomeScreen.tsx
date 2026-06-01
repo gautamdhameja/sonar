@@ -1,6 +1,5 @@
 import { BookOpen, FolderOpen, GitBranch, HardDrive, Loader2, Lock, Sparkles } from "lucide-react";
 import type { ActiveTask, RepositorySource } from "../app/types";
-import { demoRepository } from "../app/constants";
 import type { Project, ServiceSnapshot, ServiceState } from "../types";
 import { ReadinessCard } from "./ReadinessCard";
 
@@ -27,7 +26,6 @@ interface HomeScreenProps {
   onRepoPathChange: (value: string) => void;
   onSelectProject: (project: Project) => void;
   onStartRuntime: () => void;
-  onUseDemoRepository: () => void;
 }
 
 export function HomeScreen({
@@ -53,7 +51,6 @@ export function HomeScreen({
   onRepoPathChange,
   onSelectProject,
   onStartRuntime,
-  onUseDemoRepository,
 }: HomeScreenProps) {
   const createDisabled = (!canAnalyze && !selectedProjectId) || isCreatingBriefing || runtimeBusy || !runtimeReady;
 
@@ -64,11 +61,8 @@ export function HomeScreen({
           <div>
             <p className="eyebrow">Get started</p>
             <h2>Analyze a repository</h2>
-            <p>Create a concise, cited onboarding brief from a GitHub repository or a local folder on this machine.</p>
+            <p>Create a concise, cited briefing from a GitHub repository or a local folder on this machine.</p>
           </div>
-          <button className="secondary compact-button" onClick={onUseDemoRepository} type="button">
-            Try Excalidraw
-          </button>
         </div>
 
         <div className="segmented" role="tablist" aria-label="Repository source">
@@ -96,7 +90,7 @@ export function HomeScreen({
             <input
               value={githubRepository}
               onChange={(event) => onGithubRepositoryChange(event.target.value)}
-              placeholder={demoRepository}
+              placeholder="https://github.com/owner/repository"
             />
           </label>
         ) : (
@@ -143,8 +137,8 @@ export function HomeScreen({
       <aside className="start-copy">
         <div className="intro-panel">
           <p className="eyebrow">Sonar</p>
-          <h2>First-week context, grounded in source.</h2>
-          <p>Generate onboarding notes that stay close to the code, the docs, and the product flow.</p>
+          <h2>Understand any codebase. Ask what matters.</h2>
+          <p>Create a source-grounded briefing, then ask follow-up questions as you explore.</p>
         </div>
 
         <ReadinessCard

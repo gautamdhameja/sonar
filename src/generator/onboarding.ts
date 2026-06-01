@@ -36,7 +36,7 @@ const ONBOARDING_QUERY_PLAN: QueryPlan = {
   useGraph: true,
   includeSummary: true,
   maxContextRatio: 0.85,
-  reason: "first-week onboarding should prefer product docs, app/package boundaries, and workflow evidence",
+  reason: "briefing generation should prefer product docs, app/package boundaries, and workflow evidence",
 };
 
 function defaultFocus(): string[] {
@@ -84,11 +84,11 @@ export async function generateOnboardingBrief(
     persona?: Persona;
   },
 ): Promise<OnboardingBriefResult> {
-  const audience = options.audience?.trim() || "A product manager joining the team in their first week";
+  const audience = options.audience?.trim() || "A teammate trying to understand this repository";
   const focus = options.focus && options.focus.length > 0 ? options.focus.slice(0, 10) : defaultFocus();
   const persona = options.persona ?? DEFAULT_PERSONA;
   const query = [
-    "Create first-week onboarding documentation for this product.",
+    "Create a source-grounded codebase briefing for this product or repository.",
     `Audience: ${audience}.`,
     `Focus: ${focus.join(", ")}.`,
   ].join(" ");

@@ -4,17 +4,17 @@ services:
       context: .
     image: sonar-api:local
     restart: unless-stopped
+    env_file:
+      - ./.sonar/runtime.env
     ports:
       - "127.0.0.1:3001:3001"
     environment:
       SONAR_API_HOST: 0.0.0.0
       SONAR_CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:3001,http://localhost:3111,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:3111,http://127.0.0.1:5173,http://tauri.localhost,tauri://localhost
-      SONAR_API_TOKEN: ${SONAR_API_TOKEN:-sonar-local-dev-token}
       SONAR_DATA_DIR: /data
       SONAR_DB_PATH: /data/projects.db
       SONAR_ALLOWED_REPO_ROOTS: /workspace/repos
       SONAR_MEILI_HOST: http://meilisearch:7700
-      SONAR_MEILI_API_KEY: ${SONAR_MEILI_MASTER_KEY:-${SONAR_API_TOKEN:-sonar-local-dev-token}}
       SONAR_QDRANT_HOST: qdrant
       SONAR_QDRANT_PORT: 6333
       SONAR_QDRANT_VECTOR_SIZE: 768
@@ -37,8 +37,10 @@ services:
 
   meilisearch:
     image: getmeili/meilisearch:v1.13
-    command: ["meilisearch", "--master-key", "${SONAR_MEILI_MASTER_KEY:-${SONAR_API_TOKEN:-sonar-local-dev-token}}", "--http-addr", "0.0.0.0:7700"]
+    command: ["meilisearch", "--http-addr", "0.0.0.0:7700"]
     restart: unless-stopped
+    env_file:
+      - ./.sonar/runtime.env
     ports:
       - "127.0.0.1:7700:7700"
     volumes:

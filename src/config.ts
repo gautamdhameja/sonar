@@ -25,6 +25,11 @@ export interface SonarConfig {
     baseUrl: string;
     model: string;
     apiKey: string;
+    maxInputTokens: number;
+    concurrency: number;
+    maxRetries: number;
+    fallbackOnFailure: boolean;
+    maxFallbackRatio: number;
   };
   ollama: {
     baseUrl: string;
@@ -209,6 +214,11 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       baseUrl: embeddingBaseUrl,
       model: embeddingModel,
       apiKey: getString(env, "SONAR_EMBEDDING_API_KEY", "not-needed"),
+      maxInputTokens: getInteger(env, "SONAR_EMBEDDING_MAX_INPUT_TOKENS", 384),
+      concurrency: getInteger(env, "SONAR_EMBEDDING_CONCURRENCY", 2),
+      maxRetries: getInteger(env, "SONAR_EMBEDDING_MAX_RETRIES", 2),
+      fallbackOnFailure: getBoolean(env, "SONAR_EMBEDDING_FALLBACK_ON_FAILURE", true),
+      maxFallbackRatio: getNumber(env, "SONAR_EMBEDDING_MAX_FALLBACK_RATIO", 0.1),
     },
     ollama: {
       baseUrl: ollamaBaseUrl,

@@ -55,7 +55,7 @@ export async function createOnboardingSession(projectId: string): Promise<Onboar
   return request<OnboardingSessionResponse>(`/projects/${projectId}/onboarding/sessions`, {
     method: "POST",
     body: JSON.stringify({
-      audience: "A product manager joining the team in their first week",
+      audience: "A teammate trying to understand this repository",
       focus: [
         "what the product does",
         "top user workflows",
@@ -69,7 +69,7 @@ export async function createOnboardingSession(projectId: string): Promise<Onboar
         technicalBackground: "basic",
         avoidJargon: true,
         explanationDepth: "standard",
-        businessContext: "Create first-week onboarding documentation, not deep code analysis.",
+        businessContext: "Create a clear codebase briefing with practical follow-up questions, not deep code analysis.",
       },
     }),
   });

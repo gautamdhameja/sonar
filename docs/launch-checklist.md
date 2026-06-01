@@ -11,6 +11,7 @@ npm run test:integration
 npm run build
 npm run build:ui
 mdbook build docs
+npm run services:env
 docker compose -f compose.yml config
 docker compose -f docker-compose.sonar.yml config
 npm audit --audit-level=moderate
@@ -20,9 +21,10 @@ npm audit --audit-level=moderate
 ## Docker End-To-End
 
 ```bash
-docker compose up -d
-curl -H "X-Sonar-Token: ${SONAR_API_TOKEN:-sonar-local-dev-token}" http://127.0.0.1:3001/health
-curl -H "X-Sonar-Token: ${SONAR_API_TOKEN:-sonar-local-dev-token}" http://127.0.0.1:3001/health/dependencies
+npm run services:start
+TOKEN="$(grep '^SONAR_API_TOKEN=' .sonar/runtime.env | cut -d= -f2-)"
+curl -H "X-Sonar-Token: $TOKEN" http://127.0.0.1:3001/health
+curl -H "X-Sonar-Token: $TOKEN" http://127.0.0.1:3001/health/dependencies
 ```
 
 Acceptance criteria:
@@ -31,7 +33,7 @@ Acceptance criteria:
 - Sonar API, Meilisearch, Qdrant, chat model, and embedding model are healthy.
 - Docker does not mount the user's home directory.
 - A selected repository is copied into Sonar's internal Docker volume before indexing.
-- Direct Compose startup works without an env file on loopback-only ports.
+- Service startup creates `.sonar/runtime.env` and uses the same token as the desktop app.
 - Shared-machine or custom-network startup sets explicit `SONAR_API_TOKEN` and `SONAR_MEILI_MASTER_KEY` values.
 
 ## Dependency Audit Notes
@@ -53,8 +55,8 @@ Acceptance criteria:
 - GitHub URL import works for a public repository.
 - Local folder selection works for an already-cloned repository.
 - Stop analysis cancels an in-progress indexing request.
-- Onboarding brief generation produces cited source lists.
-- Follow-up questions stay grounded in the existing onboarding session.
+- Briefing generation produces cited source lists.
+- Follow-up questions stay grounded in the existing briefing session.
 - Markdown export writes only the user-selected `.md` file.
 
 ## Release Notes

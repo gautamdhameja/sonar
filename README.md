@@ -1,14 +1,14 @@
 # Sonar
 
-Local-first codebase onboarding and explanation engine for teams using laptop-scale local models.
+Understand any codebase. Ask what matters.
 
-Sonar indexes a repository, retrieves the most relevant code and docs, and asks a local or OpenAI-compatible model to generate source-grounded explanations. The V1 focus is first-week onboarding: helping a product manager, designer, support lead, or new engineer understand what a product does, where the main workflows live, and what questions to ask the engineering team.
+Sonar indexes a repository, retrieves the most relevant code and docs, and asks a local or OpenAI-compatible model to generate source-grounded briefings and follow-up answers. It helps product managers, designers, support leads, engineers, and other teammates understand what a codebase does, where important workflows live, and what to ask next.
 
 ## What Sonar Does
 
-- Generates first-week onboarding briefings for an indexed repository.
+- Generates source-grounded briefings for an indexed repository.
 - Supports session-aware follow-up questions after the initial briefing.
-- Uses exact lookup, grep-like lexical search, BM25, vector retrieval, graph expansion, and onboarding-specific ranking.
+- Uses exact lookup, grep-like lexical search, BM25, vector retrieval, graph expansion, and briefing-specific ranking.
 - Returns source lists and citation verification diagnostics with generated answers.
 - Persists projects, sessions, messages, source files, and rolling conversation summaries in SQLite.
 - Runs as a Tauri desktop app backed by a local HTTP API.
@@ -33,13 +33,15 @@ npm install
 npm run desktop:dev
 ```
 
-The desktop app starts the local Docker services with a per-install API token. Direct Compose startup also works without an env file and uses a local-only development token by default:
+The desktop app starts and repairs the local Docker services. This is the recommended V1 path; do not start Compose separately unless you are debugging the backend.
+
+For backend debugging, use the service script instead of raw Compose. It creates `.sonar/runtime.env`, then starts Docker with the same token the desktop app reads:
 
 ```bash
-docker compose up -d
+npm run services:start
 ```
 
-For shared machines or any custom network exposure, set your own token with `SONAR_API_TOKEN`.
+For shared machines or any custom network exposure, set your own token with `SONAR_API_TOKEN` before running the service script or starting the desktop app.
 
 Then paste a GitHub repository URL or select a local repository folder in the desktop UI and create a briefing.
 

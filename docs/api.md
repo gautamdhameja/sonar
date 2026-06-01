@@ -12,13 +12,13 @@ The desktop app uses the same HTTP API that can be used for automation and devel
 - `POST /projects/:id/summarize` — regenerate and store the codebase summary.
 - `GET /projects/:id/summary` — read the stored summary metadata.
 
-## Query And Onboarding Endpoints
+## Query And Briefing Endpoints
 
 - `POST /query` — backward-compatible query endpoint using `projectId` or the selected project.
 - `POST /projects/:id/query` — stateless source-grounded Q&A for a project.
-- `POST /projects/:id/explain` — role-aware onboarding-style overview using the general query pipeline.
-- `POST /projects/:id/onboarding` — generate a dedicated first-week onboarding brief without creating a session.
-- `POST /projects/:id/onboarding/sessions` — generate a brief and persist an onboarding session.
+- `POST /projects/:id/explain` — role-aware codebase overview using the general query pipeline.
+- `POST /projects/:id/onboarding` — generate a dedicated codebase briefing without creating a session.
+- `POST /projects/:id/onboarding/sessions` — generate a brief and persist a briefing session.
 - `GET /projects/:id/onboarding/sessions/:sessionId` — read a session and its messages.
 - `POST /projects/:id/onboarding/sessions/:sessionId/messages` — ask a session-aware follow-up question.
 
@@ -36,7 +36,7 @@ The desktop app uses the same HTTP API that can be used for automation and devel
 2. Start Sonar API mode.
 3. Ensure a generation endpoint is reachable at `SONAR_CHAT_BASE_URL`.
 4. Index a local repository.
-5. Create a persisted onboarding session.
+5. Create a persisted briefing session.
 6. Ask follow-up questions in that session.
 
 Index a repository:
@@ -53,11 +53,11 @@ curl -H "X-Sonar-Token: $SONAR_API_TOKEN" --json '{
 
 If `SONAR_API_HOST` is not a loopback address, `SONAR_API_TOKEN` is required. A token is recommended for local API mode as well.
 
-Create an onboarding session:
+Create a briefing session:
 
 ```bash
 curl -H "X-Sonar-Token: $SONAR_API_TOKEN" --json '{
-  "audience": "A product manager joining the team in their first week",
+  "audience": "A teammate trying to understand this repository",
   "focus": [
     "what the product does",
     "top user workflows",
@@ -71,7 +71,7 @@ curl -H "X-Sonar-Token: $SONAR_API_TOKEN" --json '{
     "technicalBackground": "basic",
     "avoidJargon": true,
     "explanationDepth": "standard",
-    "businessContext": "Create first-week onboarding documentation, not deep code analysis."
+    "businessContext": "Create a clear codebase briefing with practical follow-up questions, not deep code analysis."
   }
 }' http://localhost:3001/projects/<project-id>/onboarding/sessions
 ```
@@ -97,11 +97,11 @@ curl -H "X-Sonar-Token: $SONAR_API_TOKEN" --json '{
     "technicalBackground": "basic",
     "avoidJargon": true,
     "explanationDepth": "standard",
-    "businessContext": "I need onboarding context for planning"
+    "businessContext": "I need codebase context for planning"
   }
 }
 ```
 
-Use `POST /projects/:id/onboarding/sessions` for the V1 onboarding flow. Use `POST /projects/:id/explain` only when you want the older role-aware overview shape from the general query pipeline.
+Use `POST /projects/:id/onboarding/sessions` for the V1 briefing flow. Use `POST /projects/:id/explain` only when you want the older role-aware overview shape from the general query pipeline.
 
-Summaries and onboarding sessions are stored in SQLite and mirrored under Sonar's data directory where applicable. Sonar does not write generated artifacts into the repository being analyzed.
+Summaries and briefing sessions are stored in SQLite and mirrored under Sonar's data directory where applicable. Sonar does not write generated artifacts into the repository being analyzed.

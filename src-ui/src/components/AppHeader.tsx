@@ -15,7 +15,7 @@ export function AppHeader({ runtime, onRefreshServices, onOpenSettings }: AppHea
         <img className="brand-mark" src="/icon.svg" alt="" aria-hidden="true" />
         <div className="brand-copy">
           <h1>Sonar</h1>
-          <p>First-week codebase briefing</p>
+          <p>Understand any codebase. Ask what matters.</p>
         </div>
       </div>
       <div className="header-actions">

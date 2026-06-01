@@ -10,7 +10,7 @@ export function buildBriefingMarkdown(
   selectedProject: Project | null,
 ): string {
   const lines = [
-    `# ${session.session.repoName} - First-Week Briefing`,
+    `# ${session.session.repoName} - Codebase Briefing`,
     "",
     `Generated: ${new Date(session.session.createdAt).toLocaleString()}`,
     `Project: ${selectedProject?.name ?? session.session.repoName}`,

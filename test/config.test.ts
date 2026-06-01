@@ -10,6 +10,11 @@ test("loadConfig provides local defaults", () => {
   assert.equal(config.embedding.provider, "ollama");
   assert.equal(config.embedding.baseUrl, "http://localhost:11434");
   assert.equal(config.embedding.model, "nomic-embed-text");
+  assert.equal(config.embedding.maxInputTokens, 384);
+  assert.equal(config.embedding.concurrency, 2);
+  assert.equal(config.embedding.maxRetries, 2);
+  assert.equal(config.embedding.fallbackOnFailure, true);
+  assert.equal(config.embedding.maxFallbackRatio, 0.1);
   assert.equal(config.ollama.baseUrl, "http://localhost:11434");
   assert.equal(config.qdrant.port, 6333);
   assert.equal(config.qdrant.vectorSize, 768);
@@ -39,6 +44,11 @@ test("loadConfig reads environment overrides", () => {
     SONAR_EMBEDDING_BASE_URL: "http://127.0.0.1:12434/engines/v1",
     SONAR_EMBEDDING_MODEL: "local/embed",
     SONAR_EMBEDDING_API_KEY: "embed-secret",
+    SONAR_EMBEDDING_MAX_INPUT_TOKENS: "256",
+    SONAR_EMBEDDING_CONCURRENCY: "1",
+    SONAR_EMBEDDING_MAX_RETRIES: "3",
+    SONAR_EMBEDDING_FALLBACK_ON_FAILURE: "false",
+    SONAR_EMBEDDING_MAX_FALLBACK_RATIO: "0.25",
     SONAR_OLLAMA_BASE_URL: "http://127.0.0.1:11435",
     SONAR_QDRANT_PORT: "6334",
     SONAR_QDRANT_VECTOR_SIZE: "1024",
@@ -59,6 +69,11 @@ test("loadConfig reads environment overrides", () => {
   assert.equal(config.embedding.baseUrl, "http://127.0.0.1:12434/engines/v1");
   assert.equal(config.embedding.model, "local/embed");
   assert.equal(config.embedding.apiKey, "embed-secret");
+  assert.equal(config.embedding.maxInputTokens, 256);
+  assert.equal(config.embedding.concurrency, 1);
+  assert.equal(config.embedding.maxRetries, 3);
+  assert.equal(config.embedding.fallbackOnFailure, false);
+  assert.equal(config.embedding.maxFallbackRatio, 0.25);
   assert.equal(config.ollama.baseUrl, "http://127.0.0.1:11435");
   assert.equal(config.qdrant.port, 6334);
   assert.equal(config.qdrant.vectorSize, 1024);

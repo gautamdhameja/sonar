@@ -20,7 +20,7 @@ export function ProgressPanel({ activeTask, onStop, stopDisabled }: ProgressPane
       done: activeTask.kind === "brief",
     },
     {
-      label: "Write first-week briefing",
+      label: "Write codebase briefing",
       active: activeTask.kind === "brief",
       done: false,
     },

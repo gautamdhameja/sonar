@@ -52,7 +52,7 @@ export function BriefingView({
       <article className="brief-document">
         <div className="document-head">
           <div>
-            <p className="eyebrow">First-Week Briefing</p>
+            <p className="eyebrow">Codebase Briefing</p>
             <h2>{session.session.repoName}</h2>
           </div>
           <div className="document-actions">

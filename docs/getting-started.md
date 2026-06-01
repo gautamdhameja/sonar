@@ -14,7 +14,7 @@ Prerequisites:
 - Docker Compose 2.38 or newer
 - Git installed locally if you want the desktop app to clone GitHub repositories for you
 
-For normal desktop use, start the app. The desktop shell starts the local Docker runtime with a per-install API token:
+For normal desktop use, start the app and let it manage Docker. This is the recommended V1 path:
 
 ```bash
 npm install
@@ -31,13 +31,13 @@ This starts or connects to:
 
 The first run downloads model artifacts and can take a while. The app uses the Compose-managed API on `http://127.0.0.1:3001`.
 
-If you run Compose directly instead of through the desktop app, it uses a local-only development token by default:
+If you start services directly instead of through the desktop app, use the service script instead of raw Compose. It creates `.sonar/runtime.env`, then starts Docker with the same token the desktop app reads:
 
 ```bash
-docker compose up -d
+npm run services:start
 ```
 
-For shared machines or any custom network exposure, set your own token with `SONAR_API_TOKEN`.
+For shared machines or any custom network exposure, set your own token with `SONAR_API_TOKEN` before running the service script or starting the desktop app.
 
 ## Privacy Boundary
 
@@ -68,10 +68,11 @@ Everything else has a code default for local development. Advanced settings such
 The infra-only Compose file can start just the retrieval dependencies for API mode. Use this when you want to run the API with your own generation and embedding endpoints:
 
 ```bash
+npm run services:env
 docker compose -f docker-compose.sonar.yml up -d meilisearch qdrant
 ```
 
-For shared machines or any custom network exposure, set `SONAR_MEILI_MASTER_KEY` and `SONAR_MEILI_API_KEY` explicitly.
+For shared machines or any custom network exposure, set `SONAR_MEILI_MASTER_KEY` and `SONAR_MEILI_API_KEY` before generating the runtime env.
 
 Start the API:
 
@@ -84,6 +85,7 @@ npm start
 ## Health Checks
 
 ```bash
-curl -H "X-Sonar-Token: ${SONAR_API_TOKEN:-sonar-local-dev-token}" http://localhost:3001/health
-curl -H "X-Sonar-Token: ${SONAR_API_TOKEN:-sonar-local-dev-token}" http://localhost:3001/health/dependencies
+TOKEN="$(grep '^SONAR_API_TOKEN=' .sonar/runtime.env | cut -d= -f2-)"
+curl -H "X-Sonar-Token: $TOKEN" http://localhost:3001/health
+curl -H "X-Sonar-Token: $TOKEN" http://localhost:3001/health/dependencies
 ```

@@ -58,8 +58,7 @@ test("onboardingRetrieval favors docs, app boundaries, and product workflows", a
   ]);
 
   const result = onboardingRetrieval(store, {
-    query:
-      "Create first-week onboarding docs for a product manager focused on sharing, collaboration, and offline saving.",
+    query: "Create a codebase briefing for a product manager focused on sharing, collaboration, and offline saving.",
     topK: 3,
   });
 

@@ -1,7 +1,6 @@
 import type { DesktopModelConfig } from "../types";
 
-export const defaultQuestion = "What should I understand first, and what should I ask engineering this week?";
-export const demoRepository = "https://github.com/excalidraw/excalidraw";
+export const defaultQuestion = "What should I understand first, and what should I ask next?";
 
 export const dockerModelRunnerConfig: DesktopModelConfig = {
   chatBaseUrl: "http://localhost:12434/engines/llama.cpp/v1",

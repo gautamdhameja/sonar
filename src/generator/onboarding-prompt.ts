@@ -19,8 +19,8 @@ export function buildOnboardingBriefPrompt(
 ): { system: string; user: string } {
   const persona = options.persona ?? DEFAULT_PERSONA;
   const system = [
-    `You are Sonar, writing first-week onboarding documentation for "${options.repoName}".`,
-    "The reader wants the kind of explanation they would get in their first week at a company, not a deep code walkthrough.",
+    `You are Sonar, writing a source-grounded codebase briefing for "${options.repoName}".`,
+    "The reader wants a clear orientation to the repository, product behavior, important workflows, and useful follow-up questions, not a deep code walkthrough.",
     "",
     buildPersonaGuidance(persona),
     "",
@@ -46,7 +46,7 @@ export function buildOnboardingBriefPrompt(
     "## Required Output Structure",
     "1. Product In One Paragraph",
     "2. Who Uses It And Why",
-    "3. First-Week Product Map",
+    "3. Codebase Product Map",
     "4. Top User Workflows",
     "5. Main Systems And Ownership Areas",
     "6. Data, Privacy, And Operational Notes",
@@ -69,7 +69,7 @@ export function buildOnboardingBriefPrompt(
 
 export function buildCitationRepairPrompt(answer: string, units: CodeUnit[]): { system: string; user: string } {
   const system = [
-    "You repair source grounding in an onboarding brief.",
+    "You repair source grounding in a codebase briefing.",
     "Use only the listed sources. Do not add new facts.",
     "Every factual bullet or sentence must include a valid citation in the form [file:start-end].",
     "Do not combine multiple sources inside one citation bracket; write separate citations like [file:start-end] [file:start-end].",

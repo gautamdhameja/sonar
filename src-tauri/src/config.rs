@@ -1,6 +1,9 @@
-use std::{env, fs, io::Write, net::TcpStream, path::PathBuf};
+use std::{collections::HashMap, env, fs, io::Write, net::TcpStream, path::PathBuf};
 
-use crate::{models::DesktopModelConfig, paths::sonar_home};
+use crate::{
+    models::DesktopModelConfig,
+    paths::{repo_root, sonar_home},
+};
 use serde::Deserialize;
 
 pub(crate) const DEFAULT_CHAT_BASE_URL: &str = "http://localhost:12434/engines/llama.cpp/v1";
@@ -36,7 +39,7 @@ pub fn default_desktop_model_config() -> DesktopModelConfig {
             .unwrap_or_else(|_| DEFAULT_EMBEDDING_MODEL.to_string()),
         embedding_api_key: env::var("SONAR_EMBEDDING_API_KEY")
             .unwrap_or_else(|_| "not-needed".to_string()),
-        api_token: env::var("SONAR_API_TOKEN").unwrap_or_else(|_| generate_api_token()),
+        api_token: runtime_api_token().unwrap_or_else(|_| generate_api_token()),
     }
 }
 
@@ -85,7 +88,11 @@ pub fn desktop_model_config() -> DesktopModelConfig {
             stored.embedding_model = fallback.embedding_model;
         }
     }
-    if stored.api_token.trim().is_empty() {
+    if stored.api_token.trim().is_empty()
+        || runtime_api_token()
+            .map(|token| token != stored.api_token)
+            .unwrap_or(false)
+    {
         stored.api_token = fallback.api_token;
     }
     let _ = write_desktop_model_config(&path, &stored);
@@ -118,11 +125,7 @@ pub fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), Stri
         embedding_base_url: normalize_url(&config.embedding_base_url),
         embedding_model: config.embedding_model.trim().to_string(),
         embedding_api_key: normalize_api_key(&config.embedding_api_key),
-        api_token: if config.api_token.trim().is_empty() {
-            generate_api_token()
-        } else {
-            config.api_token.trim().to_string()
-        },
+        api_token: runtime_api_token()?,
     };
     write_desktop_model_config(&path, &normalized)
 }
@@ -150,10 +153,101 @@ fn write_desktop_model_config(path: &PathBuf, config: &DesktopModelConfig) -> Re
         .map_err(|err| format!("Unable to write desktop config: {err}"))
 }
 
+pub fn runtime_api_token() -> Result<String, String> {
+    Ok(ensure_runtime_env()?.api_token)
+}
+
+pub fn ensure_runtime_env() -> Result<RuntimeEnv, String> {
+    let path = runtime_env_path()?;
+    let mut values = read_env_file(&path)?;
+
+    let api_token = env::var("SONAR_API_TOKEN")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| values.get("SONAR_API_TOKEN").cloned())
+        .unwrap_or_else(generate_api_token);
+    let meili_key = env::var("SONAR_MEILI_MASTER_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| values.get("SONAR_MEILI_MASTER_KEY").cloned())
+        .unwrap_or_else(|| api_token.clone());
+
+    values.insert("SONAR_API_TOKEN".to_string(), api_token.clone());
+    values.insert("SONAR_MEILI_MASTER_KEY".to_string(), meili_key.clone());
+    values.insert("SONAR_MEILI_API_KEY".to_string(), meili_key.clone());
+    values.insert("MEILI_MASTER_KEY".to_string(), meili_key.clone());
+
+    write_runtime_env(&path, &values)?;
+    Ok(RuntimeEnv {
+        api_token,
+        meili_master_key: meili_key,
+    })
+}
+
+pub struct RuntimeEnv {
+    pub api_token: String,
+    pub meili_master_key: String,
+}
+
+fn runtime_env_path() -> Result<PathBuf, String> {
+    Ok(repo_root()?.join(".sonar").join("runtime.env"))
+}
+
+fn read_env_file(path: &PathBuf) -> Result<HashMap<String, String>, String> {
+    let contents = match fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(HashMap::new()),
+        Err(err) => return Err(format!("Unable to read Sonar runtime env: {err}")),
+    };
+    let mut values = HashMap::new();
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once('=') {
+            values.insert(key.trim().to_string(), value.trim().to_string());
+        }
+    }
+    Ok(values)
+}
+
+fn write_runtime_env(path: &PathBuf, values: &HashMap<String, String>) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("Unable to create Sonar runtime directory: {err}"))?;
+    }
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(path)
+        .map_err(|err| format!("Unable to write Sonar runtime env: {err}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(fs::Permissions::from_mode(0o600))
+            .map_err(|err| format!("Unable to secure Sonar runtime env permissions: {err}"))?;
+    }
+    let mut lines = vec![
+        "# Generated by Sonar. Do not commit.".to_string(),
+        format!("SONAR_API_TOKEN={}", values["SONAR_API_TOKEN"]),
+        format!(
+            "SONAR_MEILI_MASTER_KEY={}",
+            values["SONAR_MEILI_MASTER_KEY"]
+        ),
+        format!("SONAR_MEILI_API_KEY={}", values["SONAR_MEILI_API_KEY"]),
+        format!("MEILI_MASTER_KEY={}", values["MEILI_MASTER_KEY"]),
+    ];
+    lines.push(String::new());
+    file.write_all(lines.join("\n").as_bytes())
+        .map_err(|err| format!("Unable to write Sonar runtime env: {err}"))
+}
+
 fn generate_api_token() -> String {
     let mut bytes = [0_u8; 32];
     getrandom::fill(&mut bytes)
-        .expect("secure OS random source is required to create the Sonar API token");
+        .expect("secure OS random source is required to create the Sonar runtime token");
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 

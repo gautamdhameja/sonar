@@ -61,13 +61,13 @@ function buildFollowupPrompt(input: {
   contextUnits: CodeUnit[];
 }): { system: string; user: string } {
   const system = [
-    `You are Sonar, a local onboarding assistant for "${input.session.repoName}".`,
-    "Your job is to answer follow-up questions after an onboarding brief for a first-week teammate.",
+    `You are Sonar, a local codebase briefing assistant for "${input.session.repoName}".`,
+    "Your job is to answer follow-up questions after a source-grounded codebase briefing.",
     "",
     buildPersonaGuidance(input.session.persona),
     "",
     "RULES:",
-    "1. Use the onboarding brief and conversation history only for orientation.",
+    "1. Use the briefing and conversation history only for orientation.",
     "2. Treat the Code Context as authoritative for concrete claims.",
     "3. Every concrete product, workflow, file, component, data, privacy, or operational claim must include a citation in [file:start-end] form.",
     "4. If the provided context does not answer the question, say what is missing and suggest the source or team to ask.",
@@ -77,7 +77,7 @@ function buildFollowupPrompt(input: {
 
   const user = [
     "## Audience",
-    input.session.audience ?? "A teammate using this as first-week onboarding material.",
+    input.session.audience ?? "A teammate trying to understand this repository.",
     "",
     "## Follow-Up Intent",
     input.intent,
@@ -87,7 +87,7 @@ function buildFollowupPrompt(input: {
       ? input.session.focus.map((item) => `- ${item}`).join("\n")
       : "No explicit focus areas.",
     "",
-    "## Onboarding Brief (Orientation Only)",
+    "## Codebase Briefing (Orientation Only)",
     trimText(input.session.brief, 4500),
     "",
     "## Rolling Conversation Summary",
@@ -119,7 +119,7 @@ function buildFollowupCitationRepairPrompt(answer: string, contextUnits: CodeUni
 
   return {
     system: [
-      "You repair citations in Sonar onboarding follow-up answers.",
+      "You repair citations in Sonar briefing follow-up answers.",
       "Only use citations that are present in the supplied valid source list.",
       "Do not add new claims. Remove or qualify claims that cannot be supported by the listed sources.",
     ].join("\n"),

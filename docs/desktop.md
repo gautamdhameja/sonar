@@ -13,7 +13,7 @@ The V1 desktop app is the primary user experience. In Docker-first mode, Compose
 1. Open Sonar.
 2. Let the app start the local Docker services.
 3. Paste a GitHub repository URL or select a local folder.
-4. Create the first-week briefing.
+4. Create a codebase briefing.
 5. Ask follow-up questions in the same session.
 6. Copy or export the briefing as Markdown if you want to share it.
 
@@ -26,17 +26,19 @@ The V1 desktop app is the primary user experience. In Docker-first mode, Compose
 
 The default Docker-first stack is intentionally local and self-contained. To use cloud generation or a separately hosted local model, run API mode and override endpoint environment variables instead of the default Compose model bindings.
 
-When the desktop app starts Docker services, it injects a per-install API token and Meilisearch key. If you run `docker compose up` manually, Compose uses a local-only development token by default:
+When the desktop app starts Docker services, it creates `.sonar/runtime.env` and uses that generated local runtime token for both the app and Compose. If a stale Docker stack is running with a different token, the app recreates the Compose containers while preserving named volumes.
+
+If you start services manually for backend debugging, use the service script instead of raw Compose:
 
 ```bash
-docker compose up -d
+npm run services:start
 ```
 
-For shared machines or any custom network exposure, set your own token with `SONAR_API_TOKEN`.
+For shared machines or any custom network exposure, set your own token with `SONAR_API_TOKEN` before running the service script or starting the desktop app.
 
 ## Desktop Configuration
 
-The generated desktop config is stored at:
+The desktop config is stored at:
 
 ```text
 ~/.sonar/desktop-config.json
@@ -44,9 +46,17 @@ The generated desktop config is stored at:
 
 Do not commit this file. It may contain API keys.
 
+The Docker runtime env is stored at:
+
+```text
+.sonar/runtime.env
+```
+
+This file is generated locally and ignored by git.
+
 ## Repository Options
 
-- Paste a GitHub repository URL such as `https://github.com/excalidraw/excalidraw`. Sonar clones it locally, imports that selected repository into Docker's internal Sonar repository volume, and indexes the imported copy.
+- Paste a GitHub repository URL. Sonar clones it locally, imports that selected repository into Docker's internal Sonar repository volume, and indexes the imported copy.
 - Select an existing local repository with the native folder picker. Only that selected repository is copied into Docker's internal Sonar repository volume.
 
 ## Development Commands

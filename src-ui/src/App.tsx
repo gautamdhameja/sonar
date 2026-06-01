@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { askFollowup, createOnboardingSession, indexProject, listProjects, setApiToken } from "./api";
 import { buildBriefingMarkdown } from "./app/briefingMarkdown";
-import { defaultQuestion, demoRepository, dockerModelRunnerConfig } from "./app/constants";
+import { defaultQuestion, dockerModelRunnerConfig } from "./app/constants";
 import { saveMarkdownFile } from "./app/exportMarkdown";
 import { friendlyErrorMessage, runtimeState, safeFileName } from "./app/format";
 import {
@@ -115,9 +115,9 @@ export function App() {
     setNotice(null);
     setActiveTask({ kind: "settings", label: "Applying model settings" });
     try {
-      setApiToken(modelConfig.apiToken);
       const result = await saveModelConfig(modelConfig);
       setSnapshot(result);
+      await refreshModelConfig();
       setNotice("Model settings saved. Sonar restarted the local API with the new configuration.");
     } catch (err) {
       setError(friendlyErrorMessage(err));
@@ -185,7 +185,7 @@ export function App() {
 
     try {
       const projectId = canAnalyze ? await indexSelectedRepository(controller) : selectedProjectId;
-      setActiveTask({ kind: "brief", label: "Writing first-week briefing" });
+      setActiveTask({ kind: "brief", label: "Writing codebase briefing" });
       const result = await createOnboardingSession(projectId);
       setSession(result);
       setQuestion(defaultQuestion);
@@ -215,7 +215,7 @@ export function App() {
     if (!selectedProjectId) return;
     setError(null);
     setNotice(null);
-    setActiveTask({ kind: "brief", label: "Writing first-week briefing" });
+    setActiveTask({ kind: "brief", label: "Writing codebase briefing" });
     try {
       const result = await createOnboardingSession(selectedProjectId);
       setSession(result);
@@ -241,16 +241,6 @@ export function App() {
     } finally {
       setActiveTask(null);
     }
-  }
-
-  function handleUseDemoRepository() {
-    setRepositorySource("github");
-    setGithubRepository(demoRepository);
-    setProjectName("excalidraw/excalidraw");
-    setSelectedProjectId("");
-    setSession(null);
-    setFollowups([]);
-    setNotice("Demo repository selected. Click Create briefing when you are ready to index it.");
   }
 
   function handleGithubRepositoryChange(value: string) {
@@ -350,7 +340,6 @@ export function App() {
             onRepoPathChange={setRepoPath}
             onSelectProject={handleSelectProject}
             onStartRuntime={() => void bootstrap()}
-            onUseDemoRepository={handleUseDemoRepository}
             projectName={projectName}
             projects={projects}
             repositorySource={repositorySource}

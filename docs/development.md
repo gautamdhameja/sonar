@@ -4,11 +4,11 @@
 
 - **parser/** — tree-sitter code parsing into symbols and imports
 - **indexer/** — indexes parsed data into Meilisearch for keyword search and Qdrant for vector search
-- **retriever/** — local exact search, grep-like lexical search, hybrid search, graph retrieval, onboarding retrieval, and reranking
+- **retriever/** — local exact search, grep-like lexical search, hybrid search, graph retrieval, briefing retrieval, and reranking
 - **context/** — expands search results with related symbols and packs context into a local-model-friendly token budget
 - **generator/** — assembles prompts, calls the chat model, verifies citations, and repairs citation issues when possible
-- **db/** — SQLite persistence for projects, code units, dependency edges, embeddings, onboarding sessions, and onboarding messages
-- **api/** — Express HTTP server exposing indexing, querying, onboarding, session follow-up, graph, health, and stats endpoints
+- **db/** — SQLite persistence for projects, code units, dependency edges, embeddings, briefing sessions, and follow-up messages
+- **api/** — Express HTTP server exposing indexing, querying, briefing, session follow-up, graph, health, and stats endpoints
 
 ## Local Development
 
@@ -21,6 +21,7 @@ npm run dev
 Start local retrieval dependencies:
 
 ```bash
+npm run services:env
 docker compose -f docker-compose.sonar.yml up -d meilisearch qdrant
 ```
 

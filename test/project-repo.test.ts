@@ -92,7 +92,7 @@ test("ProjectRepo persists onboarding sessions and messages", async () => {
     audience: "Product manager",
     focus: ["sharing", "privacy"],
     persona: DEFAULT_PERSONA,
-    brief: "A first-week brief.",
+    brief: "A codebase briefing.",
     sourceFiles: ["README.md", "src/share.ts"],
   });
   repo.addOnboardingMessage({

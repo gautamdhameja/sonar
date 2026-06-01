@@ -82,10 +82,10 @@ function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; re
     }
   }
 
-  if (/\b(product manager|pm|onboarding|first week|first-week|non-technical)\b/.test(queryText)) {
+  if (/\b(product manager|pm|briefing|orientation|non-technical)\b/.test(queryText)) {
     if (/\b(readme|docs|welcome|share|export|collab|local|privacy|security|risk)\b/.test(filePath)) {
       score += 10;
-      reasons.push("product onboarding match");
+      reasons.push("product briefing match");
     }
     if (
       /\b(localdata|filemanager|portal|backend|sharedialog|export|collab|collaboration|storage|share|sync|socket)\b/.test(
@@ -93,7 +93,7 @@ function scoreOnboardingUnit(unit: CodeUnit, query: string): { score: number; re
       )
     ) {
       score += 18;
-      reasons.push("first-week workflow owner");
+      reasons.push("workflow owner");
     }
   }
 
