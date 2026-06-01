@@ -87,6 +87,11 @@ function initSchema(db: Database.Database): void {
       persona_json TEXT NOT NULL,
       brief TEXT NOT NULL,
       source_files_json TEXT NOT NULL DEFAULT '[]',
+      sources_json TEXT NOT NULL DEFAULT '[]',
+      citation_verification_json TEXT,
+      retrieval_time INTEGER NOT NULL DEFAULT 0,
+      generation_time INTEGER NOT NULL DEFAULT 0,
+      generation_truncated INTEGER NOT NULL DEFAULT 0,
       rolling_summary TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -109,7 +114,7 @@ function initSchema(db: Database.Database): void {
   `);
 
   migrateSchema(db);
-  db.pragma("user_version = 2");
+  db.pragma("user_version = 3");
 }
 
 function migrateSchema(db: Database.Database): void {
@@ -131,6 +136,36 @@ function migrateSchema(db: Database.Database): void {
     "dependency_edges",
     "edge_type",
     "ALTER TABLE dependency_edges ADD COLUMN edge_type TEXT NOT NULL DEFAULT 'imports'",
+  );
+  addColumnIfMissing(
+    db,
+    "onboarding_sessions",
+    "sources_json",
+    "ALTER TABLE onboarding_sessions ADD COLUMN sources_json TEXT NOT NULL DEFAULT '[]'",
+  );
+  addColumnIfMissing(
+    db,
+    "onboarding_sessions",
+    "citation_verification_json",
+    "ALTER TABLE onboarding_sessions ADD COLUMN citation_verification_json TEXT",
+  );
+  addColumnIfMissing(
+    db,
+    "onboarding_sessions",
+    "retrieval_time",
+    "ALTER TABLE onboarding_sessions ADD COLUMN retrieval_time INTEGER NOT NULL DEFAULT 0",
+  );
+  addColumnIfMissing(
+    db,
+    "onboarding_sessions",
+    "generation_time",
+    "ALTER TABLE onboarding_sessions ADD COLUMN generation_time INTEGER NOT NULL DEFAULT 0",
+  );
+  addColumnIfMissing(
+    db,
+    "onboarding_sessions",
+    "generation_truncated",
+    "ALTER TABLE onboarding_sessions ADD COLUMN generation_truncated INTEGER NOT NULL DEFAULT 0",
   );
 }
 

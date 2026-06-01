@@ -80,7 +80,7 @@ test("ProjectRepo replaces an indexed project in a single repository transaction
   assert.equal(repo.getDependencyEdges(second.id).length, 1);
 });
 
-test("ProjectRepo persists onboarding sessions and messages", async () => {
+test("ProjectRepo persists onboarding sessions and supports legacy messages", async () => {
   const { ProjectRepo } = await import("../src/db/project-repo");
   const { DEFAULT_PERSONA } = await import("../src/persona/types");
   const repo = new ProjectRepo();
@@ -94,6 +94,17 @@ test("ProjectRepo persists onboarding sessions and messages", async () => {
     persona: DEFAULT_PERSONA,
     brief: "A codebase briefing.",
     sourceFiles: ["README.md", "src/share.ts"],
+    sources: [{ filePath: "src/share.ts", name: "share", kind: "function", lines: "1-4" }],
+    citationVerification: {
+      valid: true,
+      citations: ["src/share.ts:1-4"],
+      invalidCitations: [],
+      uncitedClaims: [],
+      sourceKeys: ["src/share.ts:1-4"],
+    },
+    retrievalTime: 12,
+    generationTime: 34,
+    generationTruncated: true,
   });
   repo.addOnboardingMessage({
     sessionId: session.id,
@@ -115,7 +126,13 @@ test("ProjectRepo persists onboarding sessions and messages", async () => {
   assert.equal(loaded?.audience, "Product manager");
   assert.deepEqual(loaded?.focus, ["sharing", "privacy"]);
   assert.deepEqual(loaded?.sourceFiles, ["README.md", "src/share.ts"]);
+  assert.equal(loaded?.sources[0].filePath, "src/share.ts");
+  assert.equal(loaded?.citationVerification?.valid, true);
+  assert.equal(loaded?.retrievalTime, 12);
+  assert.equal(loaded?.generationTime, 34);
+  assert.equal(loaded?.generationTruncated, true);
   assert.equal(loaded?.rollingSummary, "User asked about sharing.");
+  assert.equal(repo.getLatestOnboardingSessionForProject(project.id)?.id, session.id);
 
   const messages = repo.listOnboardingMessages(session.id);
   assert.equal(messages.length, 2);

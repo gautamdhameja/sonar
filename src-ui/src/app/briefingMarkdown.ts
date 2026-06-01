@@ -29,7 +29,14 @@ export function buildBriefingMarkdown(
   if (followups.length > 0) {
     lines.push("", "## Follow-up Questions", "");
     followups.forEach((followup, index) => {
-      lines.push(`### ${index + 1}. ${followup.intent.replaceAll("_", " ")}`, "", followup.answer.trim(), "");
+      lines.push(
+        `### ${index + 1}. ${followup.intent.replaceAll("_", " ")}`,
+        "",
+        `Question: ${followup.question.trim()}`,
+        "",
+        followup.answer.trim(),
+        "",
+      );
       if (followup.sources.length > 0) {
         lines.push("Sources:", "", ...followup.sources.map(sourceToMarkdown), "");
       }

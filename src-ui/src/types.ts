@@ -82,7 +82,7 @@ export interface OnboardingSessionResponse {
   brief: {
     brief: string;
     sources: SourceRef[];
-    citationVerification: CitationVerification;
+    citationVerification: CitationVerification | null;
     retrievalTime: number;
     generationTime: number;
     generationTruncated?: boolean;
@@ -90,6 +90,7 @@ export interface OnboardingSessionResponse {
 }
 
 export interface FollowupResponse {
+  question: string;
   answer: string;
   intent: string;
   sources: SourceRef[];

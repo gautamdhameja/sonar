@@ -62,6 +62,7 @@ export function HomeScreen({
   onStartRuntime,
 }: HomeScreenProps) {
   const createDisabled = (!canAnalyze && !selectedProjectId) || isCreatingBriefing || runtimeBusy || !runtimeReady;
+  const createLabel = !canAnalyze && selectedProjectId ? "Open briefing" : "Create briefing";
   const briefingRoles = Object.entries(briefingRoleProfiles) as [
     BriefingRole,
     (typeof briefingRoleProfiles)[BriefingRole],
@@ -132,29 +133,9 @@ export function HomeScreen({
           />
         </label>
 
-        <div className="field">
-          <span>Briefing audience</span>
-          <div className="role-grid">
-            {briefingRoles.map(([value, profile]) => (
-              <label className={briefingRole === value ? "role-option active" : "role-option"} key={value}>
-                <input
-                  checked={briefingRole === value}
-                  className="role-radio"
-                  name="briefing-role"
-                  onChange={() => onBriefingRoleChange(value)}
-                  type="radio"
-                  value={value}
-                />
-                <strong>{profile.label}</strong>
-                <small>{profile.description}</small>
-              </label>
-            ))}
-          </div>
-        </div>
-
         <button className="primary hero-action" disabled={createDisabled} onClick={onCreateBriefing} type="button">
           {isCreatingBriefing ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
-          Create briefing
+          {createLabel}
         </button>
 
         <div className="privacy-note">
@@ -165,24 +146,6 @@ export function HomeScreen({
               : "Start the local runtime first. Sonar will import only the repository you choose."}
           </span>
         </div>
-      </div>
-
-      <aside className="start-copy">
-        <div className="intro-panel">
-          <p className="eyebrow">Sonar</p>
-          <h2>Understand any codebase. Ask what matters.</h2>
-          <p>Create a source-grounded briefing, then ask follow-up questions as you explore.</p>
-        </div>
-
-        <ReadinessCard
-          activeTask={activeTask}
-          modelConfig={modelConfig}
-          onOpenSettings={onOpenSettings}
-          onStart={onStartRuntime}
-          runtime={runtime}
-          runtimeBlocker={runtimeBlocker}
-          snapshot={snapshot}
-        />
 
         {projects.length > 0 && (
           <div className="recent-projects">
@@ -212,6 +175,41 @@ export function HomeScreen({
             )}
           </div>
         )}
+      </div>
+
+      <aside className="start-copy">
+        <ReadinessCard
+          activeTask={activeTask}
+          modelConfig={modelConfig}
+          onOpenSettings={onOpenSettings}
+          onStart={onStartRuntime}
+          runtime={runtime}
+          runtimeBlocker={runtimeBlocker}
+          snapshot={snapshot}
+        />
+
+        <div className="persona-card">
+          <div className="side-panel-head">
+            <p className="eyebrow">Briefing audience</p>
+            <h3>Tailor the briefing</h3>
+          </div>
+          <div className="role-grid">
+            {briefingRoles.map(([value, profile]) => (
+              <label className={briefingRole === value ? "role-option active" : "role-option"} key={value}>
+                <input
+                  checked={briefingRole === value}
+                  className="role-radio"
+                  name="briefing-role"
+                  onChange={() => onBriefingRoleChange(value)}
+                  type="radio"
+                  value={value}
+                />
+                <strong>{profile.label}</strong>
+                <small>{profile.description}</small>
+              </label>
+            ))}
+          </div>
+        </div>
       </aside>
     </article>
   );

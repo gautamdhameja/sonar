@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { askFollowup, createOnboardingSession, indexProject, listProjects, setApiToken } from "./api";
+import {
+  askFollowup,
+  createOnboardingSession,
+  getLatestOnboardingSession,
+  indexProject,
+  listProjects,
+  setApiToken,
+} from "./api";
 import { buildBriefingMarkdown } from "./app/briefingMarkdown";
 import { defaultBriefingRole, defaultQuestion, dockerModelRunnerConfig } from "./app/constants";
 import { saveMarkdownFile } from "./app/exportMarkdown";
@@ -218,6 +225,23 @@ export function App() {
 
     try {
       const projectId = canAnalyze ? await indexSelectedRepository(controller) : selectedProjectId;
+      if (!canAnalyze) {
+        setActiveTask({
+          kind: "brief",
+          label: "Opening saved briefing",
+          detail: "Loading the latest briefing already stored for this repository.",
+          progress: 35,
+        });
+        const saved = await getLatestOnboardingSession(projectId);
+        if (saved) {
+          setSession(saved);
+          setFollowups([]);
+          setQuestion(defaultQuestion);
+          setEvidenceOpen(false);
+          return;
+        }
+      }
+
       setActiveTask({
         kind: "brief",
         label: "Writing codebase briefing",
@@ -282,8 +306,9 @@ export function App() {
     setNotice(null);
     setActiveTask({ kind: "followup", label: "Answering follow-up" });
     try {
-      const result = await askFollowup(selectedProjectId, session.session.id, question);
+      const result = await askFollowup(selectedProjectId, session.session.id, question, followups);
       setFollowups((current) => [...current, result]);
+      setQuestion("");
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {

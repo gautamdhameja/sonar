@@ -176,7 +176,7 @@ fn start_docker_services(
             &meili_master_key,
             runtime_mode,
         )
-        .args(["up", "-d"]),
+        .args(["up", "-d", "--build"]),
         "docker compose up",
     )
 }

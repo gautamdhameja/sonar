@@ -6,6 +6,13 @@ import { logger } from "../utils/logger";
 import { DEFAULT_PERSONA, Persona } from "../persona/types";
 import type { CitationVerification } from "../generator/citation-verifier";
 
+export interface SourceRef {
+  filePath: string;
+  name: string;
+  kind: string;
+  lines: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -55,6 +62,11 @@ export interface OnboardingSession {
   persona: Persona;
   brief: string;
   sourceFiles: string[];
+  sources: SourceRef[];
+  citationVerification: CitationVerification | null;
+  retrievalTime: number;
+  generationTime: number;
+  generationTruncated: boolean;
   rollingSummary: string | null;
   createdAt: string;
   updatedAt: string;
@@ -80,6 +92,11 @@ interface OnboardingSessionRow {
   persona_json: string;
   brief: string;
   source_files_json: string;
+  sources_json: string;
+  citation_verification_json: string | null;
+  retrieval_time: number;
+  generation_time: number;
+  generation_truncated: number;
   rolling_summary: string | null;
   created_at: string;
   updated_at: string;
@@ -147,14 +164,14 @@ function parsePersonaJson(value: string | null, id: string): Persona {
   return { ...DEFAULT_PERSONA, ...parsed } as Persona;
 }
 
-function parseSourcesJson(value: string | null, id: string): OnboardingMessage["sources"] {
-  const parsed = parseJsonObjectField<unknown>(value, [], "message sources", id);
+function parseSourcesJson(value: string | null, fieldName: string, id: string): SourceRef[] {
+  const parsed = parseJsonObjectField<unknown>(value, [], fieldName, id);
   if (!Array.isArray(parsed)) {
-    logger.warn(`Invalid message sources JSON for ${id}; using empty array`);
+    logger.warn(`Invalid ${fieldName} JSON for ${id}; using empty array`);
     return [];
   }
 
-  return parsed.filter((item): item is OnboardingMessage["sources"][number] => {
+  return parsed.filter((item): item is SourceRef => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
     const source = item as Record<string, unknown>;
     return (
@@ -195,6 +212,11 @@ function rowToOnboardingSession(row: OnboardingSessionRow): OnboardingSession {
     persona: parsePersonaJson(row.persona_json, row.id),
     brief: row.brief,
     sourceFiles: parseStringArrayJson(row.source_files_json, "source files", row.id),
+    sources: parseSourcesJson(row.sources_json, "briefing sources", row.id),
+    citationVerification: parseJsonObjectField(row.citation_verification_json, null, "citation verification", row.id),
+    retrievalTime: row.retrieval_time,
+    generationTime: row.generation_time,
+    generationTruncated: row.generation_truncated === 1,
     rollingSummary: row.rolling_summary,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -208,7 +230,7 @@ function rowToOnboardingMessage(row: OnboardingMessageRow): OnboardingMessage {
     role: row.role,
     content: row.content,
     intent: row.intent,
-    sources: parseSourcesJson(row.sources_json, row.id),
+    sources: parseSourcesJson(row.sources_json, "message sources", row.id),
     citationVerification: parseJsonObjectField(row.citation_verification_json, null, "citation verification", row.id),
     createdAt: row.created_at,
   };
@@ -472,6 +494,11 @@ export class ProjectRepo {
     persona: Persona;
     brief: string;
     sourceFiles: string[];
+    sources?: SourceRef[];
+    citationVerification?: CitationVerification | null;
+    retrievalTime?: number;
+    generationTime?: number;
+    generationTruncated?: boolean;
     rollingSummary?: string | null;
   }): OnboardingSession {
     const id = uuidv4();
@@ -479,8 +506,8 @@ export class ProjectRepo {
     this.db
       .prepare(
         `INSERT INTO onboarding_sessions
-          (id, project_id, repo_name, audience, focus_json, persona_json, brief, source_files_json, rolling_summary, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, project_id, repo_name, audience, focus_json, persona_json, brief, source_files_json, sources_json, citation_verification_json, retrieval_time, generation_time, generation_truncated, rolling_summary, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -491,6 +518,11 @@ export class ProjectRepo {
         JSON.stringify(input.persona),
         input.brief,
         JSON.stringify(input.sourceFiles),
+        JSON.stringify(input.sources ?? []),
+        input.citationVerification ? JSON.stringify(input.citationVerification) : null,
+        input.retrievalTime ?? 0,
+        input.generationTime ?? 0,
+        input.generationTruncated ? 1 : 0,
         input.rollingSummary ?? null,
         now,
         now,
@@ -505,6 +537,11 @@ export class ProjectRepo {
       persona: input.persona,
       brief: input.brief,
       sourceFiles: input.sourceFiles,
+      sources: input.sources ?? [],
+      citationVerification: input.citationVerification ?? null,
+      retrievalTime: input.retrievalTime ?? 0,
+      generationTime: input.generationTime ?? 0,
+      generationTruncated: input.generationTruncated ?? false,
       rollingSummary: input.rollingSummary ?? null,
       createdAt: now,
       updatedAt: now,
@@ -515,6 +552,18 @@ export class ProjectRepo {
     const row = this.db.prepare("SELECT * FROM onboarding_sessions WHERE id = ?").get(id) as
       | OnboardingSessionRow
       | undefined;
+    return row ? rowToOnboardingSession(row) : undefined;
+  }
+
+  getLatestOnboardingSessionForProject(projectId: string): OnboardingSession | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM onboarding_sessions
+         WHERE project_id = ?
+         ORDER BY updated_at DESC, created_at DESC
+         LIMIT 1`,
+      )
+      .get(projectId) as OnboardingSessionRow | undefined;
     return row ? rowToOnboardingSession(row) : undefined;
   }
 

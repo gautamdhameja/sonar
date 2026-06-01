@@ -69,9 +69,30 @@ export async function createOnboardingSession(
   });
 }
 
-export async function askFollowup(projectId: string, sessionId: string, question: string): Promise<FollowupResponse> {
+export async function getLatestOnboardingSession(projectId: string): Promise<OnboardingSessionResponse | null> {
+  try {
+    return await request<OnboardingSessionResponse>(`/projects/${projectId}/onboarding/sessions/latest`);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("No saved briefing found")) return null;
+    throw err;
+  }
+}
+
+export async function askFollowup(
+  projectId: string,
+  sessionId: string,
+  question: string,
+  history: FollowupResponse[] = [],
+): Promise<FollowupResponse> {
   return request<FollowupResponse>(`/projects/${projectId}/onboarding/sessions/${sessionId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({
+      question,
+      history: history.map((item) => ({
+        question: item.question,
+        answer: item.answer,
+        intent: item.intent,
+      })),
+    }),
   });
 }

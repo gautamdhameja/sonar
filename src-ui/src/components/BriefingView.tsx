@@ -13,10 +13,11 @@ import { suggestedQuestions } from "../app/constants";
 import type { ActiveTask } from "../app/types";
 import { formatMs } from "../app/format";
 import type { CitationVerification, FollowupResponse, OnboardingSessionResponse, Project, SourceRef } from "../types";
+import { MarkdownContent } from "./MarkdownContent";
 
 interface BriefingViewProps {
   activeTask: ActiveTask | null;
-  citation?: CitationVerification;
+  citation?: CitationVerification | null;
   followups: FollowupResponse[];
   latestSources: SourceRef[];
   question: string;
@@ -98,38 +99,23 @@ export function BriefingView({
           )}
         </div>
 
-        <div className="markdownish briefing-text">{session.brief.brief}</div>
+        <MarkdownContent className="briefing-text" content={session.brief.brief} />
 
         <section className="followup-card">
           <div>
             <p className="eyebrow">Ask Next</p>
             <h3>Continue from this briefing</h3>
           </div>
-          <div className="suggestion-row">
-            {suggestedQuestions.map((item) => (
-              <button key={item} onClick={() => onQuestionChange(item)} type="button">
-                {item}
-              </button>
-            ))}
-          </div>
-          <div className="question-row">
-            <textarea value={question} onChange={(event) => onQuestionChange(event.target.value)} />
-            <button
-              className="primary"
-              disabled={!session || activeTask?.kind === "followup"}
-              onClick={onFollowup}
-              type="button"
-            >
-              Ask
-              <ChevronRight size={16} />
-            </button>
-          </div>
           <div className="answers">
             {followups.map((item) => (
               <article
                 className="answer"
-                key={`${item.intent}-${item.retrievalTime}-${item.generationTime}-${item.answer.slice(0, 48)}`}
+                key={`${item.question}-${item.intent}-${item.retrievalTime}-${item.generationTime}`}
               >
+                <div className="answer-question">
+                  <span>You asked</span>
+                  <p>{item.question}</p>
+                </div>
                 <div className="answer-meta">
                   <span>{item.intent.replaceAll("_", " ")}</span>
                   <span>
@@ -141,9 +127,34 @@ export function BriefingView({
                     This answer reached the model output limit. Regenerate or ask a narrower question.
                   </p>
                 )}
-                <div className="markdownish">{item.answer}</div>
+                <MarkdownContent content={item.answer} />
               </article>
             ))}
+          </div>
+          <div className="chat-composer">
+            <div className="suggestion-row">
+              {suggestedQuestions.map((item) => (
+                <button key={item} onClick={() => onQuestionChange(item)} type="button">
+                  {item}
+                </button>
+              ))}
+            </div>
+            <div className="question-row">
+              <textarea
+                value={question}
+                onChange={(event) => onQuestionChange(event.target.value)}
+                placeholder="Ask a follow-up about this codebase"
+              />
+              <button
+                className="primary"
+                disabled={!session || activeTask?.kind === "followup" || !question.trim()}
+                onClick={onFollowup}
+                type="button"
+              >
+                Ask
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         </section>
       </article>

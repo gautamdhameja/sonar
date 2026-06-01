@@ -1,12 +1,8 @@
 import { CodeUnit } from "../parser/types";
 import { CONFIG } from "../config";
-import { OnboardingMessage, OnboardingSession, ProjectRepo } from "../db/project-repo";
+import { OnboardingSession, ProjectRepo } from "../db/project-repo";
 import { CodeUnitStore } from "../retriever/unit-store";
-import {
-  classifyOnboardingFollowup,
-  OnboardingFollowupIntent,
-  retrieveOnboardingFollowup,
-} from "../retriever/onboarding-followup-retriever";
+import { OnboardingFollowupIntent, retrieveOnboardingFollowup } from "../retriever/onboarding-followup-retriever";
 import { buildPersonaGuidance } from "./persona-guidance";
 import { generateCompletionWithLengthRetry, generateResponse } from "./llm-client";
 import { removeUncitedClaims, verifyCitations, CitationVerification } from "./citation-verifier";
@@ -27,6 +23,12 @@ export interface OnboardingFollowupResult {
   queryPlanReason: string;
 }
 
+export interface OnboardingFollowupHistoryItem {
+  question: string;
+  answer: string;
+  intent?: string | null;
+}
+
 function trimText(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value;
   const trimmed = value.slice(0, maxChars);
@@ -34,11 +36,16 @@ function trimText(value: string, maxChars: number): string {
   return `${(breakAt > maxChars * 0.5 ? trimmed.slice(0, breakAt + 1) : trimmed).trim()}\n[Truncated]`;
 }
 
-function formatHistory(messages: OnboardingMessage[]): string {
-  if (messages.length === 0) return "No prior follow-up messages.";
-  return messages
+function formatHistory(history: OnboardingFollowupHistoryItem[]): string {
+  if (history.length === 0) return "No prior follow-up messages in this app session.";
+  return history
     .slice(-2)
-    .map((message) => `${message.role === "user" ? "User" : "Sonar"}: ${trimText(message.content, 120)}`)
+    .map((item) =>
+      [
+        `User: ${trimText(item.question.replace(/\s+/g, " ").trim(), 180)}`,
+        `Sonar: ${trimText(item.answer.replace(/\s+/g, " ").trim(), 240)}`,
+      ].join("\n"),
+    )
     .join("\n\n");
 }
 
@@ -57,7 +64,7 @@ function formatSources(units: CodeUnit[]): string {
 
 function buildFollowupPrompt(input: {
   session: OnboardingSession;
-  messages: OnboardingMessage[];
+  history: OnboardingFollowupHistoryItem[];
   question: string;
   intent: OnboardingFollowupIntent;
   contextUnits: CodeUnit[];
@@ -93,10 +100,10 @@ function buildFollowupPrompt(input: {
     trimText(input.session.brief, 300),
     "",
     "## Rolling Conversation Summary",
-    input.session.rollingSummary ?? "No rolling summary yet.",
+    "Follow-up answers are not persisted. Use only the recent in-memory messages below for this app session.",
     "",
     "## Recent Messages",
-    formatHistory(input.messages),
+    formatHistory(input.history),
     "",
     "## Code Context",
     formatSources(input.contextUnits),
@@ -143,21 +150,13 @@ function buildFollowupCitationRepairPrompt(
   };
 }
 
-function updateRollingSummary(existing: string | null, question: string, answer: string): string {
-  const nextEntry = [
-    `User asked: ${trimText(question.replace(/\s+/g, " ").trim(), 300)}`,
-    `Sonar answered: ${trimText(answer.replace(/\s+/g, " ").trim(), 700)}`,
-  ].join("\n");
-  return trimText([existing, nextEntry].filter(Boolean).join("\n\n"), 2400);
-}
-
 export async function answerOnboardingFollowup(input: {
   session: OnboardingSession;
   question: string;
+  history?: OnboardingFollowupHistoryItem[];
   store: CodeUnitStore;
   repo: ProjectRepo;
 }): Promise<OnboardingFollowupResult> {
-  const messages = input.repo.listOnboardingMessages(input.session.id, 10);
   const retrieval = await retrieveOnboardingFollowup({
     query: input.question,
     projectId: input.session.projectId,
@@ -169,7 +168,7 @@ export async function answerOnboardingFollowup(input: {
 
   const { system, user } = buildFollowupPrompt({
     session: input.session,
-    messages,
+    history: input.history ?? [],
     question: input.question,
     intent: retrieval.intent,
     contextUnits: retrieval.contextUnits,
@@ -229,25 +228,6 @@ export async function answerOnboardingFollowup(input: {
     kind: unit.kind,
     lines: `${unit.startLine}-${unit.endLine}`,
   }));
-
-  input.repo.addOnboardingMessage({
-    sessionId: input.session.id,
-    role: "user",
-    content: input.question,
-    intent: classifyOnboardingFollowup(input.question),
-  });
-  input.repo.addOnboardingMessage({
-    sessionId: input.session.id,
-    role: "assistant",
-    content: answer,
-    intent: retrieval.intent,
-    sources,
-    citationVerification,
-  });
-  input.repo.updateOnboardingSessionSummary(
-    input.session.id,
-    updateRollingSummary(input.session.rollingSummary, input.question, answer),
-  );
 
   return {
     sessionId: input.session.id,

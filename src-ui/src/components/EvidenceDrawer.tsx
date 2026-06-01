@@ -3,7 +3,7 @@ import type { CitationVerification, SourceRef } from "../types";
 import { SourceList } from "./SourceList";
 
 interface EvidenceDrawerProps {
-  citation?: CitationVerification;
+  citation?: CitationVerification | null;
   sources: SourceRef[];
   onClose: () => void;
 }
