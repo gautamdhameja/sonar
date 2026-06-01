@@ -15,6 +15,7 @@ interface HomeScreenProps {
   repositorySource: RepositorySource;
   repoPath: string;
   runtime: ServiceState;
+  runtimeBlocker: string | null;
   runtimeBusy: boolean;
   runtimeReady: boolean;
   selectedProjectId: string;
@@ -42,6 +43,7 @@ export function HomeScreen({
   repositorySource,
   repoPath,
   runtime,
+  runtimeBlocker,
   runtimeBusy,
   runtimeReady,
   selectedProjectId,
@@ -175,6 +177,7 @@ export function HomeScreen({
           onOpenSettings={onOpenSettings}
           onStart={onStartRuntime}
           runtime={runtime}
+          runtimeBlocker={runtimeBlocker}
           snapshot={snapshot}
         />
 

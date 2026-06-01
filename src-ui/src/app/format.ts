@@ -25,13 +25,16 @@ export function formatMs(ms: number): string {
 export function friendlyErrorMessage(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
   const lower = raw.toLowerCase();
+  if (lower.includes("docker is not installed") || lower.includes("not available on path")) {
+    return "Docker Desktop is required to run Sonar's local indexing services. Install Docker Desktop, then restart Sonar.";
+  }
   if (
     lower.includes("cannot connect to the docker daemon") ||
     lower.includes("docker daemon") ||
     lower.includes("is the docker daemon running") ||
     lower.includes("connection refused")
   ) {
-    return "Docker Desktop or the local model runtime is not ready yet. Start Docker Desktop, wait for it to finish starting, then check again.";
+    return "Docker Desktop is not ready. Start Docker Desktop, wait for it to finish starting, then restart Sonar.";
   }
   if (lower.includes("failed to fetch") || lower.includes("networkerror")) {
     return "Sonar could not reach its local API. Start the local runtime, then try again.";

@@ -63,6 +63,7 @@ export function App() {
   const canAnalyze = repositorySource === "github" ? githubRepository.trim().length > 0 : repoPath.trim().length > 0;
   const isCreatingBriefing = activeTask?.kind === "analyze" || activeTask?.kind === "brief";
   const runtime = runtimeState(snapshot);
+  const runtimeBlocker = error?.includes("Docker Desktop") ? error : null;
   const runtimeReady = runtime === "ready";
   const runtimeBusy = activeTask?.kind === "bootstrap" || activeTask?.kind === "settings";
   const hasBrief = session !== null;
@@ -378,6 +379,7 @@ export function App() {
             repositorySource={repositorySource}
             repoPath={repoPath}
             runtime={runtime}
+            runtimeBlocker={runtimeBlocker}
             runtimeBusy={runtimeBusy}
             runtimeReady={runtimeReady}
             selectedProjectId={selectedProjectId}
