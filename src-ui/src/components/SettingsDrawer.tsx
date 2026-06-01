@@ -1,5 +1,5 @@
-import { RefreshCw, Save, Server, X } from "lucide-react";
-import { dockerModelRunnerConfig } from "../app/constants";
+import { Cloud, RefreshCw, Save, Server, X } from "lucide-react";
+import { dockerModelRunnerConfig, openAiCompatibleConfig } from "../app/constants";
 import { stateLabel } from "../app/format";
 import type { ActiveTask } from "../app/types";
 import type { DesktopModelConfig, Project, ServiceSnapshot } from "../types";
@@ -32,6 +32,8 @@ export function SettingsDrawer({
   onSelectProject,
 }: SettingsDrawerProps) {
   const updateModelConfig = (patch: Partial<DesktopModelConfig>) => onModelConfigChange({ ...modelConfig, ...patch });
+  const useDockerLocal = () => onModelConfigChange({ ...dockerModelRunnerConfig, apiToken: modelConfig.apiToken });
+  const useApiEndpoint = () => onModelConfigChange({ ...openAiCompatibleConfig, apiToken: modelConfig.apiToken });
 
   return (
     <div className="drawer-backdrop" role="presentation">
@@ -97,80 +99,113 @@ export function SettingsDrawer({
         </section>
 
         <section className="drawer-section">
-          <h3>Generation API</h3>
+          <h3>Model source</h3>
+          <div className="model-mode-grid">
+            <button
+              className={modelConfig.modelMode === "local" ? "model-mode active" : "model-mode"}
+              onClick={useDockerLocal}
+              type="button"
+            >
+              <Server size={18} />
+              <span>
+                <strong>Local Docker model</strong>
+                <small>Use Docker Model Runner for generation and embeddings.</small>
+              </span>
+            </button>
+            <button
+              className={modelConfig.modelMode === "api" ? "model-mode active" : "model-mode"}
+              onClick={useApiEndpoint}
+              type="button"
+            >
+              <Cloud size={18} />
+              <span>
+                <strong>API endpoint</strong>
+                <small>Use OpenAI-compatible cloud or self-hosted endpoints.</small>
+              </span>
+            </button>
+          </div>
+
+          <h3>{modelConfig.modelMode === "local" ? "Local model settings" : "API endpoint settings"}</h3>
           <div className="settings-grid">
+            {modelConfig.modelMode === "api" && (
+              <label className="field">
+                <span>Generation endpoint</span>
+                <input
+                  value={modelConfig.chatBaseUrl}
+                  onChange={(event) => updateModelConfig({ chatBaseUrl: event.target.value })}
+                  placeholder="https://api.openai.com/v1 or http://localhost:8080/v1"
+                />
+              </label>
+            )}
             <label className="field">
-              <span>API endpoint</span>
-              <input
-                value={modelConfig.chatBaseUrl}
-                onChange={(event) => updateModelConfig({ chatBaseUrl: event.target.value })}
-                placeholder="http://localhost:12434/engines/llama.cpp/v1 or https://api.openai.com/v1"
-              />
-            </label>
-            <label className="field">
-              <span>Model</span>
+              <span>Generation model</span>
               <input
                 value={modelConfig.chatModel}
                 onChange={(event) => updateModelConfig({ chatModel: event.target.value })}
-                placeholder="local/model or gpt-4.1-mini"
+                placeholder={
+                  modelConfig.modelMode === "local" ? "hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL" : "gpt-4.1-mini"
+                }
               />
             </label>
-            <label className="field">
-              <span>API key</span>
-              <input
-                value={modelConfig.chatApiKey}
-                onChange={(event) => updateModelConfig({ chatApiKey: event.target.value })}
-                placeholder="not-needed for local servers"
-                type="password"
-              />
-            </label>
-            <label className="field">
-              <span>Embedding API endpoint</span>
-              <input
-                value={modelConfig.embeddingBaseUrl}
-                onChange={(event) => updateModelConfig({ embeddingBaseUrl: event.target.value })}
-                placeholder="http://localhost:12434/engines/v1 or https://api.openai.com/v1"
-              />
-            </label>
+            {modelConfig.modelMode === "api" && (
+              <label className="field">
+                <span>Generation API key</span>
+                <input
+                  value={modelConfig.chatApiKey}
+                  onChange={(event) => updateModelConfig({ chatApiKey: event.target.value })}
+                  placeholder="Required for cloud APIs"
+                  type="password"
+                />
+              </label>
+            )}
+            {modelConfig.modelMode === "api" && (
+              <label className="field">
+                <span>Embedding endpoint</span>
+                <input
+                  value={modelConfig.embeddingBaseUrl}
+                  onChange={(event) => updateModelConfig({ embeddingBaseUrl: event.target.value })}
+                  placeholder="https://api.openai.com/v1 or http://localhost:12434/engines/v1"
+                />
+              </label>
+            )}
             <label className="field">
               <span>Embedding model</span>
               <input
                 value={modelConfig.embeddingModel}
                 onChange={(event) => updateModelConfig({ embeddingModel: event.target.value })}
-                placeholder="hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M"
+                placeholder={
+                  modelConfig.modelMode === "local"
+                    ? "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M"
+                    : "text-embedding-3-small"
+                }
               />
             </label>
+            {modelConfig.modelMode === "api" && (
+              <label className="field">
+                <span>Embedding API key</span>
+                <input
+                  value={modelConfig.embeddingApiKey}
+                  onChange={(event) => updateModelConfig({ embeddingApiKey: event.target.value })}
+                  placeholder="Required for cloud APIs"
+                  type="password"
+                />
+              </label>
+            )}
             <label className="field">
-              <span>Embedding API key</span>
+              <span>Embedding vector size</span>
               <input
-                value={modelConfig.embeddingApiKey}
-                onChange={(event) => updateModelConfig({ embeddingApiKey: event.target.value })}
-                placeholder="not-needed for local servers"
-                type="password"
+                min={1}
+                step={1}
+                type="number"
+                value={modelConfig.embeddingVectorSize}
+                onChange={(event) =>
+                  updateModelConfig({ embeddingVectorSize: Number.parseInt(event.target.value, 10) || 768 })
+                }
+                placeholder="768 for Docker local, 1536 for text-embedding-3-small"
               />
             </label>
           </div>
           <div className="preset-row">
-            <button className="secondary" onClick={() => updateModelConfig(dockerModelRunnerConfig)} type="button">
-              <Server size={16} />
-              Docker local
-            </button>
-            <button
-              className="secondary"
-              onClick={() =>
-                updateModelConfig({
-                  chatBaseUrl: "https://api.openai.com/v1",
-                  chatModel: "gpt-4.1-mini",
-                  chatApiKey: "",
-                  embeddingBaseUrl: "https://api.openai.com/v1",
-                  embeddingApiKey: "",
-                })
-              }
-              type="button"
-            >
-              <Server size={16} />
-              OpenAI compatible
-            </button>
             <button
               className="primary"
               disabled={activeTask?.kind === "settings"}

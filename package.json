@@ -32,7 +32,7 @@
     "eval:retrieval": "ts-node src/eval/retrieval-cli.ts",
     "services:env": "node scripts/ensure-runtime-env.mjs",
     "services:wait": "node scripts/wait-for-services.mjs",
-    "services:start": "npm run services:env && docker compose up -d --build && npm run services:wait",
+    "services:start": "npm run services:env && docker compose -f compose.yml -f compose.models.yml up -d --build && npm run services:wait",
     "services:stop": "docker compose down --remove-orphans",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",

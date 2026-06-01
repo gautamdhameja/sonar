@@ -17,17 +17,7 @@ services:
       SONAR_MEILI_HOST: http://meilisearch:7700
       SONAR_QDRANT_HOST: qdrant
       SONAR_QDRANT_PORT: 6333
-      SONAR_QDRANT_VECTOR_SIZE: 768
-      SONAR_CHAT_API_KEY: not-needed
-      SONAR_EMBEDDING_PROVIDER: openai
-      SONAR_EMBEDDING_API_KEY: not-needed
-    models:
-      chat_model:
-        endpoint_var: SONAR_CHAT_BASE_URL
-        model_var: SONAR_CHAT_MODEL
-      embedding_model:
-        endpoint_var: SONAR_EMBEDDING_BASE_URL
-        model_var: SONAR_EMBEDDING_MODEL
+      SONAR_QDRANT_VECTOR_SIZE: ${SONAR_QDRANT_VECTOR_SIZE:-768}
     volumes:
       - sonar-data:/data
       - sonar-repos:/workspace/repos
@@ -54,19 +44,6 @@ services:
       - "127.0.0.1:6334:6334"
     volumes:
       - sonar-qdrant:/qdrant/storage
-
-models:
-  chat_model:
-    model: ${SONAR_CHAT_MODEL:-hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL}
-    context_size: 8192
-    runtime_flags:
-      - "--temp"
-      - "0.1"
-  embedding_model:
-    model: ${SONAR_EMBEDDING_MODEL:-hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M}
-    context_size: 2048
-    runtime_flags:
-      - "--embeddings"
 
 volumes:
   sonar-data:

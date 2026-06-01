@@ -27,11 +27,18 @@ function splitClaims(answer: string): string[] {
         !/^\*\*[^*]+:\*\*:?$/.test(line) &&
         !/^["“].+\?["”]?$/.test(line) &&
         !/\?["”]?$/.test(line) &&
-        !/\b(not found|not supported|does not contain|do not contain|does not include|does not show|what is missing|would be needed|would need to (?:show|be provided|include)|is needed|could not determine)\b/i.test(
+        !/\b(not found|not supported|does not contain|do not contain|does not include|does not show|what is missing|would be needed|would need to (?:show|be provided|include)|is needed|could not determine|could not generate)\b/i.test(
           line,
         ) &&
         !/^(purpose|main components|how work moves|questions|what this means)\b/i.test(line),
     );
+}
+
+function isNavigationGuidance(claim: string): boolean {
+  return (
+    /^(?:\*\*)?(?:for|to understand|to find|where to look|review|look at)\b/i.test(claim) ||
+    /^(?:this file|these files)\s+(?:shows?|contains?|defines?|explains?)\b/i.test(claim)
+  );
 }
 
 function normalizeCitation(value: string): string {
@@ -54,6 +61,14 @@ function parseCitation(value: string): { filePath: string; startLine?: number; e
     startLine,
     endLine,
   };
+}
+
+function parseLineOnlyCitation(value: string): { startLine: number; endLine: number } | null {
+  const match = value.trim().match(/^(\d+)(?:-(\d+))?$/);
+  if (!match) return null;
+  const startLine = Number.parseInt(match[1], 10);
+  const endLine = match[2] ? Number.parseInt(match[2], 10) : startLine;
+  return { startLine, endLine };
 }
 
 function expandCitationGroup(value: string): string[] {
@@ -128,6 +143,14 @@ export function verifyCitations(answer: string, contextUnits: CodeUnit[]): Citat
   });
 
   const invalidCitations = citations.filter((citation) => {
+    const lineOnly = parseLineOnlyCitation(citation);
+    if (lineOnly) {
+      const matchingUnits = contextUnits.filter(
+        (unit) => lineOnly.startLine >= unit.startLine && lineOnly.endLine <= unit.endLine,
+      );
+      return matchingUnits.length !== 1;
+    }
+
     const parsed = parseCitation(citation);
     if (!parsed) return true;
 
@@ -138,7 +161,7 @@ export function verifyCitations(answer: string, contextUnits: CodeUnit[]): Citat
       return parsed.startLine >= range.startLine && citationEnd <= range.endLine;
     });
   });
-  const uncitedClaims = splitClaims(answer).filter((claim) => !hasCitation(claim));
+  const uncitedClaims = splitClaims(answer).filter((claim) => !hasCitation(claim) && !isNavigationGuidance(claim));
 
   return {
     valid: invalidCitations.length === 0 && uncitedClaims.length === 0,
@@ -147,4 +170,21 @@ export function verifyCitations(answer: string, contextUnits: CodeUnit[]): Citat
     uncitedClaims,
     sourceKeys: Array.from(sourceKeys).sort(),
   };
+}
+
+export function removeUncitedClaims(answer: string, verification: CitationVerification): string {
+  if (verification.uncitedClaims.length === 0) return answer;
+
+  let next = answer;
+  for (const claim of verification.uncitedClaims) {
+    const lines = next.split("\n");
+    const filtered = lines.filter((line) => !line.trim().includes(claim));
+    if (filtered.length !== lines.length) {
+      next = filtered.join("\n");
+      continue;
+    }
+    next = next.replace(claim, "").replace(/[ \t]+\n/g, "\n");
+  }
+
+  return next.replace(/\n{3,}/g, "\n\n").trim();
 }

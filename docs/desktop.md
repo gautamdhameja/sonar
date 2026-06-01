@@ -24,7 +24,11 @@ The V1 desktop app is the primary user experience. In Docker-first mode, Compose
 - Docker Model Runner for chat generation through an OpenAI-compatible API.
 - Docker Model Runner for embeddings through an OpenAI-compatible embeddings API.
 
-The default Docker-first stack is intentionally local and self-contained. To use cloud generation or a separately hosted local model, run API mode and override endpoint environment variables instead of the default Compose model bindings.
+The default Docker-first stack is intentionally local and self-contained. To use cloud generation, cloud embeddings, or a separately hosted OpenAI-compatible local model, open settings and choose **API endpoint** instead of **Local Docker model**. In Local Docker model mode, the desktop app starts Docker Model Runner through Compose. In API endpoint mode, it starts only Sonar API, Meilisearch, and Qdrant, then passes the configured model endpoints and keys into the API container.
+
+If the model server runs on the host machine and the API runs in Docker, the desktop app translates `localhost` and `127.0.0.1` model endpoints to `host.docker.internal` for the API container. Keep the URL shown in the UI as the normal desktop URL.
+
+Embedding vector size matters. Use `768` for Sonar's default Docker embedding model. Use `1536` for OpenAI `text-embedding-3-small` unless your compatible endpoint is configured to return another dimension.
 
 When the desktop app starts Docker services, it creates `.sonar/runtime.env` and uses that generated local runtime token for both the app and Compose. If a stale Docker stack is running with a different token, the app recreates the Compose containers while preserving named volumes.
 

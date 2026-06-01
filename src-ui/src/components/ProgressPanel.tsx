@@ -8,20 +8,26 @@ interface ProgressPanelProps {
 }
 
 export function ProgressPanel({ activeTask, onStop, stopDisabled }: ProgressPanelProps) {
+  const progress = activeTask.progress ?? (activeTask.kind === "brief" ? 82 : activeTask.kind === "followup" ? 55 : 25);
   const steps = [
     {
-      label: "Import repository",
-      active: activeTask.label.includes("Cloning") || activeTask.label.includes("Preparing"),
-      done: activeTask.kind === "brief",
+      label: "Import",
+      active: activeTask.label.includes("Importing"),
+      done: progress > 25 || activeTask.kind === "brief",
     },
     {
-      label: "Build local index",
+      label: "Prepare",
+      active: activeTask.label.includes("Preparing"),
+      done: progress > 45 || activeTask.kind === "brief",
+    },
+    {
+      label: "Index",
       active: activeTask.label.includes("Indexing"),
-      done: activeTask.kind === "brief",
+      done: progress > 78 || activeTask.kind === "brief",
     },
     {
-      label: "Write codebase briefing",
-      active: activeTask.kind === "brief",
+      label: activeTask.kind === "followup" ? "Answer" : "Brief",
+      active: activeTask.kind === "brief" || activeTask.kind === "followup",
       done: false,
     },
   ];
@@ -31,6 +37,26 @@ export function ProgressPanel({ activeTask, onStop, stopDisabled }: ProgressPane
       <div>
         <p className="eyebrow">Preparing Briefing</p>
         <h2>{activeTask.label}</h2>
+        {activeTask.detail && <p className="progress-detail">{activeTask.detail}</p>}
+      </div>
+      <div className="progress-meter">
+        <div className="progress-meter-row">
+          <span>{progress}%</span>
+          <span>{activeTask.kind === "brief" ? "Generating" : "Working"}</span>
+        </div>
+        <div
+          aria-label={activeTask.label}
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={progress}
+          className="progress-track"
+          role="progressbar"
+        >
+          <span
+            className={activeTask.kind === "brief" ? "progress-fill indeterminate" : "progress-fill"}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
       </div>
       <div className="progress-steps">
         {steps.map((step) => (

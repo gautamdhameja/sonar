@@ -30,12 +30,14 @@ export interface PreparedRepository {
 }
 
 export interface DesktopModelConfig {
+  modelMode: "local" | "api";
   chatBaseUrl: string;
   chatModel: string;
   chatApiKey: string;
   embeddingBaseUrl: string;
   embeddingModel: string;
   embeddingApiKey: string;
+  embeddingVectorSize: number;
   apiToken: string;
 }
 
@@ -82,6 +84,7 @@ export interface OnboardingSessionResponse {
     citationVerification: CitationVerification;
     retrievalTime: number;
     generationTime: number;
+    generationTruncated?: boolean;
   };
 }
 
@@ -92,5 +95,6 @@ export interface FollowupResponse {
   citationVerification: CitationVerification;
   retrievalTime: number;
   generationTime: number;
+  generationTruncated?: boolean;
   graphEnhanced: boolean;
 }

@@ -3,7 +3,7 @@ import { CodeUnitStore } from "../retriever/unit-store";
 import { expandContext } from "../context/expander";
 import { graphEnhancedRetrieval } from "../retriever/graph-retriever";
 import { buildPrompt } from "./prompt";
-import { generateResponse } from "./llm-client";
+import { generateCompletionWithLengthRetry } from "./llm-client";
 import { ProjectRepo } from "../db/project-repo";
 import { CodeUnit } from "../parser/types";
 import { CONFIG } from "../config";
@@ -19,7 +19,8 @@ import { planQuery, QueryPlan } from "../retriever/query-router";
 import { packContext } from "../context/packer";
 import { rerankRetrievedResults, RetrievalDiagnostic } from "../retriever/reranker";
 import { applyOptionalLocalReranker } from "../retriever/local-reranker-hook";
-import { verifyCitations, CitationVerification } from "./citation-verifier";
+import { removeUncitedClaims, verifyCitations, CitationVerification } from "./citation-verifier";
+import { buildSourceEvidenceFallback } from "./source-fallback";
 
 export interface QueryResult {
   answer: string;
@@ -27,6 +28,7 @@ export interface QueryResult {
   sources: Array<{ filePath: string; name: string; kind: string; lines: string }>;
   retrievalTime: number;
   generationTime: number;
+  generationTruncated: boolean;
   graphEnhanced: boolean;
   persona: Persona;
   intent: QueryIntent;
@@ -135,9 +137,33 @@ export async function answerQuery(
   const { system, user } = buildPrompt(query, contextUnits, repoName, codebaseSummary, persona);
 
   const generationStart = Date.now();
-  const answer = await generateResponse(system, user);
+  const completion = await generateCompletionWithLengthRetry(
+    system,
+    user,
+    "The previous answer was too long. Return a concise answer under 180 words.",
+  );
+  let answer = completion.content;
   const generationTime = Date.now() - generationStart;
-  const citationVerification = verifyCitations(answer, contextUnits);
+  let citationVerification = verifyCitations(answer, contextUnits);
+  if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
+    const scrubbedAnswer = removeUncitedClaims(answer, citationVerification);
+    const scrubbedVerification = verifyCitations(scrubbedAnswer, contextUnits);
+    if (
+      scrubbedAnswer.length >= Math.max(120, answer.length * 0.35) &&
+      scrubbedVerification.uncitedClaims.length < citationVerification.uncitedClaims.length
+    ) {
+      answer = scrubbedAnswer;
+      citationVerification = scrubbedVerification;
+    }
+  }
+  if (completion.truncated && citationVerification.valid && answer.length >= 120 && /[.!?)]$/.test(answer.trim())) {
+    completion.truncated = false;
+  }
+  if (answer.trim() === "" || (completion.truncated && !citationVerification.valid)) {
+    answer = buildSourceEvidenceFallback(contextUnits);
+    citationVerification = verifyCitations(answer, contextUnits);
+    completion.truncated = false;
+  }
 
   const sources = contextUnits.map((unit) => ({
     filePath: unit.filePath,
@@ -152,6 +178,7 @@ export async function answerQuery(
     sources,
     retrievalTime,
     generationTime,
+    generationTruncated: completion.truncated,
     graphEnhanced,
     persona,
     intent: queryPlan.intent,

@@ -22,12 +22,14 @@ pub struct ServiceSnapshot {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopModelConfig {
+    pub model_mode: String,
     pub chat_base_url: String,
     pub chat_model: String,
     pub chat_api_key: String,
     pub embedding_base_url: String,
     pub embedding_model: String,
     pub embedding_api_key: String,
+    pub embedding_vector_size: u32,
     pub api_token: String,
 }
 

@@ -20,6 +20,11 @@ const QDRANT_READY_URL: &str = "http://127.0.0.1:6333/readyz";
 pub async fn service_snapshot() -> ServiceSnapshot {
     let model_config = desktop_model_config();
     let chat = chat_base_url();
+    let model_label = if uses_managed_models(&model_config) {
+        "Docker model services"
+    } else {
+        "Configured model APIs"
+    };
     ServiceSnapshot {
         api_base_url: API_BASE_URL.to_string(),
         chat_base_url: chat.clone(),
@@ -36,7 +41,7 @@ pub async fn service_snapshot() -> ServiceSnapshot {
             service("qdrant", "Qdrant", QDRANT_READY_URL, true, None).await,
             service(
                 "models",
-                "Docker model services",
+                model_label,
                 API_DEPENDENCIES_URL,
                 true,
                 Some(&model_config.api_token),
@@ -110,19 +115,18 @@ fn start_docker_services(force_recreate: bool) -> Result<(), String> {
     let compose_file = root.join("compose.yml");
     let runtime_env = ensure_runtime_env()?;
     let model_config = desktop_model_config();
-    let chat_model = model_config.chat_model;
-    let embedding_model = model_config.embedding_model;
     let api_token = runtime_env.api_token;
     let meili_master_key = runtime_env.meili_master_key;
+    let managed_models = uses_managed_models(&model_config);
 
     if force_recreate {
         let status = compose_command(
             &root,
             &compose_file,
-            &chat_model,
-            &embedding_model,
+            &model_config,
             &api_token,
             &meili_master_key,
+            managed_models,
         )
         .args(["down", "--remove-orphans"])
         .status()
@@ -135,10 +139,10 @@ fn start_docker_services(force_recreate: bool) -> Result<(), String> {
     let status = compose_command(
         &root,
         &compose_file,
-        &chat_model,
-        &embedding_model,
+        &model_config,
         &api_token,
         &meili_master_key,
+        managed_models,
     )
     .args(["up", "-d"])
     .status()
@@ -154,23 +158,55 @@ fn start_docker_services(force_recreate: bool) -> Result<(), String> {
 fn compose_command(
     root: &std::path::Path,
     compose_file: &std::path::Path,
-    chat_model: &str,
-    embedding_model: &str,
+    model_config: &DesktopModelConfig,
     api_token: &str,
     meili_master_key: &str,
+    managed_models: bool,
 ) -> Command {
     let mut command = Command::new("docker");
+    command.arg("compose").arg("-f").arg(compose_file);
+    if managed_models {
+        command.arg("-f").arg(root.join("compose.models.yml"));
+    } else {
+        command.arg("-f").arg(root.join("compose.endpoints.yml"));
+    }
     command
-        .args(["compose", "-f"])
-        .arg(compose_file)
         .current_dir(root)
-        .env("SONAR_CHAT_MODEL", chat_model)
-        .env("SONAR_EMBEDDING_MODEL", embedding_model)
+        .env("SONAR_CHAT_MODEL", &model_config.chat_model)
+        .env("SONAR_CHAT_API_KEY", &model_config.chat_api_key)
+        .env("SONAR_EMBEDDING_PROVIDER", "openai")
+        .env("SONAR_EMBEDDING_MODEL", &model_config.embedding_model)
+        .env("SONAR_EMBEDDING_API_KEY", &model_config.embedding_api_key)
+        .env(
+            "SONAR_QDRANT_VECTOR_SIZE",
+            model_config.embedding_vector_size.to_string(),
+        )
         .env("SONAR_API_TOKEN", api_token)
         .env("SONAR_MEILI_MASTER_KEY", meili_master_key)
         .env("SONAR_MEILI_API_KEY", meili_master_key)
         .env("MEILI_MASTER_KEY", meili_master_key);
+    if !managed_models {
+        command
+            .env(
+                "SONAR_CHAT_BASE_URL",
+                docker_reachable_url(&model_config.chat_base_url),
+            )
+            .env(
+                "SONAR_EMBEDDING_BASE_URL",
+                docker_reachable_url(&model_config.embedding_base_url),
+            );
+    }
     command
+}
+
+fn uses_managed_models(model_config: &DesktopModelConfig) -> bool {
+    model_config.model_mode == "local"
+}
+
+fn docker_reachable_url(value: &str) -> String {
+    value
+        .replace("http://localhost:", "http://host.docker.internal:")
+        .replace("http://127.0.0.1:", "http://host.docker.internal:")
 }
 
 fn ensure_embedding_model() -> Result<(), String> {

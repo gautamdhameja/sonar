@@ -12,6 +12,7 @@ Sonar indexes a repository, retrieves the most relevant code and docs, and asks 
 - Returns source lists and citation verification diagnostics with generated answers.
 - Persists projects, sessions, messages, source files, and rolling conversation summaries in SQLite.
 - Runs as a Tauri desktop app backed by a local HTTP API.
+- Supports Docker Model Runner defaults or custom OpenAI-compatible cloud/local model endpoints.
 - Lets users copy or export generated briefings as Markdown.
 
 Sonar is intended to produce strong source-grounded first drafts. It is not a replacement for human-reviewed technical, security, or compliance documentation.

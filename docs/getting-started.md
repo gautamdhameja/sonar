@@ -2,7 +2,7 @@
 
 Sonar has three supported run modes:
 
-- **Docker-first mode** for normal V1 use. Docker Compose starts Sonar API, Meilisearch, Qdrant, and Docker Model Runner models for both generation and embeddings.
+- **Docker-first mode** for normal V1 use. Docker Compose starts Sonar API, Meilisearch, Qdrant, and, by default, Docker Model Runner models for both generation and embeddings.
 - **Desktop mode** for the native V1 UI. The Tauri shell connects to the local Sonar API on `http://127.0.0.1:3001` and supports both GitHub URLs and local folders.
 - **API mode** for development and automation. You start the API and dependencies yourself and use environment variables.
 
@@ -31,6 +31,13 @@ This starts or connects to:
 
 The first run downloads model artifacts and can take a while. The app uses the Compose-managed API on `http://127.0.0.1:3001`.
 
+You can also use cloud or separately hosted OpenAI-compatible APIs from the desktop settings drawer. Choose **Local Docker model** to run Docker Model Runner, or **API endpoint** to skip Docker Model Runner and use your configured endpoints. For API endpoint mode, configure:
+
+- Generation API endpoint, model, and API key
+- Embedding API endpoint, model, API key, and vector size
+
+The embedding vector size must match the embedding model output. For example, Docker's default local embedding model uses `768`, while OpenAI `text-embedding-3-small` uses `1536` unless a compatible server is configured to return a different dimension.
+
 If you start services directly instead of through the desktop app, use the service script instead of raw Compose. It creates `.sonar/runtime.env`, then starts Docker with the same token the desktop app reads:
 
 ```bash
@@ -57,7 +64,13 @@ Most desktop users should not need an env file. Desktop model settings are confi
 
 ```bash
 SONAR_CHAT_BASE_URL=http://localhost:8080/v1
+SONAR_CHAT_MODEL=local-chat-model
+SONAR_CHAT_API_KEY=not-needed
+SONAR_EMBEDDING_PROVIDER=openai
 SONAR_EMBEDDING_BASE_URL=http://localhost:12434/engines/v1
+SONAR_EMBEDDING_MODEL=local-embedding-model
+SONAR_EMBEDDING_API_KEY=not-needed
+SONAR_QDRANT_VECTOR_SIZE=768
 SONAR_MEILI_HOST=http://localhost:7700
 SONAR_QDRANT_HOST=localhost
 SONAR_QDRANT_PORT=6333

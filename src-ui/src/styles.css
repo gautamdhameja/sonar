@@ -424,6 +424,63 @@ textarea:focus {
   box-shadow: 0 1px 2px rgba(15, 48, 107, 0.1);
 }
 
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.role-option {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-height: 78px;
+  align-content: start;
+  padding: 12px;
+  color: #315073;
+  text-align: left;
+  background: #f8fbff;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.role-option:hover {
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.role-option:focus-within {
+  border-color: rgba(37, 99, 235, 0.5);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.role-option.active {
+  color: #0f2445;
+  background: #ffffff;
+  border-color: rgba(37, 99, 235, 0.5);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.role-option strong {
+  font-size: 12.5px;
+  line-height: 1.2;
+}
+
+.role-option small {
+  color: #5e7491;
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.role-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  opacity: 0;
+}
+
 .repo-picker input {
   min-width: 0;
 }
@@ -487,7 +544,55 @@ textarea:focus {
 
 .progress-panel h2 {
   color: #102a4d;
-  font-size: 20px;
+  font-size: 18px;
+}
+
+.progress-detail {
+  margin: 6px 0 0;
+  color: #59708d;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.progress-meter {
+  display: grid;
+  gap: 7px;
+}
+
+.progress-meter-row {
+  display: flex;
+  justify-content: space-between;
+  color: #48648a;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.progress-track {
+  position: relative;
+  height: 9px;
+  overflow: hidden;
+  background: #e8f1ff;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  border-radius: 999px;
+}
+
+.progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: 8%;
+  background: linear-gradient(90deg, #2f7dff, #0ea5e9);
+  border-radius: inherit;
+  transition: width 240ms ease;
+}
+
+.progress-fill.indeterminate::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: progressSweep 1.3s ease-in-out infinite;
 }
 
 .progress-steps {
@@ -653,6 +758,13 @@ textarea:focus {
   font-weight: 850;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.inline-warning {
+  margin: 10px 0 12px;
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .brief-aside {
@@ -822,6 +934,50 @@ textarea:focus {
   gap: 12px;
 }
 
+.model-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+
+.model-mode {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 10px;
+  align-items: start;
+  min-height: 74px;
+  padding: 13px;
+  color: #315073;
+  text-align: left;
+  background: #f8fbff;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 8px;
+}
+
+.model-mode.active {
+  color: #0f2445;
+  background: #ffffff;
+  border-color: rgba(37, 99, 235, 0.5);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.model-mode strong,
+.model-mode small {
+  display: block;
+}
+
+.model-mode strong {
+  font-size: 13px;
+}
+
+.model-mode small {
+  margin-top: 3px;
+  color: #5e7491;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .preset-row {
   display: flex;
   flex-wrap: wrap;
@@ -890,5 +1046,50 @@ textarea:focus {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes progressSweep {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 1040px) {
+  .start-card {
+    grid-template-columns: 1fr;
+  }
+
+  .role-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .start-shell,
+  .briefing-shell {
+    width: min(100% - 28px, 1180px);
+    padding-top: 24px;
+  }
+
+  .repo-card {
+    padding: 20px;
+  }
+
+  .repo-card-head h2 {
+    font-size: 24px;
+  }
+
+  .role-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-grid,
+  .model-mode-grid {
+    grid-template-columns: 1fr;
   }
 }

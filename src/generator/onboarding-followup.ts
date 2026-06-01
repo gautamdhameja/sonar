@@ -8,8 +8,9 @@ import {
   retrieveOnboardingFollowup,
 } from "../retriever/onboarding-followup-retriever";
 import { buildPersonaGuidance } from "./persona-guidance";
-import { generateResponse } from "./llm-client";
-import { verifyCitations, CitationVerification } from "./citation-verifier";
+import { generateCompletionWithLengthRetry, generateResponse } from "./llm-client";
+import { removeUncitedClaims, verifyCitations, CitationVerification } from "./citation-verifier";
+import { buildSourceEvidenceFallback } from "./source-fallback";
 
 export interface OnboardingFollowupResult {
   sessionId: string;
@@ -20,6 +21,7 @@ export interface OnboardingFollowupResult {
   sources: Array<{ filePath: string; name: string; kind: string; lines: string }>;
   retrievalTime: number;
   generationTime: number;
+  generationTruncated: boolean;
   graphEnhanced: boolean;
   citationVerification: CitationVerification;
   queryPlanReason: string;
@@ -35,8 +37,8 @@ function trimText(value: string, maxChars: number): string {
 function formatHistory(messages: OnboardingMessage[]): string {
   if (messages.length === 0) return "No prior follow-up messages.";
   return messages
-    .slice(-8)
-    .map((message) => `${message.role === "user" ? "User" : "Sonar"}: ${trimText(message.content, 700)}`)
+    .slice(-2)
+    .map((message) => `${message.role === "user" ? "User" : "Sonar"}: ${trimText(message.content, 120)}`)
     .join("\n\n");
 }
 
@@ -88,7 +90,7 @@ function buildFollowupPrompt(input: {
       : "No explicit focus areas.",
     "",
     "## Codebase Briefing (Orientation Only)",
-    trimText(input.session.brief, 4500),
+    trimText(input.session.brief, 300),
     "",
     "## Rolling Conversation Summary",
     input.session.rollingSummary ?? "No rolling summary yet.",
@@ -103,18 +105,20 @@ function buildFollowupPrompt(input: {
     input.question,
     "",
     "## Answer Format",
-    "Use this structure unless the question is very small:",
-    "Short Answer",
-    "What The Sources Show",
-    "What Is Inferred",
-    "Where To Look Next",
-    "Questions To Ask Engineering",
+    "Return one short answer paragraph followed by up to four concise bullets.",
+    "Use section headings only for broad workflow, risk, or architecture questions.",
+    "Do not use decorative separators.",
+    "Every factual sentence or bullet must include a citation.",
   ].join("\n");
 
   return { system, user };
 }
 
-function buildFollowupCitationRepairPrompt(answer: string, contextUnits: CodeUnit[]): { system: string; user: string } {
+function buildFollowupCitationRepairPrompt(
+  answer: string,
+  contextUnits: CodeUnit[],
+  issues: CitationVerification,
+): { system: string; user: string } {
   const validSources = contextUnits.map((unit) => `- ${unit.filePath}:${unit.startLine}-${unit.endLine}`).join("\n");
 
   return {
@@ -126,6 +130,10 @@ function buildFollowupCitationRepairPrompt(answer: string, contextUnits: CodeUni
     user: [
       "## Valid Sources",
       validSources,
+      "",
+      "## Issues To Fix",
+      ...issues.invalidCitations.map((citation) => `- Invalid citation: ${citation}`),
+      ...issues.uncitedClaims.map((claim) => `- Uncited claim: ${claim}`),
       "",
       "## Answer To Repair",
       answer,
@@ -156,7 +164,7 @@ export async function answerOnboardingFollowup(input: {
     store: input.store,
     sourceFiles: input.session.sourceFiles,
     repo: input.repo,
-    maxContextRatio: 0.78,
+    maxContextRatio: 0.16,
   });
 
   const { system, user } = buildFollowupPrompt({
@@ -168,12 +176,18 @@ export async function answerOnboardingFollowup(input: {
   });
 
   const generationStart = Date.now();
-  let answer = await generateResponse(system, user);
+  const completion = await generateCompletionWithLengthRetry(
+    system,
+    user,
+    "The previous answer was too long. Return exactly three bullets under 100 words.",
+  );
+  let answer = completion.content;
+  let generationTruncated = completion.truncated;
   let generationTime = Date.now() - generationStart;
   let citationVerification = verifyCitations(answer, retrieval.contextUnits);
 
-  if (!citationVerification.valid) {
-    const repairPrompt = buildFollowupCitationRepairPrompt(answer, retrieval.contextUnits);
+  if (citationVerification.invalidCitations.length > 0) {
+    const repairPrompt = buildFollowupCitationRepairPrompt(answer, retrieval.contextUnits, citationVerification);
     const repairStart = Date.now();
     const repaired = await generateResponse(repairPrompt.system, repairPrompt.user);
     const repairedVerification = verifyCitations(repaired, retrieval.contextUnits);
@@ -185,7 +199,28 @@ export async function answerOnboardingFollowup(input: {
     ) {
       answer = repaired;
       citationVerification = repairedVerification;
+      generationTruncated = false;
     }
+  }
+
+  if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
+    const scrubbedAnswer = removeUncitedClaims(answer, citationVerification);
+    const scrubbedVerification = verifyCitations(scrubbedAnswer, retrieval.contextUnits);
+    if (
+      scrubbedAnswer.length >= Math.max(120, answer.length * 0.35) &&
+      scrubbedVerification.uncitedClaims.length < citationVerification.uncitedClaims.length
+    ) {
+      answer = scrubbedAnswer;
+      citationVerification = scrubbedVerification;
+    }
+  }
+  if (generationTruncated && citationVerification.valid && answer.length >= 120 && /[.!?)]$/.test(answer.trim())) {
+    generationTruncated = false;
+  }
+  if (answer.trim() === "" || (generationTruncated && !citationVerification.valid)) {
+    answer = buildSourceEvidenceFallback(retrieval.contextUnits);
+    citationVerification = verifyCitations(answer, retrieval.contextUnits);
+    generationTruncated = false;
   }
 
   const sources = retrieval.contextUnits.map((unit) => ({
@@ -223,6 +258,7 @@ export async function answerOnboardingFollowup(input: {
     sources,
     retrievalTime: retrieval.retrievalTime,
     generationTime,
+    generationTruncated,
     graphEnhanced: retrieval.graphEnhanced,
     citationVerification,
     queryPlanReason: retrieval.queryPlan.reason,

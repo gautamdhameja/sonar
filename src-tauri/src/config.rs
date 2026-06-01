@@ -10,16 +10,21 @@ pub(crate) const DEFAULT_CHAT_BASE_URL: &str = "http://localhost:12434/engines/l
 pub(crate) const DEFAULT_EMBEDDING_BASE_URL: &str = "http://localhost:12434/engines/v1";
 const DEFAULT_CHAT_MODEL: &str = "hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL";
 const DEFAULT_EMBEDDING_MODEL: &str = "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
+const DEFAULT_EMBEDDING_VECTOR_SIZE: u32 = 768;
+const DEFAULT_MODEL_MODE: &str = "local";
 const LEGACY_CHAT_MODEL: &str = "Qwen/Qwen3.5-9B";
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct StoredDesktopModelConfig {
+    model_mode: Option<String>,
     chat_base_url: Option<String>,
     chat_model: Option<String>,
     chat_api_key: Option<String>,
     embedding_base_url: Option<String>,
     embedding_model: Option<String>,
     embedding_api_key: Option<String>,
+    embedding_vector_size: Option<u32>,
     api_token: Option<String>,
 }
 
@@ -29,6 +34,10 @@ pub fn chat_base_url() -> String {
 
 pub fn default_desktop_model_config() -> DesktopModelConfig {
     DesktopModelConfig {
+        model_mode: env::var("SONAR_MODEL_MODE")
+            .ok()
+            .filter(|value| is_valid_model_mode(value))
+            .unwrap_or_else(|| DEFAULT_MODEL_MODE.to_string()),
         chat_base_url: detect_chat_base_url(),
         chat_model: env::var("SONAR_CHAT_MODEL").unwrap_or_else(|_| DEFAULT_CHAT_MODEL.to_string()),
         chat_api_key: env::var("SONAR_CHAT_API_KEY").unwrap_or_else(|_| "not-needed".to_string()),
@@ -39,6 +48,11 @@ pub fn default_desktop_model_config() -> DesktopModelConfig {
             .unwrap_or_else(|_| DEFAULT_EMBEDDING_MODEL.to_string()),
         embedding_api_key: env::var("SONAR_EMBEDDING_API_KEY")
             .unwrap_or_else(|_| "not-needed".to_string()),
+        embedding_vector_size: env::var("SONAR_QDRANT_VECTOR_SIZE")
+            .ok()
+            .and_then(|value| value.parse::<u32>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(DEFAULT_EMBEDDING_VECTOR_SIZE),
         api_token: runtime_api_token().unwrap_or_else(|_| generate_api_token()),
     }
 }
@@ -55,7 +69,14 @@ pub fn desktop_model_config() -> DesktopModelConfig {
     let Ok(stored) = serde_json::from_str::<StoredDesktopModelConfig>(&contents) else {
         return fallback;
     };
+    let inferred_model_mode = stored
+        .model_mode
+        .as_deref()
+        .filter(|value| is_valid_model_mode(value))
+        .map(str::to_string)
+        .unwrap_or_else(|| infer_model_mode(&stored, &fallback));
     let mut stored = DesktopModelConfig {
+        model_mode: inferred_model_mode,
         chat_base_url: stored
             .chat_base_url
             .unwrap_or_else(|| fallback.chat_base_url.clone()),
@@ -74,6 +95,9 @@ pub fn desktop_model_config() -> DesktopModelConfig {
         embedding_api_key: stored
             .embedding_api_key
             .unwrap_or_else(|| fallback.embedding_api_key.clone()),
+        embedding_vector_size: stored
+            .embedding_vector_size
+            .unwrap_or(fallback.embedding_vector_size),
         api_token: stored
             .api_token
             .unwrap_or_else(|| fallback.api_token.clone()),
@@ -82,8 +106,10 @@ pub fn desktop_model_config() -> DesktopModelConfig {
         stored.chat_base_url = fallback.chat_base_url;
         stored.chat_model = fallback.chat_model;
         stored.chat_api_key = fallback.chat_api_key;
+        stored.model_mode = fallback.model_mode;
         stored.embedding_base_url = fallback.embedding_base_url;
         stored.embedding_api_key = fallback.embedding_api_key;
+        stored.embedding_vector_size = fallback.embedding_vector_size;
         if stored.embedding_model == "nomic-embed-text" {
             stored.embedding_model = fallback.embedding_model;
         }
@@ -115,19 +141,49 @@ pub fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), Stri
     if config.embedding_model.trim().is_empty() {
         return Err("Embedding model is required.".to_string());
     }
+    if config.embedding_vector_size == 0 {
+        return Err("Embedding vector size must be a positive integer.".to_string());
+    }
+    if !is_valid_model_mode(&config.model_mode) {
+        return Err("Model source must be local or api.".to_string());
+    }
     validate_http_url(config.chat_base_url.trim(), "Generation API URL")?;
     validate_http_url(config.embedding_base_url.trim(), "Embedding API URL")?;
 
     let normalized = DesktopModelConfig {
+        model_mode: config.model_mode.trim().to_string(),
         chat_base_url: normalize_url(&config.chat_base_url),
         chat_model: config.chat_model.trim().to_string(),
         chat_api_key: normalize_api_key(&config.chat_api_key),
         embedding_base_url: normalize_url(&config.embedding_base_url),
         embedding_model: config.embedding_model.trim().to_string(),
         embedding_api_key: normalize_api_key(&config.embedding_api_key),
+        embedding_vector_size: config.embedding_vector_size,
         api_token: runtime_api_token()?,
     };
     write_desktop_model_config(&path, &normalized)
+}
+
+fn is_valid_model_mode(value: &str) -> bool {
+    matches!(value.trim(), "local" | "api")
+}
+
+fn infer_model_mode(stored: &StoredDesktopModelConfig, fallback: &DesktopModelConfig) -> String {
+    let chat_base_url = stored
+        .chat_base_url
+        .as_deref()
+        .unwrap_or(&fallback.chat_base_url);
+    let embedding_base_url = stored
+        .embedding_base_url
+        .as_deref()
+        .unwrap_or(&fallback.embedding_base_url);
+    if normalize_url(chat_base_url) == normalize_url(DEFAULT_CHAT_BASE_URL)
+        && normalize_url(embedding_base_url) == normalize_url(DEFAULT_EMBEDDING_BASE_URL)
+    {
+        "local".to_string()
+    } else {
+        "api".to_string()
+    }
 }
 
 fn write_desktop_model_config(path: &PathBuf, config: &DesktopModelConfig) -> Result<(), String> {

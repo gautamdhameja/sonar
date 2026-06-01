@@ -118,6 +118,7 @@ export function registerQueryRoutes(app: Express, state: ApiState): void {
         sources: result.sources,
         retrievalTime: result.retrievalTime,
         generationTime: result.generationTime,
+        generationTruncated: result.generationTruncated,
         graphEnhanced: result.graphEnhanced,
         retrievalDiagnostics: result.retrievalDiagnostics,
         citationVerification: result.citationVerification,

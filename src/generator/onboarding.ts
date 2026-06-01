@@ -5,9 +5,9 @@ import { DEFAULT_PERSONA, Persona } from "../persona/types";
 import { onboardingRetrieval, OnboardingRetrievalDiagnostic } from "../retriever/onboarding-retriever";
 import { QueryPlan } from "../retriever/query-router";
 import { CodeUnitStore } from "../retriever/unit-store";
-import { verifyCitations, CitationVerification } from "./citation-verifier";
-import { generateResponse } from "./llm-client";
-import { buildCitationRepairPrompt, buildOnboardingBriefPrompt } from "./onboarding-prompt";
+import { removeUncitedClaims, verifyCitations, CitationVerification } from "./citation-verifier";
+import { generateCompletion } from "./llm-client";
+import { buildCitationRepairPrompt, buildOnboardingBriefPartPrompt } from "./onboarding-prompt";
 
 export interface OnboardingBriefResult {
   projectId: string;
@@ -18,6 +18,7 @@ export interface OnboardingBriefResult {
   sources: Array<{ filePath: string; name: string; kind: string; lines: string }>;
   retrievalTime: number;
   generationTime: number;
+  generationTruncated: boolean;
   citationVerification: CitationVerification;
   repaired: boolean;
   retrievalDiagnostics: OnboardingRetrievalDiagnostic[];
@@ -38,6 +39,13 @@ const ONBOARDING_QUERY_PLAN: QueryPlan = {
   maxContextRatio: 0.85,
   reason: "briefing generation should prefer product docs, app/package boundaries, and workflow evidence",
 };
+
+const BRIEFING_PARTS = [
+  ["Product In One Paragraph", "Who Uses It And Why"],
+  ["Codebase Product Map", "Top User Workflows"],
+  ["Main Systems And Ownership Areas", "Data, Privacy, And Operational Notes"],
+  ["Risks Or Open Questions", "Glossary For A Non-Deeply-Technical Reader"],
+];
 
 function defaultFocus(): string[] {
   return [
@@ -74,6 +82,45 @@ function selectOnboardingContext(units: CodeUnit[], maxTokens: number): CodeUnit
   return selected;
 }
 
+async function generateBriefingPart(
+  contextUnits: CodeUnit[],
+  options: {
+    repoName: string;
+    audience: string;
+    focus: string[];
+    persona: Persona;
+    sections: string[];
+  },
+): Promise<{ content: string; generationTime: number; truncated: boolean }> {
+  const prompt = buildOnboardingBriefPartPrompt(contextUnits, options);
+  const started = Date.now();
+  const completion = await generateCompletion(prompt.system, prompt.user);
+  let generationTime = Date.now() - started;
+
+  if (!completion.truncated) {
+    return { content: completion.content.trim(), generationTime, truncated: false };
+  }
+
+  const retryStarted = Date.now();
+  const retry = await generateCompletion(
+    prompt.system,
+    [
+      prompt.user,
+      "",
+      "## Retry Constraint",
+      "The previous answer was too long. Return a shorter version under 140 words total.",
+      "Keep the same requested section headings and preserve citations.",
+    ].join("\n"),
+  );
+  generationTime += Date.now() - retryStarted;
+
+  if (!retry.truncated) {
+    return { content: retry.content.trim(), generationTime, truncated: false };
+  }
+
+  return { content: retry.content.trim() || completion.content.trim(), generationTime, truncated: true };
+}
+
 export async function generateOnboardingBrief(
   store: CodeUnitStore,
   options: {
@@ -106,38 +153,60 @@ export async function generateOnboardingBrief(
 
   const contextUnits = selectOnboardingContext(
     candidateUnits,
-    Math.max(2500, Math.floor(CONFIG.generator.maxContextTokens * ONBOARDING_QUERY_PLAN.maxContextRatio)),
+    Math.max(1400, Math.floor(CONFIG.generator.maxContextTokens * ONBOARDING_QUERY_PLAN.maxContextRatio)),
   );
   const retrievalTime = Date.now() - retrievalStart;
 
-  const prompt = buildOnboardingBriefPrompt(contextUnits, {
-    repoName: options.repoName,
-    audience,
-    focus,
-    persona,
-  });
-
   const generationStart = Date.now();
-  let brief = await generateResponse(prompt.system, prompt.user);
+  const generatedParts = [];
+  for (const sections of BRIEFING_PARTS) {
+    generatedParts.push(
+      await generateBriefingPart(contextUnits, {
+        repoName: options.repoName,
+        audience,
+        focus,
+        persona,
+        sections,
+      }),
+    );
+  }
+  let brief = [`## ${options.repoName} Codebase Briefing`, ...generatedParts.map((part) => part.content)].join("\n\n");
+  let generationTruncated = generatedParts.some((part) => part.truncated);
   let generationTime = Date.now() - generationStart;
   let citationVerification = verifyCitations(brief, contextUnits);
   let repaired = false;
 
-  if (!citationVerification.valid) {
+  if (citationVerification.invalidCitations.length > 0) {
     const repairStart = Date.now();
-    const repairPrompt = buildCitationRepairPrompt(brief, contextUnits);
-    const repairedBrief = await generateResponse(repairPrompt.system, repairPrompt.user);
+    const repairPrompt = buildCitationRepairPrompt(brief, contextUnits, citationVerification);
+    const repairedCompletion = await generateCompletion(repairPrompt.system, repairPrompt.user);
+    const repairedBrief = repairedCompletion.content;
     const repairedVerification = verifyCitations(repairedBrief, contextUnits);
 
     if (
+      !repairedCompletion.truncated &&
       repairedVerification.invalidCitations.length <= citationVerification.invalidCitations.length &&
       repairedVerification.uncitedClaims.length < citationVerification.uncitedClaims.length
     ) {
       brief = repairedBrief;
       citationVerification = repairedVerification;
+      generationTruncated = false;
       repaired = true;
     }
     generationTime += Date.now() - repairStart;
+  }
+
+  if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
+    const scrubbedBrief = removeUncitedClaims(brief, citationVerification);
+    const scrubbedVerification = verifyCitations(scrubbedBrief, contextUnits);
+    if (
+      scrubbedBrief.length >= Math.max(120, brief.length * 0.35) &&
+      scrubbedVerification.uncitedClaims.length < citationVerification.uncitedClaims.length
+    ) {
+      brief = scrubbedBrief;
+      citationVerification = scrubbedVerification;
+      repaired = true;
+    }
   }
 
   return {
@@ -149,6 +218,7 @@ export async function generateOnboardingBrief(
     sources: sourceList(contextUnits),
     retrievalTime,
     generationTime,
+    generationTruncated,
     citationVerification,
     repaired,
     retrievalDiagnostics: retrieved.diagnostics,

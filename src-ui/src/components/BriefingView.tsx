@@ -90,6 +90,12 @@ export function BriefingView({
               {citation.valid ? "Grounded" : `${citation.uncitedClaims.length} open claims`}
             </span>
           )}
+          {session.brief.generationTruncated && (
+            <span className="confidence-warn">
+              <AlertTriangle size={15} />
+              Output truncated
+            </span>
+          )}
         </div>
 
         <div className="markdownish briefing-text">{session.brief.brief}</div>
@@ -130,6 +136,11 @@ export function BriefingView({
                     {formatMs(item.retrievalTime)} retrieval · {formatMs(item.generationTime)} generation
                   </span>
                 </div>
+                {item.generationTruncated && (
+                  <p className="inline-warning">
+                    This answer reached the model output limit. Regenerate or ask a narrower question.
+                  </p>
+                )}
                 <div className="markdownish">{item.answer}</div>
               </article>
             ))}

@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { CodeUnit } from "../src/parser/types";
-import { buildCitationRepairPrompt, buildOnboardingBriefPrompt } from "../src/generator/onboarding-prompt";
+import {
+  buildCitationRepairPrompt,
+  buildOnboardingBriefPartPrompt,
+  buildOnboardingBriefPrompt,
+} from "../src/generator/onboarding-prompt";
 
 const unit: CodeUnit = {
   id: "unit-1",
@@ -29,6 +33,7 @@ test("buildOnboardingBriefPrompt asks for source-grounded briefings with strict 
 
   assert.match(prompt.system, /source-grounded codebase briefing/);
   assert.match(prompt.system, /Every factual bullet or sentence must include a citation/);
+  assert.match(prompt.system, /Adapt depth, vocabulary, and examples to the audience guidance/);
   assert.match(prompt.system, /untrusted repository content/);
   assert.match(prompt.user, /Top User Workflows/);
   assert.match(prompt.user, /Codebase Product Map/);
@@ -36,10 +41,31 @@ test("buildOnboardingBriefPrompt asks for source-grounded briefings with strict 
 });
 
 test("buildCitationRepairPrompt restricts citations to valid sources", () => {
-  const prompt = buildCitationRepairPrompt("Acme shares documents.", [unit]);
+  const prompt = buildCitationRepairPrompt("Acme shares documents.", [unit], {
+    invalidCitations: [],
+    uncitedClaims: ["Acme shares documents."],
+  });
 
   assert.match(prompt.system, /repair source grounding/);
   assert.match(prompt.system, /untrusted text to repair/);
+  assert.match(prompt.user, /Issues To Fix/);
+  assert.match(prompt.user, /Uncited claim: Acme shares documents/);
   assert.match(prompt.user, /src\/share.ts:10-12/);
   assert.match(prompt.user, /Acme shares documents/);
+});
+
+test("buildOnboardingBriefPartPrompt scopes output to requested sections", () => {
+  const prompt = buildOnboardingBriefPartPrompt([unit], {
+    repoName: "Acme",
+    audience: "A product manager joining the team",
+    focus: ["sharing"],
+    sections: ["Product In One Paragraph", "Who Uses It And Why"],
+  });
+
+  assert.match(prompt.system, /writing part of a source-grounded codebase briefing/);
+  assert.match(prompt.system, /at most 220 words total/);
+  assert.match(prompt.system, /For business roles, emphasize product capability/);
+  assert.match(prompt.user, /Product In One Paragraph/);
+  assert.match(prompt.user, /Who Uses It And Why/);
+  assert.match(prompt.user, /Return only these requested sections/);
 });

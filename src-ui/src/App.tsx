@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { askFollowup, createOnboardingSession, indexProject, listProjects, setApiToken } from "./api";
 import { buildBriefingMarkdown } from "./app/briefingMarkdown";
-import { defaultQuestion, dockerModelRunnerConfig } from "./app/constants";
+import { defaultBriefingRole, defaultQuestion, dockerModelRunnerConfig } from "./app/constants";
 import { saveMarkdownFile } from "./app/exportMarkdown";
 import { friendlyErrorMessage, runtimeState, safeFileName } from "./app/format";
 import {
@@ -13,7 +13,7 @@ import {
   saveModelConfig,
   serviceCommand,
 } from "./app/runtime";
-import type { ActiveTask, RepositorySource } from "./app/types";
+import type { ActiveTask, BriefingRole, RepositorySource } from "./app/types";
 import { AppHeader } from "./components/AppHeader";
 import { BriefingView } from "./components/BriefingView";
 import { EvidenceDrawer } from "./components/EvidenceDrawer";
@@ -34,6 +34,7 @@ export function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [repositorySource, setRepositorySource] = useState<RepositorySource>("github");
+  const [briefingRole, setBriefingRole] = useState<BriefingRole>(defaultBriefingRole);
   const [githubRepository, setGithubRepository] = useState("");
   const [repoPath, setRepoPath] = useState("");
   const [projectName, setProjectName] = useState("");
@@ -145,7 +146,12 @@ export function App() {
     };
 
     if (repositorySource === "github") {
-      setActiveTask({ kind: "analyze", label: "Cloning GitHub repository" });
+      setActiveTask({
+        kind: "analyze",
+        label: "Importing GitHub repository",
+        detail: "Cloning the selected repository into Sonar's local workspace.",
+        progress: 12,
+      });
       const cloned = await cloneGithubRepository(githubRepository);
       stopIfRequested();
       pathToIndex = cloned.localPath;
@@ -154,12 +160,22 @@ export function App() {
       setProjectName(nameToIndex);
     }
 
-    setActiveTask({ kind: "analyze", label: "Preparing selected repository" });
+    setActiveTask({
+      kind: "analyze",
+      label: "Preparing selected repository",
+      detail: "Copying only the selected repository into the Docker workspace.",
+      progress: repositorySource === "github" ? 28 : 18,
+    });
     const prepared = await prepareRepositoryForIndexing(pathToIndex, nameToIndex);
     stopIfRequested();
     pathToIndex = prepared.indexedPath;
 
-    setActiveTask({ kind: "analyze", label: "Indexing repository" });
+    setActiveTask({
+      kind: "analyze",
+      label: "Indexing repository",
+      detail: "Parsing files, building lexical search, creating embeddings, and writing vector indexes.",
+      progress: 48,
+    });
     const indexed = await indexProject(pathToIndex, nameToIndex, controller.signal);
     stopIfRequested();
     await refreshProjects();
@@ -185,8 +201,13 @@ export function App() {
 
     try {
       const projectId = canAnalyze ? await indexSelectedRepository(controller) : selectedProjectId;
-      setActiveTask({ kind: "brief", label: "Writing codebase briefing" });
-      const result = await createOnboardingSession(projectId);
+      setActiveTask({
+        kind: "brief",
+        label: "Writing codebase briefing",
+        detail: "Retrieving evidence and generating the initial role-aware briefing.",
+        progress: canAnalyze ? 82 : 35,
+      });
+      const result = await createOnboardingSession(projectId, briefingRole);
       setSession(result);
       setQuestion(defaultQuestion);
       setEvidenceOpen(false);
@@ -208,16 +229,26 @@ export function App() {
   function handleStopAnalysis() {
     analysisAbortController.current?.abort();
     setAnalysisStopRequested(true);
-    setActiveTask({ kind: "analyze", label: "Stopping analysis after the current step" });
+    setActiveTask({
+      kind: "analyze",
+      label: "Stopping analysis after the current step",
+      detail: "Waiting for the current repository operation to release cleanly.",
+      progress: 92,
+    });
   }
 
   async function handleCreateOnboarding() {
     if (!selectedProjectId) return;
     setError(null);
     setNotice(null);
-    setActiveTask({ kind: "brief", label: "Writing codebase briefing" });
+    setActiveTask({
+      kind: "brief",
+      label: "Writing codebase briefing",
+      detail: "Retrieving evidence and generating a refreshed role-aware briefing.",
+      progress: 35,
+    });
     try {
-      const result = await createOnboardingSession(selectedProjectId);
+      const result = await createOnboardingSession(selectedProjectId, briefingRole);
       setSession(result);
       setFollowups([]);
       setEvidenceOpen(false);
@@ -328,10 +359,12 @@ export function App() {
         ) : (
           <HomeScreen
             activeTask={activeTask}
+            briefingRole={briefingRole}
             canAnalyze={canAnalyze}
             githubRepository={githubRepository}
             isCreatingBriefing={isCreatingBriefing}
             onChooseDirectory={() => void chooseDirectory()}
+            onBriefingRoleChange={setBriefingRole}
             onCreateBriefing={() => void handleCreateBriefing()}
             onGithubRepositoryChange={handleGithubRepositoryChange}
             onOpenSettings={() => setAdvancedOpen(true)}

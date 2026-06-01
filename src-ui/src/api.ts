@@ -1,4 +1,6 @@
 import type { FollowupResponse, OnboardingSessionResponse, Project } from "./types";
+import { briefingRoleProfiles } from "./app/constants";
+import type { BriefingRole } from "./app/types";
 
 export const apiBaseUrl = "http://127.0.0.1:3001";
 
@@ -51,26 +53,18 @@ export async function indexProject(
   });
 }
 
-export async function createOnboardingSession(projectId: string): Promise<OnboardingSessionResponse> {
+export async function createOnboardingSession(
+  projectId: string,
+  briefingRole: BriefingRole,
+): Promise<OnboardingSessionResponse> {
+  const profile = briefingRoleProfiles[briefingRole];
+
   return request<OnboardingSessionResponse>(`/projects/${projectId}/onboarding/sessions`, {
     method: "POST",
     body: JSON.stringify({
-      audience: "A teammate trying to understand this repository",
-      focus: [
-        "what the product does",
-        "top user workflows",
-        "local/offline behavior",
-        "collaboration and sharing",
-        "privacy and operational risks",
-        "questions to ask engineering",
-      ],
-      persona: {
-        role: "product_manager",
-        technicalBackground: "basic",
-        avoidJargon: true,
-        explanationDepth: "standard",
-        businessContext: "Create a clear codebase briefing with practical follow-up questions, not deep code analysis.",
-      },
+      audience: profile.audience,
+      focus: profile.focus,
+      persona: profile.persona,
     }),
   });
 }

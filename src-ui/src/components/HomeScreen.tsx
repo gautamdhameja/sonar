@@ -1,10 +1,12 @@
 import { BookOpen, FolderOpen, GitBranch, HardDrive, Loader2, Lock, Sparkles } from "lucide-react";
-import type { ActiveTask, RepositorySource } from "../app/types";
+import { briefingRoleProfiles } from "../app/constants";
+import type { ActiveTask, BriefingRole, RepositorySource } from "../app/types";
 import type { Project, ServiceSnapshot, ServiceState } from "../types";
 import { ReadinessCard } from "./ReadinessCard";
 
 interface HomeScreenProps {
   activeTask: ActiveTask | null;
+  briefingRole: BriefingRole;
   canAnalyze: boolean;
   githubRepository: string;
   isCreatingBriefing: boolean;
@@ -17,6 +19,7 @@ interface HomeScreenProps {
   runtimeReady: boolean;
   selectedProjectId: string;
   snapshot: ServiceSnapshot | null;
+  onBriefingRoleChange: (value: BriefingRole) => void;
   onChooseDirectory: () => void;
   onCreateBriefing: () => void;
   onGithubRepositoryChange: (value: string) => void;
@@ -30,6 +33,7 @@ interface HomeScreenProps {
 
 export function HomeScreen({
   activeTask,
+  briefingRole,
   canAnalyze,
   githubRepository,
   isCreatingBriefing,
@@ -42,6 +46,7 @@ export function HomeScreen({
   runtimeReady,
   selectedProjectId,
   snapshot,
+  onBriefingRoleChange,
   onChooseDirectory,
   onCreateBriefing,
   onGithubRepositoryChange,
@@ -53,6 +58,10 @@ export function HomeScreen({
   onStartRuntime,
 }: HomeScreenProps) {
   const createDisabled = (!canAnalyze && !selectedProjectId) || isCreatingBriefing || runtimeBusy || !runtimeReady;
+  const briefingRoles = Object.entries(briefingRoleProfiles) as [
+    BriefingRole,
+    (typeof briefingRoleProfiles)[BriefingRole],
+  ][];
 
   return (
     <article className="start-card">
@@ -118,6 +127,26 @@ export function HomeScreen({
             placeholder="Product or team name"
           />
         </label>
+
+        <div className="field">
+          <span>Briefing audience</span>
+          <div className="role-grid">
+            {briefingRoles.map(([value, profile]) => (
+              <label className={briefingRole === value ? "role-option active" : "role-option"} key={value}>
+                <input
+                  checked={briefingRole === value}
+                  className="role-radio"
+                  name="briefing-role"
+                  onChange={() => onBriefingRoleChange(value)}
+                  type="radio"
+                  value={value}
+                />
+                <strong>{profile.label}</strong>
+                <small>{profile.description}</small>
+              </label>
+            ))}
+          </div>
+        </div>
 
         <button className="primary hero-action" disabled={createDisabled} onClick={onCreateBriefing} type="button">
           {isCreatingBriefing ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}

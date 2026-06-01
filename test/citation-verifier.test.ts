@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { verifyCitations } from "../src/generator/citation-verifier";
+import { removeUncitedClaims, verifyCitations } from "../src/generator/citation-verifier";
 import { CodeUnit } from "../src/parser/types";
 
 const unit: CodeUnit = {
@@ -80,6 +80,23 @@ test("verifyCitations accepts bare file-line citations from small local models",
   assert.deepEqual(result.uncitedClaims, []);
 });
 
+test("verifyCitations accepts unambiguous line-only citations from small local models", () => {
+  const result = verifyCitations("The function reads local storage [4-16].", [unit]);
+
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.invalidCitations, []);
+});
+
+test("verifyCitations rejects ambiguous line-only citations", () => {
+  const result = verifyCitations("The function reads local storage [4-16].", [
+    unit,
+    { ...unit, id: "unit-2", filePath: "src/other.ts" },
+  ]);
+
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.invalidCitations, ["4-16"]);
+});
+
 test("verifyCitations rejects broad summary labels", () => {
   const result = verifyCitations("The workflow validates local model configuration before execution [Data Flow].", [
     unit,
@@ -97,6 +114,16 @@ test("verifyCitations flags uncited factual claims", () => {
 
   assert.equal(result.valid, false);
   assert.equal(result.uncitedClaims.length, 1);
+});
+
+test("verifyCitations ignores where-to-look-next navigation guidance", () => {
+  const result = verifyCitations(
+    "For local storage logic: Look at `src/client/api/index.ts`. This file contains the core functions for saving and retrieving data.",
+    [unit],
+  );
+
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.uncitedClaims, []);
 });
 
 test("verifyCitations allows unsupported-context gap statements without citations", () => {
@@ -117,4 +144,17 @@ test("verifyCitations ignores markdown links as citations", () => {
 
   assert.deepEqual(result.citations, []);
   assert.equal(result.uncitedClaims.length, 1);
+});
+
+test("removeUncitedClaims removes exact unsupported lines", () => {
+  const answer = [
+    "Supported claim [src/llama/config.ts:4-16].",
+    "* **Server:** The server handles authenticated data synchronization.",
+  ].join("\n");
+  const verification = verifyCitations(answer, [unit]);
+
+  const scrubbed = removeUncitedClaims(answer, verification);
+
+  assert.equal(scrubbed, "Supported claim [src/llama/config.ts:4-16].");
+  assert.equal(verifyCitations(scrubbed, [unit]).valid, true);
 });
