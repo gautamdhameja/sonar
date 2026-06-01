@@ -42,10 +42,7 @@ export function App() {
   const [session, setSession] = useState<OnboardingSessionResponse | null>(null);
   const [followups, setFollowups] = useState<FollowupResponse[]>([]);
   const [question, setQuestion] = useState(defaultQuestion);
-  const [activeTask, setActiveTask] = useState<ActiveTask | null>({
-    kind: "bootstrap",
-    label: "Starting local services",
-  });
+  const [activeTask, setActiveTask] = useState<ActiveTask | null>(null);
   const [analysisStopRequested, setAnalysisStopRequested] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -66,7 +63,7 @@ export function App() {
   const isCreatingBriefing = activeTask?.kind === "analyze" || activeTask?.kind === "brief";
   const runtime = runtimeState(snapshot);
   const runtimeBlocker = error?.includes("Docker Desktop") ? error : null;
-  const runtimeReady = runtime === "ready";
+  const runtimeReady = modelConfig.modelSetupComplete && runtime === "ready";
   const runtimeBusy = activeTask?.kind === "bootstrap" || activeTask?.kind === "settings";
   const hasBrief = session !== null;
   const briefingMarkdown = session ? buildBriefingMarkdown(session, followups, selectedProject) : "";
@@ -92,14 +89,17 @@ export function App() {
   async function bootstrap() {
     setError(null);
     setNotice(null);
-    setActiveTask({ kind: "bootstrap", label: "Starting local services" });
     try {
-      const result = await serviceCommand("bootstrap_services");
-      setSnapshot(result);
       const nextConfig = await refreshModelConfig();
       if (!nextConfig.modelSetupComplete) {
+        setSnapshot(null);
         setModelSetupOpen(true);
+        return;
       }
+
+      setActiveTask({ kind: "bootstrap", label: "Preparing Sonar" });
+      const result = await serviceCommand("bootstrap_services");
+      setSnapshot(result);
       if (isTauriRuntime()) {
         await refreshProjects();
       } else {
@@ -121,7 +121,16 @@ export function App() {
   async function handleSaveModelConfig() {
     setError(null);
     setNotice(null);
-    setActiveTask({ kind: "settings", label: "Applying model settings" });
+    setActiveTask({
+      kind: "settings",
+      label:
+        modelConfig.modelMode === "local" ? "Preparing Sonar with local models" : "Preparing Sonar with API models",
+      detail:
+        modelConfig.modelMode === "local"
+          ? "Pulling runtime images and local models, then starting the workspace."
+          : "Starting the workspace and validating your model endpoints.",
+      progress: 20,
+    });
     try {
       const result = await saveModelConfig(modelConfig);
       setSnapshot(result);
@@ -371,6 +380,7 @@ export function App() {
             canAnalyze={canAnalyze}
             githubRepository={githubRepository}
             isCreatingBriefing={isCreatingBriefing}
+            modelConfig={modelConfig}
             onChooseDirectory={() => void chooseDirectory()}
             onBriefingRoleChange={setBriefingRole}
             onCreateBriefing={() => void handleCreateBriefing()}

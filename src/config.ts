@@ -1,7 +1,5 @@
 import path from "path";
 
-export type EmbeddingProvider = "ollama" | "openai";
-
 export const DEFAULT_CHAT_BASE_URL = "http://localhost:12434/engines/llama.cpp/v1";
 export const DEFAULT_CHAT_MODEL = "hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL";
 export const DEFAULT_EMBEDDING_MODEL = "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
@@ -16,12 +14,8 @@ export interface SonarConfig {
     model: string;
     apiKey: string;
   };
-  vllm: {
-    baseUrl: string;
-    model: string;
-  };
   embedding: {
-    provider: EmbeddingProvider;
+    provider: "openai";
     baseUrl: string;
     model: string;
     apiKey: string;
@@ -30,10 +24,6 @@ export interface SonarConfig {
     maxRetries: number;
     fallbackOnFailure: boolean;
     maxFallbackRatio: number;
-  };
-  ollama: {
-    baseUrl: string;
-    embeddingModel: string;
   };
   meilisearch: {
     host: string;
@@ -124,14 +114,6 @@ function getNumber(env: Env, name: string, fallback: number): number {
   return parsed;
 }
 
-function getEmbeddingProvider(env: Env): EmbeddingProvider {
-  const provider = getString(env, "SONAR_EMBEDDING_PROVIDER", "ollama");
-  if (provider !== "ollama" && provider !== "openai") {
-    throw new Error(`SONAR_EMBEDDING_PROVIDER must be "ollama" or "openai"; received "${provider}"`);
-  }
-  return provider;
-}
-
 function getBoolean(env: Env, name: string, fallback: boolean): boolean {
   const raw = env[name];
   if (raw === undefined || raw.trim() === "") return fallback;
@@ -170,19 +152,12 @@ export function loadConfig(env: Env = process.env): SonarConfig {
   const dbPath = path.resolve(getString(env, "SONAR_DB_PATH", path.join(dataDir, "projects.db")));
   const chatBaseUrl = getUrl(env, "SONAR_CHAT_BASE_URL", DEFAULT_CHAT_BASE_URL);
   const chatModel = getString(env, "SONAR_CHAT_MODEL", DEFAULT_CHAT_MODEL);
-  const embeddingProvider = getEmbeddingProvider(env);
-  const ollamaBaseUrl = getUrl(env, "SONAR_OLLAMA_BASE_URL", "http://localhost:11434");
-  const ollamaEmbeddingModel = getString(env, "SONAR_OLLAMA_EMBEDDING_MODEL", "nomic-embed-text");
-  const embeddingBaseUrl = getUrl(
-    env,
-    "SONAR_EMBEDDING_BASE_URL",
-    embeddingProvider === "openai" ? chatBaseUrl : ollamaBaseUrl,
-  );
-  const embeddingModel = getString(
-    env,
-    "SONAR_EMBEDDING_MODEL",
-    embeddingProvider === "openai" ? DEFAULT_EMBEDDING_MODEL : ollamaEmbeddingModel,
-  );
+  const embeddingProvider = getString(env, "SONAR_EMBEDDING_PROVIDER", "openai");
+  if (embeddingProvider !== "openai") {
+    throw new Error(`SONAR_EMBEDDING_PROVIDER must be "openai"; received "${embeddingProvider}"`);
+  }
+  const embeddingBaseUrl = getUrl(env, "SONAR_EMBEDDING_BASE_URL", chatBaseUrl);
+  const embeddingModel = getString(env, "SONAR_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL);
 
   return {
     api: {
@@ -205,10 +180,6 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       model: chatModel,
       apiKey: getString(env, "SONAR_CHAT_API_KEY", "not-needed"),
     },
-    vllm: {
-      baseUrl: chatBaseUrl,
-      model: chatModel,
-    },
     embedding: {
       provider: embeddingProvider,
       baseUrl: embeddingBaseUrl,
@@ -219,10 +190,6 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       maxRetries: getInteger(env, "SONAR_EMBEDDING_MAX_RETRIES", 2),
       fallbackOnFailure: getBoolean(env, "SONAR_EMBEDDING_FALLBACK_ON_FAILURE", true),
       maxFallbackRatio: getNumber(env, "SONAR_EMBEDDING_MAX_FALLBACK_RATIO", 0.1),
-    },
-    ollama: {
-      baseUrl: ollamaBaseUrl,
-      embeddingModel: ollamaEmbeddingModel,
     },
     meilisearch: {
       host: getUrl(env, "SONAR_MEILI_HOST", "http://localhost:7700"),

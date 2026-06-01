@@ -18,7 +18,6 @@ const QDRANT_READY_URL: &str = "http://127.0.0.1:6333/readyz";
 
 #[derive(Clone, Copy)]
 enum ModelRuntimeMode {
-    CoreOnly,
     DockerModels,
     ApiEndpoints,
 }
@@ -28,27 +27,26 @@ pub async fn service_snapshot() -> ServiceSnapshot {
     let model_config = desktop_model_config();
     let model_setup_complete = desktop_model_setup_complete();
     let chat = chat_base_url();
-    let model_label = if !model_setup_complete {
-        "Model setup pending"
-    } else if uses_managed_models(&model_config) {
-        "Docker model services"
-    } else {
-        "Configured model APIs"
-    };
-    ServiceSnapshot {
-        api_base_url: API_BASE_URL.to_string(),
-        chat_base_url: chat.clone(),
-        services: vec![
-            service(
-                "sonar",
-                "Sonar API",
-                API_HEALTH_URL,
-                true,
-                Some(&model_config.api_token),
-            )
-            .await,
-            service("meilisearch", "Meilisearch", MEILI_HEALTH_URL, true, None).await,
-            service("qdrant", "Qdrant", QDRANT_READY_URL, true, None).await,
+    let mut services = vec![
+        service(
+            "sonar",
+            "Sonar API",
+            API_HEALTH_URL,
+            true,
+            Some(&model_config.api_token),
+        )
+        .await,
+        service("meilisearch", "Meilisearch", MEILI_HEALTH_URL, true, None).await,
+        service("qdrant", "Qdrant", QDRANT_READY_URL, true, None).await,
+    ];
+
+    if model_setup_complete {
+        let model_label = if uses_managed_models(&model_config) {
+            "Docker model services"
+        } else {
+            "Configured model APIs"
+        };
+        services.push(
             service(
                 "models",
                 model_label,
@@ -57,6 +55,8 @@ pub async fn service_snapshot() -> ServiceSnapshot {
                 Some(&model_config.api_token),
             )
             .await,
+        );
+        services.push(
             service(
                 "chat",
                 "Chat model server",
@@ -65,18 +65,34 @@ pub async fn service_snapshot() -> ServiceSnapshot {
                 Some(&model_config.api_token),
             )
             .await,
-        ],
+        );
+    }
+
+    ServiceSnapshot {
+        api_base_url: API_BASE_URL.to_string(),
+        chat_base_url: chat.clone(),
+        services,
     }
 }
 
 #[tauri::command]
 pub async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
     let model_setup_complete = desktop_model_setup_complete();
+    if !model_setup_complete {
+        return Ok(service_snapshot().await);
+    }
+
+    let model_config = desktop_model_config();
     let before = service_snapshot().await;
     let sonar_needs_reconcile = before
         .services
         .iter()
         .any(|service| service.id == "sonar" && service.state != "ready");
+    let local_models_need_reconcile = uses_managed_models(&model_config)
+        && before
+            .services
+            .iter()
+            .any(|service| matches!(service.id, "models" | "chat") && service.state != "ready");
 
     if before
         .services
@@ -90,16 +106,13 @@ pub async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
             .services
             .iter()
             .any(|service| service.id == "sonar" && service.state != "ready")
+        || local_models_need_reconcile
     {
-        start_docker_services(
-            sonar_needs_reconcile,
-            selected_runtime_mode(model_setup_complete),
-        )?;
+        start_docker_services(sonar_needs_reconcile, selected_runtime_mode())?;
         let api_token = runtime_api_token()?;
         wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45)).await?;
     }
 
-    let _ = ensure_embedding_model();
     tokio::time::sleep(Duration::from_millis(500)).await;
     Ok(service_snapshot().await)
 }
@@ -112,10 +125,15 @@ pub fn get_model_config() -> DesktopModelConfig {
 #[tauri::command]
 pub async fn save_model_config(config: DesktopModelConfig) -> Result<ServiceSnapshot, String> {
     save_desktop_model_config(&config)?;
-    start_docker_services(true, selected_runtime_mode(true))?;
+    start_docker_services(true, selected_runtime_mode())?;
     let api_token = runtime_api_token()?;
     wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45)).await?;
-    let _ = ensure_embedding_model();
+    wait_for_url(
+        API_DEPENDENCIES_URL,
+        Some(&api_token),
+        Duration::from_secs(180),
+    )
+    .await?;
     tokio::time::sleep(Duration::from_millis(500)).await;
     Ok(service_snapshot().await)
 }
@@ -135,7 +153,22 @@ fn start_docker_services(
     let api_token = runtime_env.api_token;
     let meili_master_key = runtime_env.meili_master_key;
     if force_recreate {
-        let status = compose_command(
+        run_compose(
+            compose_command(
+                &root,
+                &compose_file,
+                &model_config,
+                &api_token,
+                &meili_master_key,
+                runtime_mode,
+            )
+            .args(["down", "--remove-orphans"]),
+            "docker compose down",
+        )?;
+    }
+
+    run_compose(
+        compose_command(
             &root,
             &compose_file,
             &model_config,
@@ -143,31 +176,9 @@ fn start_docker_services(
             &meili_master_key,
             runtime_mode,
         )
-        .args(["down", "--remove-orphans"])
-        .status()
-        .map_err(|err| err.to_string())?;
-        if !status.success() {
-            return Err(format!("docker compose down exited with {status}"));
-        }
-    }
-
-    let status = compose_command(
-        &root,
-        &compose_file,
-        &model_config,
-        &api_token,
-        &meili_master_key,
-        runtime_mode,
+        .args(["up", "-d"]),
+        "docker compose up",
     )
-    .args(["up", "-d"])
-    .status()
-    .map_err(|err| err.to_string())?;
-
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("docker compose exited with {status}"))
-    }
 }
 
 fn compose_command(
@@ -181,7 +192,6 @@ fn compose_command(
     let mut command = Command::new("docker");
     command.arg("compose").arg("-f").arg(compose_file);
     match runtime_mode {
-        ModelRuntimeMode::CoreOnly => {}
         ModelRuntimeMode::DockerModels => {
             command.arg("-f").arg(root.join("compose.models.yml"));
         }
@@ -218,14 +228,33 @@ fn compose_command(
     command
 }
 
+fn run_compose(command: &mut Command, label: &str) -> Result<(), String> {
+    let output = command
+        .output()
+        .map_err(|err| format!("{label} could not start: {err}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let details = [stderr.trim(), stdout.trim()]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+    if details.is_empty() {
+        Err(format!("{label} exited with {}", output.status))
+    } else {
+        Err(format!("{label} exited with {}:\n{details}", output.status))
+    }
+}
+
 fn uses_managed_models(model_config: &DesktopModelConfig) -> bool {
     model_config.model_mode == "local"
 }
 
-fn selected_runtime_mode(model_setup_complete: bool) -> ModelRuntimeMode {
-    if !model_setup_complete {
-        return ModelRuntimeMode::CoreOnly;
-    }
+fn selected_runtime_mode() -> ModelRuntimeMode {
     if uses_managed_models(&desktop_model_config()) {
         ModelRuntimeMode::DockerModels
     } else {
@@ -237,10 +266,6 @@ fn docker_reachable_url(value: &str) -> String {
     value
         .replace("http://localhost:", "http://host.docker.internal:")
         .replace("http://127.0.0.1:", "http://host.docker.internal:")
-}
-
-fn ensure_embedding_model() -> Result<(), String> {
-    Ok(())
 }
 
 async fn service(

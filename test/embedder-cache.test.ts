@@ -23,9 +23,9 @@ test("persistent embedding cache stores and reads vectors", async () => {
     writeEmbeddingCache,
   } = await import("../src/indexer/embedding-cache");
   const parts = {
-    provider: "ollama",
-    baseUrl: "http://localhost:11434",
-    model: "nomic-embed-text",
+    provider: "openai",
+    baseUrl: "http://localhost:12434/engines/v1",
+    model: "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M",
     vectorSize: 3,
     contentHash: "hash-a",
   };
@@ -45,9 +45,9 @@ test("persistent embedding cache drops invalid vector dimensions", async () => {
     "../src/indexer/embedding-cache"
   );
   const parts = {
-    provider: "ollama",
-    baseUrl: "http://localhost:11434",
-    model: "nomic-embed-text",
+    provider: "openai",
+    baseUrl: "http://localhost:12434/engines/v1",
+    model: "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M",
     vectorSize: 2,
     contentHash: "hash-b",
   };

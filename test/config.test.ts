@@ -7,15 +7,14 @@ test("loadConfig provides local defaults", () => {
 
   assert.equal(config.chat.baseUrl, DEFAULT_CHAT_BASE_URL);
   assert.equal(config.chat.model, DEFAULT_CHAT_MODEL);
-  assert.equal(config.embedding.provider, "ollama");
-  assert.equal(config.embedding.baseUrl, "http://localhost:11434");
-  assert.equal(config.embedding.model, "nomic-embed-text");
+  assert.equal(config.embedding.provider, "openai");
+  assert.equal(config.embedding.baseUrl, DEFAULT_CHAT_BASE_URL);
+  assert.equal(config.embedding.model, DEFAULT_EMBEDDING_MODEL);
   assert.equal(config.embedding.maxInputTokens, 384);
   assert.equal(config.embedding.concurrency, 2);
   assert.equal(config.embedding.maxRetries, 2);
   assert.equal(config.embedding.fallbackOnFailure, true);
   assert.equal(config.embedding.maxFallbackRatio, 0.1);
-  assert.equal(config.ollama.baseUrl, "http://localhost:11434");
   assert.equal(config.qdrant.port, 6333);
   assert.equal(config.qdrant.vectorSize, 768);
   assert.equal(config.storage.dbPath, "/tmp/sonar-home/.sonar/projects.db");
@@ -49,7 +48,6 @@ test("loadConfig reads environment overrides", () => {
     SONAR_EMBEDDING_MAX_RETRIES: "3",
     SONAR_EMBEDDING_FALLBACK_ON_FAILURE: "false",
     SONAR_EMBEDDING_MAX_FALLBACK_RATIO: "0.25",
-    SONAR_OLLAMA_BASE_URL: "http://127.0.0.1:11435",
     SONAR_QDRANT_PORT: "6334",
     SONAR_QDRANT_VECTOR_SIZE: "1024",
     SONAR_DB_PATH: "/tmp/sonar.db",
@@ -74,7 +72,6 @@ test("loadConfig reads environment overrides", () => {
   assert.equal(config.embedding.maxRetries, 3);
   assert.equal(config.embedding.fallbackOnFailure, false);
   assert.equal(config.embedding.maxFallbackRatio, 0.25);
-  assert.equal(config.ollama.baseUrl, "http://127.0.0.1:11435");
   assert.equal(config.qdrant.port, 6334);
   assert.equal(config.qdrant.vectorSize, 1024);
   assert.equal(config.storage.dbPath, "/tmp/sonar.db");
@@ -108,6 +105,6 @@ test("loadConfig rejects invalid booleans", () => {
 test("loadConfig rejects invalid embedding providers", () => {
   assert.throws(
     () => loadConfig({ SONAR_EMBEDDING_PROVIDER: "docker-model-runner" }),
-    /SONAR_EMBEDDING_PROVIDER must be "ollama" or "openai"/,
+    /SONAR_EMBEDDING_PROVIDER must be "openai"/,
   );
 });

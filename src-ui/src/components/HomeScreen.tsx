@@ -1,7 +1,7 @@
 import { BookOpen, FolderOpen, GitBranch, HardDrive, Loader2, Lock, Sparkles } from "lucide-react";
 import { briefingRoleProfiles } from "../app/constants";
 import type { ActiveTask, BriefingRole, RepositorySource } from "../app/types";
-import type { Project, ServiceSnapshot, ServiceState } from "../types";
+import type { DesktopModelConfig, Project, ServiceSnapshot, ServiceState } from "../types";
 import { ReadinessCard } from "./ReadinessCard";
 
 interface HomeScreenProps {
@@ -10,6 +10,7 @@ interface HomeScreenProps {
   canAnalyze: boolean;
   githubRepository: string;
   isCreatingBriefing: boolean;
+  modelConfig: DesktopModelConfig;
   projectName: string;
   projects: Project[];
   repositorySource: RepositorySource;
@@ -38,6 +39,7 @@ export function HomeScreen({
   canAnalyze,
   githubRepository,
   isCreatingBriefing,
+  modelConfig,
   projectName,
   projects,
   repositorySource,
@@ -174,6 +176,7 @@ export function HomeScreen({
 
         <ReadinessCard
           activeTask={activeTask}
+          modelConfig={modelConfig}
           onOpenSettings={onOpenSettings}
           onStart={onStartRuntime}
           runtime={runtime}

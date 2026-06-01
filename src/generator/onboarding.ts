@@ -47,6 +47,8 @@ const BRIEFING_PARTS = [
   ["Risks Or Open Questions", "Glossary For A Non-Deeply-Technical Reader"],
 ];
 
+const COMPLETE_LINE_PATTERN = /(?:[.!?)]|]|\|)$/;
+
 function defaultFocus(): string[] {
   return [
     "what the product does",
@@ -80,6 +82,46 @@ function selectOnboardingContext(units: CodeUnit[], maxTokens: number): CodeUnit
   }
 
   return selected;
+}
+
+function sectionPattern(section: string): RegExp {
+  const escaped = section.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^###\\s+${escaped}\\s*$`, "im");
+}
+
+function trimIncompleteTail(content: string): string {
+  const lines = content.trim().split("\n");
+  while (lines.length > 0) {
+    const last = lines[lines.length - 1].trim();
+    if (last === "") {
+      lines.pop();
+      continue;
+    }
+    if (/^[-*]\s*$/.test(last) || /\[[^\]]*$/.test(last) || !COMPLETE_LINE_PATTERN.test(last)) {
+      lines.pop();
+      continue;
+    }
+    break;
+  }
+  return lines.join("\n").trim();
+}
+
+export function sanitizeTruncatedBriefingPart(content: string, sections: string[]): string {
+  const output: string[] = [];
+  for (const section of sections) {
+    const match = content.match(sectionPattern(section));
+    if (!match || match.index === undefined) {
+      output.push(`### ${section}\nNot found in provided context`);
+      continue;
+    }
+
+    const start = match.index + match[0].length;
+    const nextHeading = content.slice(start).search(/^###\s+/m);
+    const rawSection = nextHeading >= 0 ? content.slice(start, start + nextHeading) : content.slice(start);
+    const sanitized = trimIncompleteTail(rawSection);
+    output.push(`### ${section}\n${sanitized || "Not found in provided context"}`);
+  }
+  return output.join("\n\n");
 }
 
 async function generateBriefingPart(
@@ -118,7 +160,11 @@ async function generateBriefingPart(
     return { content: retry.content.trim(), generationTime, truncated: false };
   }
 
-  return { content: retry.content.trim() || completion.content.trim(), generationTime, truncated: true };
+  return {
+    content: sanitizeTruncatedBriefingPart(retry.content.trim() || completion.content.trim(), options.sections),
+    generationTime,
+    truncated: true,
+  };
 }
 
 export async function generateOnboardingBrief(

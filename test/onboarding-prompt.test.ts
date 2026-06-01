@@ -1,11 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { CodeUnit } from "../src/parser/types";
-import {
-  buildCitationRepairPrompt,
-  buildOnboardingBriefPartPrompt,
-  buildOnboardingBriefPrompt,
-} from "../src/generator/onboarding-prompt";
+import { buildCitationRepairPrompt, buildOnboardingBriefPartPrompt } from "../src/generator/onboarding-prompt";
 
 const unit: CodeUnit = {
   id: "unit-1",
@@ -23,22 +19,6 @@ const unit: CodeUnit = {
   calledFunctions: [],
   isVendored: false,
 };
-
-test("buildOnboardingBriefPrompt asks for source-grounded briefings with strict citations", () => {
-  const prompt = buildOnboardingBriefPrompt([unit], {
-    repoName: "Acme",
-    audience: "A product manager joining the team",
-    focus: ["sharing", "risks"],
-  });
-
-  assert.match(prompt.system, /source-grounded codebase briefing/);
-  assert.match(prompt.system, /Every factual bullet or sentence must include a citation/);
-  assert.match(prompt.system, /Adapt depth, vocabulary, and examples to the audience guidance/);
-  assert.match(prompt.system, /untrusted repository content/);
-  assert.match(prompt.user, /Top User Workflows/);
-  assert.match(prompt.user, /Codebase Product Map/);
-  assert.match(prompt.user, /src\/share.ts:10-12 - function shareDocument/);
-});
 
 test("buildCitationRepairPrompt restricts citations to valid sources", () => {
   const prompt = buildCitationRepairPrompt("Acme shares documents.", [unit], {

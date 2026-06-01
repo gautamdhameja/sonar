@@ -46,7 +46,6 @@ pub fn default_desktop_model_config() -> DesktopModelConfig {
         embedding_base_url: env::var("SONAR_EMBEDDING_BASE_URL")
             .unwrap_or_else(|_| DEFAULT_EMBEDDING_BASE_URL.to_string()),
         embedding_model: env::var("SONAR_EMBEDDING_MODEL")
-            .or_else(|_| env::var("SONAR_OLLAMA_EMBEDDING_MODEL"))
             .unwrap_or_else(|_| DEFAULT_EMBEDDING_MODEL.to_string()),
         embedding_api_key: env::var("SONAR_EMBEDDING_API_KEY")
             .unwrap_or_else(|_| "not-needed".to_string()),

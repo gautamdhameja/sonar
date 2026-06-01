@@ -1,5 +1,4 @@
 import { CONFIG } from "../config";
-import { CodeUnit } from "../parser/types";
 import { createHash } from "crypto";
 import {
   buildEmbeddingCacheKey,
@@ -103,10 +102,7 @@ async function embedSingleChunk(text: string, signal?: AbortSignal): Promise<num
       `Embedding input is too large for configured budget (${estimatedTokens} > ${CONFIG.embedding.maxInputTokens} tokens)`,
     );
   }
-  if (CONFIG.embedding.provider === "openai") {
-    return embedOpenAiChunk(text, signal);
-  }
-  return embedOllamaChunk(text, signal);
+  return embedOpenAiChunk(text, signal);
 }
 
 function isInputTooLargeError(err: unknown): boolean {
@@ -173,25 +169,6 @@ async function embedChunkAdaptive(text: string, signal?: AbortSignal): Promise<n
     const vectors = [await embedChunkAdaptive(left, signal), await embedChunkAdaptive(right, signal)];
     return validateEmbedding(averageVectors(vectors), "Adaptive pooled");
   }
-}
-
-async function embedOllamaChunk(text: string, signal?: AbortSignal): Promise<number[]> {
-  const response = await withTimeout(signal, 60_000, (timeoutSignal) =>
-    fetch(`${CONFIG.ollama.baseUrl}/api/embed`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: CONFIG.ollama.embeddingModel, input: text }),
-      signal: timeoutSignal,
-    }),
-  );
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Ollama embedding failed (${response.status}): ${body.slice(0, 200)}`);
-  }
-
-  const data = (await response.json()) as { embeddings?: unknown[] };
-  return validateEmbedding(data.embeddings?.[0], "Ollama");
 }
 
 async function embedOpenAiChunk(text: string, signal?: AbortSignal): Promise<number[]> {
@@ -338,14 +315,4 @@ export async function generateEmbeddings(texts: string[], signal?: AbortSignal):
     );
   }
   return embeddings;
-}
-
-export function buildEmbeddingText(unit: CodeUnit): string {
-  // Kept for tests and external callers. Repository indexing uses contextual
-  // embedding text from contextual-text.ts.
-  const parts: string[] = [];
-  if (unit.docstring) parts.push(unit.docstring);
-  parts.push(`${unit.kind} ${unit.name}`);
-  parts.push(unit.code);
-  return parts.join("\n");
 }

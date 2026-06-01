@@ -1,5 +1,9 @@
 services:
   api:
+    environment:
+      SONAR_CHAT_API_KEY: ${SONAR_CHAT_API_KEY:-not-needed}
+      SONAR_EMBEDDING_PROVIDER: openai
+      SONAR_EMBEDDING_API_KEY: ${SONAR_EMBEDDING_API_KEY:-not-needed}
     models:
       chat_model:
         endpoint_var: SONAR_CHAT_BASE_URL

@@ -33,8 +33,8 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
           <p className="eyebrow">First run</p>
           <h2>Choose your model source</h2>
           <p>
-            Sonar starts the local index and search services first. Choose whether generation and embeddings should run
-            through Docker Model Runner or an OpenAI-compatible API.
+            Sonar will start the right Docker stack after this choice. Local mode prepares the app services and models
+            together; API mode starts only the app services and validates your configured endpoints.
           </p>
         </div>
 
@@ -47,7 +47,7 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
             <Server size={18} />
             <span>
               <strong>Local Docker model</strong>
-              <small>Use Docker Model Runner. Best when the machine can run local models.</small>
+              <small>Pull app images and local models in one startup. Best when this machine can run models.</small>
             </span>
           </button>
           <button
@@ -58,7 +58,7 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
             <Cloud size={18} />
             <span>
               <strong>API endpoint</strong>
-              <small>Use OpenAI or another compatible API. Best for laptops without enough VRAM.</small>
+              <small>Start only Sonar's local services and use an OpenAI-compatible API for models.</small>
             </span>
           </button>
         </div>
@@ -139,10 +139,7 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
         </div>
 
         <div className="setup-actions">
-          <p>
-            Cloud mode still uses Docker for Sonar's local API, search, and vector database. It only replaces the model
-            server.
-          </p>
+          <p>First startup can take a few minutes. Future launches reuse the saved choice and start automatically.</p>
           <button className="primary" disabled={isSaving} onClick={onSave} type="button">
             {isSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
             Save and start

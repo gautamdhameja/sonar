@@ -35,12 +35,9 @@ export async function checkDependencies(): Promise<DependencyHealth[]> {
     headers: { Authorization: `Bearer ${CONFIG.meilisearch.apiKey}` },
   });
   const qdrant = checkFetch("qdrant", `http://${CONFIG.qdrant.host}:${CONFIG.qdrant.port}/collections`);
-  const embedding =
-    CONFIG.embedding.provider === "openai"
-      ? checkFetch("embeddings", `${CONFIG.embedding.baseUrl}/models`, {
-          headers: { Authorization: `Bearer ${CONFIG.embedding.apiKey}` },
-        })
-      : checkFetch("ollama", `${CONFIG.ollama.baseUrl}/api/tags`);
+  const embedding = checkFetch("embeddings", `${CONFIG.embedding.baseUrl}/models`, {
+    headers: { Authorization: `Bearer ${CONFIG.embedding.apiKey}` },
+  });
   const chat = checkFetch("chat", `${CONFIG.chat.baseUrl}/models`, {
     headers: { Authorization: `Bearer ${CONFIG.chat.apiKey}` },
   });
