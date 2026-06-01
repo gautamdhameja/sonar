@@ -18,6 +18,7 @@ import { AppHeader } from "./components/AppHeader";
 import { BriefingView } from "./components/BriefingView";
 import { EvidenceDrawer } from "./components/EvidenceDrawer";
 import { HomeScreen } from "./components/HomeScreen";
+import { ModelSetupDialog } from "./components/ModelSetupDialog";
 import { ProgressPanel } from "./components/ProgressPanel";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { Toast } from "./components/Toast";
@@ -49,6 +50,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [modelConfig, setModelConfig] = useState<DesktopModelConfig>(dockerModelRunnerConfig);
+  const [modelSetupOpen, setModelSetupOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const analysisAbortController = useRef<AbortController | null>(null);
@@ -80,10 +82,11 @@ export function App() {
     if (!selectedProjectId && next[0]) setSelectedProjectId(next[0].id);
   }
 
-  async function refreshModelConfig() {
+  async function refreshModelConfig(): Promise<DesktopModelConfig> {
     const next = await loadModelConfig();
     setApiToken(next.apiToken);
     setModelConfig(next);
+    return next;
   }
 
   async function bootstrap() {
@@ -93,7 +96,10 @@ export function App() {
     try {
       const result = await serviceCommand("bootstrap_services");
       setSnapshot(result);
-      await refreshModelConfig();
+      const nextConfig = await refreshModelConfig();
+      if (!nextConfig.modelSetupComplete) {
+        setModelSetupOpen(true);
+      }
       if (isTauriRuntime()) {
         await refreshProjects();
       } else {
@@ -119,7 +125,8 @@ export function App() {
     try {
       const result = await saveModelConfig(modelConfig);
       setSnapshot(result);
-      await refreshModelConfig();
+      const nextConfig = await refreshModelConfig();
+      setModelSetupOpen(!nextConfig.modelSetupComplete);
       setNotice("Model settings saved. Sonar restarted the local API with the new configuration.");
     } catch (err) {
       setError(friendlyErrorMessage(err));
@@ -405,6 +412,15 @@ export function App() {
           projects={projects}
           selectedProjectId={selectedProjectId}
           snapshot={snapshot}
+        />
+      )}
+
+      {modelSetupOpen && !modelConfig.modelSetupComplete && (
+        <ModelSetupDialog
+          activeTask={activeTask}
+          modelConfig={modelConfig}
+          onModelConfigChange={setModelConfig}
+          onSave={() => void handleSaveModelConfig()}
         />
       )}
     </main>

@@ -2,8 +2,8 @@ use std::{process::Command, time::Duration};
 
 use crate::{
     config::{
-        chat_base_url, desktop_model_config, ensure_runtime_env, runtime_api_token,
-        save_desktop_model_config,
+        chat_base_url, desktop_model_config, desktop_model_setup_complete, ensure_runtime_env,
+        runtime_api_token, save_desktop_model_config,
     },
     models::{DesktopModelConfig, ServiceSnapshot, ServiceStatus},
     paths::repo_root,
@@ -16,11 +16,21 @@ const API_DEPENDENCIES_URL: &str = "http://127.0.0.1:3001/health/dependencies";
 const MEILI_HEALTH_URL: &str = "http://127.0.0.1:7700/health";
 const QDRANT_READY_URL: &str = "http://127.0.0.1:6333/readyz";
 
+#[derive(Clone, Copy)]
+enum ModelRuntimeMode {
+    CoreOnly,
+    DockerModels,
+    ApiEndpoints,
+}
+
 #[tauri::command]
 pub async fn service_snapshot() -> ServiceSnapshot {
     let model_config = desktop_model_config();
+    let model_setup_complete = desktop_model_setup_complete();
     let chat = chat_base_url();
-    let model_label = if uses_managed_models(&model_config) {
+    let model_label = if !model_setup_complete {
+        "Model setup pending"
+    } else if uses_managed_models(&model_config) {
         "Docker model services"
     } else {
         "Configured model APIs"
@@ -61,6 +71,7 @@ pub async fn service_snapshot() -> ServiceSnapshot {
 
 #[tauri::command]
 pub async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
+    let model_setup_complete = desktop_model_setup_complete();
     let before = service_snapshot().await;
     let sonar_needs_reconcile = before
         .services
@@ -80,7 +91,10 @@ pub async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
             .iter()
             .any(|service| service.id == "sonar" && service.state != "ready")
     {
-        start_docker_services(sonar_needs_reconcile)?;
+        start_docker_services(
+            sonar_needs_reconcile,
+            selected_runtime_mode(model_setup_complete),
+        )?;
         let api_token = runtime_api_token()?;
         wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45)).await?;
     }
@@ -98,7 +112,7 @@ pub fn get_model_config() -> DesktopModelConfig {
 #[tauri::command]
 pub async fn save_model_config(config: DesktopModelConfig) -> Result<ServiceSnapshot, String> {
     save_desktop_model_config(&config)?;
-    start_docker_services(true)?;
+    start_docker_services(true, selected_runtime_mode(true))?;
     let api_token = runtime_api_token()?;
     wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45)).await?;
     let _ = ensure_embedding_model();
@@ -106,7 +120,10 @@ pub async fn save_model_config(config: DesktopModelConfig) -> Result<ServiceSnap
     Ok(service_snapshot().await)
 }
 
-fn start_docker_services(force_recreate: bool) -> Result<(), String> {
+fn start_docker_services(
+    force_recreate: bool,
+    runtime_mode: ModelRuntimeMode,
+) -> Result<(), String> {
     if !command_exists("docker") {
         return Err("Docker is not installed or not available on PATH".to_string());
     }
@@ -117,8 +134,6 @@ fn start_docker_services(force_recreate: bool) -> Result<(), String> {
     let model_config = desktop_model_config();
     let api_token = runtime_env.api_token;
     let meili_master_key = runtime_env.meili_master_key;
-    let managed_models = uses_managed_models(&model_config);
-
     if force_recreate {
         let status = compose_command(
             &root,
@@ -126,7 +141,7 @@ fn start_docker_services(force_recreate: bool) -> Result<(), String> {
             &model_config,
             &api_token,
             &meili_master_key,
-            managed_models,
+            runtime_mode,
         )
         .args(["down", "--remove-orphans"])
         .status()
@@ -142,7 +157,7 @@ fn start_docker_services(force_recreate: bool) -> Result<(), String> {
         &model_config,
         &api_token,
         &meili_master_key,
-        managed_models,
+        runtime_mode,
     )
     .args(["up", "-d"])
     .status()
@@ -161,14 +176,18 @@ fn compose_command(
     model_config: &DesktopModelConfig,
     api_token: &str,
     meili_master_key: &str,
-    managed_models: bool,
+    runtime_mode: ModelRuntimeMode,
 ) -> Command {
     let mut command = Command::new("docker");
     command.arg("compose").arg("-f").arg(compose_file);
-    if managed_models {
-        command.arg("-f").arg(root.join("compose.models.yml"));
-    } else {
-        command.arg("-f").arg(root.join("compose.endpoints.yml"));
+    match runtime_mode {
+        ModelRuntimeMode::CoreOnly => {}
+        ModelRuntimeMode::DockerModels => {
+            command.arg("-f").arg(root.join("compose.models.yml"));
+        }
+        ModelRuntimeMode::ApiEndpoints => {
+            command.arg("-f").arg(root.join("compose.endpoints.yml"));
+        }
     }
     command
         .current_dir(root)
@@ -185,7 +204,7 @@ fn compose_command(
         .env("SONAR_MEILI_MASTER_KEY", meili_master_key)
         .env("SONAR_MEILI_API_KEY", meili_master_key)
         .env("MEILI_MASTER_KEY", meili_master_key);
-    if !managed_models {
+    if matches!(runtime_mode, ModelRuntimeMode::ApiEndpoints) {
         command
             .env(
                 "SONAR_CHAT_BASE_URL",
@@ -201,6 +220,17 @@ fn compose_command(
 
 fn uses_managed_models(model_config: &DesktopModelConfig) -> bool {
     model_config.model_mode == "local"
+}
+
+fn selected_runtime_mode(model_setup_complete: bool) -> ModelRuntimeMode {
+    if !model_setup_complete {
+        return ModelRuntimeMode::CoreOnly;
+    }
+    if uses_managed_models(&desktop_model_config()) {
+        ModelRuntimeMode::DockerModels
+    } else {
+        ModelRuntimeMode::ApiEndpoints
+    }
 }
 
 fn docker_reachable_url(value: &str) -> String {

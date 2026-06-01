@@ -92,9 +92,10 @@ export async function loadModelConfig(): Promise<DesktopModelConfig> {
 }
 
 export async function saveModelConfig(config: DesktopModelConfig): Promise<ServiceSnapshot> {
+  const savedConfig = { ...config, modelSetupComplete: true };
   if (!isTauriRuntime()) {
-    window.localStorage.setItem("sonar.modelConfig", JSON.stringify(config));
+    window.localStorage.setItem("sonar.modelConfig", JSON.stringify(savedConfig));
     return browserServiceSnapshot();
   }
-  return invoke<ServiceSnapshot>("save_model_config", { config });
+  return invoke<ServiceSnapshot>("save_model_config", { config: savedConfig });
 }

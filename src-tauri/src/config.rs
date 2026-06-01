@@ -17,6 +17,7 @@ const LEGACY_CHAT_MODEL: &str = "Qwen/Qwen3.5-9B";
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct StoredDesktopModelConfig {
+    model_setup_complete: Option<bool>,
     model_mode: Option<String>,
     chat_base_url: Option<String>,
     chat_model: Option<String>,
@@ -34,6 +35,7 @@ pub fn chat_base_url() -> String {
 
 pub fn default_desktop_model_config() -> DesktopModelConfig {
     DesktopModelConfig {
+        model_setup_complete: false,
         model_mode: env::var("SONAR_MODEL_MODE")
             .ok()
             .filter(|value| is_valid_model_mode(value))
@@ -63,7 +65,6 @@ pub fn desktop_model_config() -> DesktopModelConfig {
         return fallback;
     };
     let Ok(contents) = fs::read_to_string(&path) else {
-        let _ = write_desktop_model_config(&path, &fallback);
         return fallback;
     };
     let Ok(stored) = serde_json::from_str::<StoredDesktopModelConfig>(&contents) else {
@@ -76,6 +77,7 @@ pub fn desktop_model_config() -> DesktopModelConfig {
         .map(str::to_string)
         .unwrap_or_else(|| infer_model_mode(&stored, &fallback));
     let mut stored = DesktopModelConfig {
+        model_setup_complete: stored.model_setup_complete.unwrap_or(true),
         model_mode: inferred_model_mode,
         chat_base_url: stored
             .chat_base_url
@@ -106,6 +108,7 @@ pub fn desktop_model_config() -> DesktopModelConfig {
         stored.chat_base_url = fallback.chat_base_url;
         stored.chat_model = fallback.chat_model;
         stored.chat_api_key = fallback.chat_api_key;
+        stored.model_setup_complete = fallback.model_setup_complete;
         stored.model_mode = fallback.model_mode;
         stored.embedding_base_url = fallback.embedding_base_url;
         stored.embedding_api_key = fallback.embedding_api_key;
@@ -151,6 +154,7 @@ pub fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), Stri
     validate_http_url(config.embedding_base_url.trim(), "Embedding API URL")?;
 
     let normalized = DesktopModelConfig {
+        model_setup_complete: true,
         model_mode: config.model_mode.trim().to_string(),
         chat_base_url: normalize_url(&config.chat_base_url),
         chat_model: config.chat_model.trim().to_string(),
@@ -162,6 +166,18 @@ pub fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), Stri
         api_token: runtime_api_token()?,
     };
     write_desktop_model_config(&path, &normalized)
+}
+
+pub fn desktop_model_setup_complete() -> bool {
+    let Ok(path) = desktop_config_path() else {
+        return false;
+    };
+    let Ok(contents) = fs::read_to_string(&path) else {
+        return false;
+    };
+    serde_json::from_str::<StoredDesktopModelConfig>(&contents)
+        .map(|stored| stored.model_setup_complete.unwrap_or(true))
+        .unwrap_or(false)
 }
 
 fn is_valid_model_mode(value: &str) -> bool {

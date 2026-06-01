@@ -1,6 +1,6 @@
 [book]
 title = "Sonar Documentation"
-description = "Detailed setup, usage, API, retrieval, and development documentation for Sonar."
+description = "Setup and desktop app documentation for Sonar."
 authors = ["Sonar contributors"]
 language = "en"
 src = "."

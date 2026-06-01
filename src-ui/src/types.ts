@@ -30,6 +30,7 @@ export interface PreparedRepository {
 }
 
 export interface DesktopModelConfig {
+  modelSetupComplete: boolean;
   modelMode: "local" | "api";
   chatBaseUrl: string;
   chatModel: string;

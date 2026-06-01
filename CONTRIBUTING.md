@@ -12,7 +12,6 @@ npm run check
 For the desktop app:
 
 ```bash
-docker compose up -d
 npm run desktop:dev
 ```
 
@@ -21,7 +20,3 @@ npm run desktop:dev
 - Keep changes focused and covered by tests when behavior changes.
 - Run `npm run check` before opening a PR.
 - Do not commit local data, model files, `.env` files, API keys, or generated docs output.
-
-## Security
-
-Report vulnerabilities through the process in `SECURITY.md`, not public issues.

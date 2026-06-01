@@ -74,7 +74,7 @@ export const briefingRoleProfiles = {
       "user-facing capabilities and differentiators",
       "integration points, dependencies, and data boundaries",
       "positioning proof points supported by the source",
-      "commercial, trust, and validation questions to ask internally",
+      "commercial, trust, and validation questions for the team",
     ],
     persona: {
       role: "sales",
@@ -133,6 +133,7 @@ export const briefingRoleProfiles = {
 } satisfies Record<BriefingRole, BriefingRoleProfile>;
 
 export const dockerModelRunnerConfig: DesktopModelConfig = {
+  modelSetupComplete: false,
   modelMode: "local",
   chatBaseUrl: "http://localhost:12434/engines/llama.cpp/v1",
   chatModel: "hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL",
@@ -145,6 +146,7 @@ export const dockerModelRunnerConfig: DesktopModelConfig = {
 };
 
 export const openAiCompatibleConfig: DesktopModelConfig = {
+  modelSetupComplete: false,
   modelMode: "api",
   chatBaseUrl: "https://api.openai.com/v1",
   chatModel: "gpt-4.1-mini",

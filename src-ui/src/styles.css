@@ -844,6 +844,50 @@ textarea:focus {
   width: min(760px, 100vw);
 }
 
+.setup-backdrop {
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+}
+
+.setup-dialog {
+  display: grid;
+  gap: 18px;
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  padding: 26px;
+  overflow: auto;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 12px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+}
+
+.setup-dialog h2 {
+  color: #0f2445;
+  font-size: 24px;
+}
+
+.setup-dialog p {
+  margin: 8px 0 0;
+  color: #536b89;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.setup-actions {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.setup-actions p {
+  max-width: 470px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
 .drawer-head {
   display: flex;
   align-items: flex-start;
@@ -1107,5 +1151,9 @@ textarea:focus {
   .settings-grid,
   .model-mode-grid {
     grid-template-columns: 1fr;
+  }
+
+  .setup-actions {
+    display: grid;
   }
 }
