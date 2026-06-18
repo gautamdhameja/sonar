@@ -1,6 +1,0 @@
-services:
-  api:
-    environment:
-      SONAR_CHAT_BASE_URL: ${SONAR_CHAT_BASE_URL}
-      SONAR_CHAT_MODEL: ${SONAR_CHAT_MODEL}
-      SONAR_CHAT_API_KEY: ${SONAR_CHAT_API_KEY:-not-needed}

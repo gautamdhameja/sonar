@@ -26,17 +26,13 @@ export function ReadinessCard({
   const api = serviceDetail(snapshot, "sonar");
   const model = serviceDetail(snapshot, "chat") ?? serviceDetail(snapshot, "models");
   const modelConfigured = modelConfig.modelSetupComplete;
-  const workspaceReady = api?.state === "ready" && serviceDetail(snapshot, "meilisearch")?.state === "ready";
+  const workspaceReady = api?.state === "ready";
   const isStarting = activeTask?.kind === "bootstrap";
   const isPreparingModel = activeTask?.kind === "settings";
   const isWorking = isStarting || isPreparingModel;
-  const dockerUnavailable =
-    runtimeBlocker !== null ||
-    (snapshot?.services ?? []).some((service) => service.detail.toLowerCase().includes("docker is not installed"));
-  const title = dockerUnavailable
-    ? runtimeBlocker?.includes("required")
-      ? "Docker Desktop required"
-      : "Docker Desktop not ready"
+  const runtimeUnavailable = runtimeBlocker !== null;
+  const title = runtimeUnavailable
+    ? "Runtime needs attention"
     : isPreparingModel
       ? "Preparing Sonar"
       : !modelConfigured
@@ -46,16 +42,15 @@ export function ReadinessCard({
           : runtime === "unknown" || runtime === "starting"
             ? "Preparing workspace"
             : "Runtime needs attention";
-  const body = dockerUnavailable
-    ? (runtimeBlocker ??
-      "Sonar needs Docker Desktop for the local API and search service. Install Docker Desktop, then restart Sonar.")
+  const body = runtimeUnavailable
+    ? (runtimeBlocker ?? "Sonar could not start its local runtime. Check the service details, then try again.")
     : isPreparingModel
-      ? (activeTask.detail ?? "Starting the selected Docker stack and validating model endpoints.")
+      ? (activeTask.detail ?? "Starting the local runtime and validating the model endpoint.")
       : !modelConfigured
-        ? "Select local Docker models or API models. Sonar will start the right Docker stack once after your choice."
+        ? "Select a local llama.cpp server or an OpenAI-compatible API endpoint."
         : runtime === "ready"
           ? "Workspace services and model endpoints are available."
-          : "First startup can take a few minutes while Docker pulls images, prepares services, and validates models.";
+          : "Start Sonar's local API, then validate the selected model endpoint.";
 
   return (
     <section className={`readiness-card ${runtime}`}>
@@ -65,12 +60,8 @@ export function ReadinessCard({
         <p>{body}</p>
       </div>
       <div className="readiness-checks">
-        <span className={!modelConfigured ? "ready" : workspaceReady ? "ready" : ""}>
-          {(!modelConfigured && !isPreparingModel) || workspaceReady ? (
-            <CheckCircle2 size={15} />
-          ) : (
-            <CircleDashed size={15} />
-          )}
+        <span className={workspaceReady ? "ready" : ""}>
+          {workspaceReady ? <CheckCircle2 size={15} /> : <CircleDashed size={15} />}
           {isPreparingModel
             ? "Workspace starting"
             : !modelConfigured
@@ -107,10 +98,10 @@ export function ReadinessCard({
         </span>
       </div>
       <div className="readiness-actions">
-        {dockerUnavailable ? (
+        {runtimeUnavailable ? (
           <span className="setup-required">
             <AlertCircle size={16} />
-            Install Docker Desktop and restart Sonar
+            Check runtime details
           </span>
         ) : (
           <button className="primary" disabled={isWorking} onClick={onStart} type="button">

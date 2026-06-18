@@ -18,7 +18,7 @@ test("selectSurveyFiles honors known requested files and rejects missing paths",
       { filePath: "missing.c", priority: 100 },
       { filePath: "src/main.c", priority: 90 },
     ],
-    { maxFilesPerIteration: 2, maxFilesTotal: 3, maxFileBytes: 20_000 },
+    { maxFilesPerIteration: 2, maxFilesTotal: 3 },
   );
 
   assert.equal(selection.selected[0].filePath, "src/main.c");
@@ -33,7 +33,6 @@ test("selectSurveyFiles skips already inspected files and falls back to inventor
   const selection = selectSurveyFiles(inventory, graph, [{ filePath: "src/main.c", priority: 100 }], {
     maxFilesPerIteration: 2,
     maxFilesTotal: 3,
-    maxFileBytes: 20_000,
   });
 
   assert.ok(selection.rejected.some((item) => item.filePath === "src/main.c" && /already inspected/.test(item.reason)));
@@ -45,7 +44,6 @@ test("selectSurveyFiles reserves first-pass space for documentation context and 
   const selection = selectSurveyFiles(inventory, emptyMemoryGraph("project-1"), [], {
     maxFilesPerIteration: 4,
     maxFilesTotal: 8,
-    maxFileBytes: 20_000,
   });
   const selectedPaths = selection.selected.map((file) => file.filePath);
 
@@ -66,7 +64,7 @@ test("selectSurveyFiles keeps important large files for bounded excerpting", asy
       inventory,
       emptyMemoryGraph("project-1"),
       [{ filePath: "src/server.go", priority: 100 }],
-      { maxFilesPerIteration: 1, maxFilesTotal: 1, maxFileBytes: 1_000 },
+      { maxFilesPerIteration: 1, maxFilesTotal: 1 },
     );
 
     assert.equal(selection.selected[0]?.filePath, "src/server.go");

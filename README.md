@@ -11,11 +11,11 @@ Sonar is optimized for high-level orientation. For fine-grained debugging, refac
 - Generates source-grounded briefings for an indexed repository.
 - Supports session-aware follow-up questions for orientation, risks, workflows, systems, and source navigation.
 - Builds a deterministic repository inventory, asks the model to inspect selected source files, and stores a source-backed memory graph before writing the initial briefing.
-- Uses exact lookup, grep-like lexical search, BM25, graph expansion, workflow planning, and briefing-specific ranking for follow-up questions and source lookup.
+- Uses exact lookup, grep-like lexical search, graph expansion, workflow planning, and briefing-specific ranking for follow-up questions and source lookup.
 - Returns source lists and citation verification diagnostics with generated answers.
 - Persists projects, sessions, source files, generated memory graphs, and rolling conversation summaries in SQLite.
-- Runs as a Tauri desktop app backed by a local HTTP API.
-- Supports Docker Model Runner defaults or custom OpenAI-compatible cloud/local model endpoints.
+- Runs as a Tauri desktop app backed by a local HTTP API and embedded SQLite project store.
+- Supports local llama.cpp/OpenAI-compatible generation or custom OpenAI-compatible cloud/local model endpoints.
 - Lets users copy or export generated briefings as Markdown.
 
 Sonar is intended to produce strong source-grounded briefing drafts, especially with local models. It is not a replacement for human-reviewed technical, compliance, security, or architecture documentation.
@@ -30,10 +30,9 @@ See [Language Support and Limits](docs/language-support.md) for the current pars
 
 Prerequisites for running from source:
 
-- Docker Desktop
-- Docker Compose 2.38 or newer
 - Node.js 22.x, 23.x, 24.x, or 25.x
 - Git, if you want Sonar to clone GitHub repositories
+- A local OpenAI-compatible model server, or an OpenAI-compatible API endpoint
 
 Install dependencies and run the desktop app:
 
@@ -42,11 +41,11 @@ npm install
 npm run desktop:dev
 ```
 
-On first launch, Sonar starts the local indexing services and asks whether you want to use a local Docker model or an OpenAI-compatible API endpoint. Then paste a GitHub repository URL or select a local repository folder and create a briefing.
+On first launch, Sonar starts its local API and asks whether you want to use a local model endpoint or an OpenAI-compatible API endpoint. The default local endpoint is `http://127.0.0.1:8080/v1`, but you can change it in the setup screen. Then paste a GitHub repository URL or select a local repository folder and create a briefing.
 
 ## Local Privacy Boundary
 
-The Docker-first stack does not mount your home directory. Docker only sees repositories imported into Sonar's private `/workspace/repos` volume. When you select a local folder in the desktop UI, Sonar copies that selected repository into the private volume and indexes the copy.
+Sonar indexes only the GitHub clone or local folder you explicitly select in the desktop UI. Project state, generated briefings, memory graphs, and runtime settings are stored locally under `~/.sonar`.
 
 Desktop model settings are stored locally at:
 
@@ -56,6 +55,8 @@ Desktop model settings are stored locally at:
 
 Do not commit this file. It may contain API keys.
 
+If you use API endpoint mode, source excerpts needed for generation are sent to the configured model provider. If you use a local model endpoint, repository analysis stays on your machine.
+
 ## Documentation
 
 Detailed documentation lives in [docs/](docs/README.md).
@@ -63,5 +64,7 @@ Detailed documentation lives in [docs/](docs/README.md).
 - [Getting Started](docs/getting-started.md)
 - [Desktop App](docs/desktop.md)
 - [Language Support and Limits](docs/language-support.md)
+
+For a local macOS release build, run `npm run release:mac`. Public macOS distribution still requires Apple Developer ID signing and notarization.
 
 Release notes live in [CHANGELOG.md](CHANGELOG.md).

@@ -1,5 +1,5 @@
 import { Cloud, Loader2, Save, Server } from "lucide-react";
-import { dockerModelRunnerConfig, openAiCompatibleConfig } from "../app/constants";
+import { localLlamaConfig, openAiCompatibleConfig } from "../app/constants";
 import type { ActiveTask } from "../app/types";
 import type { DesktopModelConfig } from "../types";
 
@@ -12,9 +12,9 @@ interface ModelSetupDialogProps {
 
 export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange, onSave }: ModelSetupDialogProps) {
   const updateModelConfig = (patch: Partial<DesktopModelConfig>) => onModelConfigChange({ ...modelConfig, ...patch });
-  const useDockerLocal = () =>
+  const useLocalModel = () =>
     onModelConfigChange({
-      ...dockerModelRunnerConfig,
+      ...localLlamaConfig,
       apiToken: modelConfig.apiToken,
       modelSetupComplete: modelConfig.modelSetupComplete,
     });
@@ -33,21 +33,21 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
           <p className="eyebrow">First run</p>
           <h2>Choose your model source</h2>
           <p>
-            Sonar will start the right Docker stack after this choice. Local mode prepares the app services and
-            generation model together; API mode starts only the app services and validates your configured endpoint.
+            Sonar uses its embedded project store and an OpenAI-compatible generation endpoint. Choose local mode for a
+            llama.cpp server on this machine, or API mode for a cloud or self-hosted endpoint.
           </p>
         </div>
 
         <div className="model-mode-grid">
           <button
             className={modelConfig.modelMode === "local" ? "model-mode active" : "model-mode"}
-            onClick={useDockerLocal}
+            onClick={useLocalModel}
             type="button"
           >
             <Server size={18} />
             <span>
-              <strong>Local Docker model</strong>
-              <small>Pull app images and the local generation model in one startup.</small>
+              <strong>Local llama.cpp</strong>
+              <small>Use a local OpenAI-compatible server on this machine.</small>
             </span>
           </button>
           <button
@@ -58,28 +58,26 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
             <Cloud size={18} />
             <span>
               <strong>API endpoint</strong>
-              <small>Start only Sonar's local services and use an OpenAI-compatible generation API.</small>
+              <small>Use an OpenAI-compatible cloud or self-hosted generation API.</small>
             </span>
           </button>
         </div>
 
         <div className="settings-grid">
-          {modelConfig.modelMode === "api" && (
-            <label className="field">
-              <span>Generation endpoint</span>
-              <input
-                value={modelConfig.chatBaseUrl}
-                onChange={(event) => updateModelConfig({ chatBaseUrl: event.target.value })}
-                placeholder="https://api.openai.com/v1"
-              />
-            </label>
-          )}
+          <label className="field">
+            <span>Generation endpoint</span>
+            <input
+              value={modelConfig.chatBaseUrl}
+              onChange={(event) => updateModelConfig({ chatBaseUrl: event.target.value })}
+              placeholder={modelConfig.modelMode === "local" ? "http://127.0.0.1:8080/v1" : "https://api.openai.com/v1"}
+            />
+          </label>
           <label className="field">
             <span>Generation model</span>
             <input
               value={modelConfig.chatModel}
               onChange={(event) => updateModelConfig({ chatModel: event.target.value })}
-              placeholder={modelConfig.modelMode === "local" ? dockerModelRunnerConfig.chatModel : "gpt-4.1-mini"}
+              placeholder={modelConfig.modelMode === "local" ? localLlamaConfig.chatModel : "gpt-4.1-mini"}
             />
           </label>
           {modelConfig.modelMode === "api" && (
@@ -96,7 +94,7 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
         </div>
 
         <div className="setup-actions">
-          <p>First startup can take a few minutes. Future launches reuse the saved choice and start automatically.</p>
+          <p>Future launches reuse this saved choice and start the Sonar runtime automatically.</p>
           <button className="primary" disabled={isSaving} onClick={onSave} type="button">
             {isSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
             Save and start

@@ -12,6 +12,10 @@ test("toErrorResponse preserves explicit HTTP errors", () => {
 test("toErrorResponse exposes model provider failures as bad gateway", () => {
   assert.deepEqual(toErrorResponse(new Error("LLM generation failed: Unsupported parameter: max_tokens")), {
     status: 502,
-    message: "LLM generation failed: Unsupported parameter: max_tokens",
+    message: "Model provider request failed",
+  });
+  assert.deepEqual(toErrorResponse(new Error("LLM generation failed")), {
+    status: 502,
+    message: "Model provider request failed",
   });
 });

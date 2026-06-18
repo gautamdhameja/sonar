@@ -27,10 +27,6 @@ pub struct DesktopModelConfig {
     pub chat_base_url: String,
     pub chat_model: String,
     pub chat_api_key: String,
-    pub embedding_base_url: String,
-    pub embedding_model: String,
-    pub embedding_api_key: String,
-    pub embedding_vector_size: u32,
     pub api_token: String,
 }
 
@@ -49,5 +45,4 @@ pub struct ClonedRepository {
 pub struct PreparedRepository {
     pub local_path: String,
     pub indexed_path: String,
-    pub copied_to_docker: bool,
 }

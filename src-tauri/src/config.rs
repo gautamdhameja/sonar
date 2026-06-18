@@ -1,16 +1,10 @@
 use std::{collections::HashMap, env, fs, io::Write, net::TcpStream, path::PathBuf};
 
-use crate::{
-    models::DesktopModelConfig,
-    paths::{repo_root, sonar_home},
-};
+use crate::{models::DesktopModelConfig, paths::sonar_home};
 use serde::Deserialize;
 
-pub(crate) const DEFAULT_CHAT_BASE_URL: &str = "http://localhost:12434/engines/llama.cpp/v1";
-pub(crate) const DEFAULT_EMBEDDING_BASE_URL: &str = "http://localhost:12434/engines/v1";
-const DEFAULT_CHAT_MODEL: &str = "hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL";
-const DEFAULT_EMBEDDING_MODEL: &str = "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
-const DEFAULT_EMBEDDING_VECTOR_SIZE: u32 = 768;
+pub(crate) const DEFAULT_CHAT_BASE_URL: &str = "http://127.0.0.1:8080/v1";
+const DEFAULT_CHAT_MODEL: &str = "local-model";
 const DEFAULT_MODEL_MODE: &str = "local";
 const LEGACY_CHAT_MODEL: &str = "Qwen/Qwen3.5-9B";
 
@@ -22,10 +16,6 @@ struct StoredDesktopModelConfig {
     chat_base_url: Option<String>,
     chat_model: Option<String>,
     chat_api_key: Option<String>,
-    embedding_base_url: Option<String>,
-    embedding_model: Option<String>,
-    embedding_api_key: Option<String>,
-    embedding_vector_size: Option<u32>,
     api_token: Option<String>,
 }
 
@@ -43,17 +33,6 @@ pub fn default_desktop_model_config() -> DesktopModelConfig {
         chat_base_url: detect_chat_base_url(),
         chat_model: env::var("SONAR_CHAT_MODEL").unwrap_or_else(|_| DEFAULT_CHAT_MODEL.to_string()),
         chat_api_key: env::var("SONAR_CHAT_API_KEY").unwrap_or_else(|_| "not-needed".to_string()),
-        embedding_base_url: env::var("SONAR_EMBEDDING_BASE_URL")
-            .unwrap_or_else(|_| DEFAULT_EMBEDDING_BASE_URL.to_string()),
-        embedding_model: env::var("SONAR_EMBEDDING_MODEL")
-            .unwrap_or_else(|_| DEFAULT_EMBEDDING_MODEL.to_string()),
-        embedding_api_key: env::var("SONAR_EMBEDDING_API_KEY")
-            .unwrap_or_else(|_| "not-needed".to_string()),
-        embedding_vector_size: env::var("SONAR_QDRANT_VECTOR_SIZE")
-            .ok()
-            .and_then(|value| value.parse::<u32>().ok())
-            .filter(|value| *value > 0)
-            .unwrap_or(DEFAULT_EMBEDDING_VECTOR_SIZE),
         api_token: runtime_api_token().unwrap_or_else(|_| generate_api_token()),
     }
 }
@@ -87,18 +66,6 @@ pub fn desktop_model_config() -> DesktopModelConfig {
         chat_api_key: stored
             .chat_api_key
             .unwrap_or_else(|| fallback.chat_api_key.clone()),
-        embedding_base_url: stored
-            .embedding_base_url
-            .unwrap_or_else(|| fallback.embedding_base_url.clone()),
-        embedding_model: stored
-            .embedding_model
-            .unwrap_or_else(|| fallback.embedding_model.clone()),
-        embedding_api_key: stored
-            .embedding_api_key
-            .unwrap_or_else(|| fallback.embedding_api_key.clone()),
-        embedding_vector_size: stored
-            .embedding_vector_size
-            .unwrap_or(fallback.embedding_vector_size),
         api_token: stored
             .api_token
             .unwrap_or_else(|| fallback.api_token.clone()),
@@ -109,12 +76,6 @@ pub fn desktop_model_config() -> DesktopModelConfig {
         stored.chat_api_key = fallback.chat_api_key;
         stored.model_setup_complete = fallback.model_setup_complete;
         stored.model_mode = fallback.model_mode;
-        stored.embedding_base_url = fallback.embedding_base_url;
-        stored.embedding_api_key = fallback.embedding_api_key;
-        stored.embedding_vector_size = fallback.embedding_vector_size;
-        if stored.embedding_model == "nomic-embed-text" {
-            stored.embedding_model = fallback.embedding_model;
-        }
     }
     if stored.api_token.trim().is_empty()
         || runtime_api_token()
@@ -151,10 +112,6 @@ pub fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), Stri
         chat_base_url: normalize_url(&config.chat_base_url),
         chat_model: config.chat_model.trim().to_string(),
         chat_api_key: normalize_api_key(&config.chat_api_key),
-        embedding_base_url: normalize_url(&config.embedding_base_url),
-        embedding_model: config.embedding_model.trim().to_string(),
-        embedding_api_key: normalize_api_key(&config.embedding_api_key),
-        embedding_vector_size: config.embedding_vector_size,
         api_token: runtime_api_token()?,
     };
     write_desktop_model_config(&path, &normalized)
@@ -224,31 +181,18 @@ pub fn ensure_runtime_env() -> Result<RuntimeEnv, String> {
         .filter(|value| !value.trim().is_empty())
         .or_else(|| values.get("SONAR_API_TOKEN").cloned())
         .unwrap_or_else(generate_api_token);
-    let meili_key = env::var("SONAR_MEILI_MASTER_KEY")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .or_else(|| values.get("SONAR_MEILI_MASTER_KEY").cloned())
-        .unwrap_or_else(|| api_token.clone());
-
     values.insert("SONAR_API_TOKEN".to_string(), api_token.clone());
-    values.insert("SONAR_MEILI_MASTER_KEY".to_string(), meili_key.clone());
-    values.insert("SONAR_MEILI_API_KEY".to_string(), meili_key.clone());
-    values.insert("MEILI_MASTER_KEY".to_string(), meili_key.clone());
 
     write_runtime_env(&path, &values)?;
-    Ok(RuntimeEnv {
-        api_token,
-        meili_master_key: meili_key,
-    })
+    Ok(RuntimeEnv { api_token })
 }
 
 pub struct RuntimeEnv {
     pub api_token: String,
-    pub meili_master_key: String,
 }
 
 fn runtime_env_path() -> Result<PathBuf, String> {
-    Ok(repo_root()?.join(".sonar").join("runtime.env"))
+    Ok(sonar_home()?.join("runtime.env"))
 }
 
 fn read_env_file(path: &PathBuf) -> Result<HashMap<String, String>, String> {
@@ -290,12 +234,6 @@ fn write_runtime_env(path: &PathBuf, values: &HashMap<String, String>) -> Result
     let mut lines = vec![
         "# Generated by Sonar. Do not commit.".to_string(),
         format!("SONAR_API_TOKEN={}", values["SONAR_API_TOKEN"]),
-        format!(
-            "SONAR_MEILI_MASTER_KEY={}",
-            values["SONAR_MEILI_MASTER_KEY"]
-        ),
-        format!("SONAR_MEILI_API_KEY={}", values["SONAR_MEILI_API_KEY"]),
-        format!("MEILI_MASTER_KEY={}", values["MEILI_MASTER_KEY"]),
     ];
     lines.push(String::new());
     file.write_all(lines.join("\n").as_bytes())
@@ -337,7 +275,7 @@ fn desktop_config_path() -> Result<PathBuf, String> {
 }
 
 fn detect_chat_base_url() -> String {
-    for (port, url) in [(12434, DEFAULT_CHAT_BASE_URL)] {
+    for (port, url) in [(8080, DEFAULT_CHAT_BASE_URL)] {
         if TcpStream::connect(("127.0.0.1", port))
             .map(|stream| stream.set_nonblocking(true).is_ok())
             .unwrap_or(false)

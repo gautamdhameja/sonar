@@ -63,21 +63,6 @@ function initSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_deps_source ON dependency_edges(project_id, source_file);
     CREATE INDEX IF NOT EXISTS idx_deps_target ON dependency_edges(project_id, target_file);
 
-    CREATE TABLE IF NOT EXISTS embedding_cache (
-      cache_key TEXT PRIMARY KEY,
-      provider TEXT NOT NULL,
-      base_url TEXT NOT NULL,
-      model TEXT NOT NULL,
-      vector_size INTEGER NOT NULL,
-      content_hash TEXT NOT NULL,
-      embedding_json TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      last_used_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_embedding_cache_model ON embedding_cache(provider, model, vector_size);
-    CREATE INDEX IF NOT EXISTS idx_embedding_cache_hash ON embedding_cache(content_hash);
-
     CREATE TABLE IF NOT EXISTS onboarding_sessions (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

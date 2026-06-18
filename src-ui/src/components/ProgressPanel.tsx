@@ -9,6 +9,7 @@ interface ProgressPanelProps {
 
 export function ProgressPanel({ activeTask, onStop, stopDisabled }: ProgressPanelProps) {
   const progress = activeTask.progress ?? (activeTask.kind === "brief" ? 82 : activeTask.kind === "followup" ? 55 : 25);
+  const canStop = activeTask.canStop ?? activeTask.kind === "brief";
   const steps =
     activeTask.kind === "brief"
       ? [
@@ -79,8 +80,8 @@ export function ProgressPanel({ activeTask, onStop, stopDisabled }: ProgressPane
           </div>
         ))}
       </div>
-      {(activeTask.kind === "analyze" || activeTask.kind === "brief") && (
-        <button className="quiet-danger" disabled={stopDisabled} onClick={onStop} type="button">
+      {(activeTask.kind === "analyze" || activeTask.kind === "brief") && canStop && (
+        <button className="quiet-danger" disabled={stopDisabled || !canStop} onClick={onStop} type="button">
           <StopCircle size={16} />
           {activeTask.kind === "brief" ? "Cancel generation" : "Stop analysis"}
         </button>

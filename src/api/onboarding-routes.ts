@@ -4,6 +4,7 @@ import type { OnboardingFollowupHistoryItem } from "../generator/onboarding-foll
 import { generateOnboardingBrief } from "../generator/onboarding";
 import { parsePersona } from "../persona/schema";
 import type { OnboardingSession } from "../db/project-repo";
+import { isOperationAborted, throwIfAborted } from "../utils/abort";
 import { ApiState } from "./api-state";
 import { toErrorResponse } from "./errors";
 import { parseOnboardingRequest } from "./onboarding-request";
@@ -80,10 +81,26 @@ function parseFollowupHistory(value: unknown): OnboardingFollowupHistoryItem[] {
   return history;
 }
 
+function requestAbortController(req: Request, res: Response): AbortController {
+  const controller = new AbortController();
+  req.on("aborted", () => controller.abort());
+  res.on("close", () => {
+    if (!res.writableEnded) controller.abort();
+  });
+  return controller;
+}
+
+function sendAbortResponse(res: Response, message: string): void {
+  if (!res.headersSent && !res.writableEnded) {
+    res.status(499).json({ error: message });
+  }
+}
+
 export function registerOnboardingRoutes(app: Express, state: ApiState): void {
   const { repo } = state;
 
   app.post("/projects/:id/onboarding", async (req: Request, res: Response) => {
+    const controller = requestAbortController(req, res);
     try {
       const project = repo.getProject(req.params.id);
       if (!project) {
@@ -112,16 +129,23 @@ export function registerOnboardingRoutes(app: Express, state: ApiState): void {
         focus: onboardingRequest.focus,
         persona,
         repoRoot: project.repoPath,
+        signal: controller.signal,
       });
+      throwIfAborted(controller.signal);
       if (result.memoryGraph) repo.saveMemoryGraph(project.id, result.memoryGraph);
       res.json(result);
     } catch (err) {
+      if (isOperationAborted(err)) {
+        sendAbortResponse(res, "Briefing generation cancelled");
+        return;
+      }
       const { status, message } = toErrorResponse(err);
       res.status(status).json({ error: message });
     }
   });
 
   app.post("/projects/:id/onboarding/sessions", async (req: Request, res: Response) => {
+    const controller = requestAbortController(req, res);
     try {
       const project = repo.getProject(req.params.id);
       if (!project) {
@@ -150,8 +174,11 @@ export function registerOnboardingRoutes(app: Express, state: ApiState): void {
         focus: onboardingRequest.focus,
         persona,
         repoRoot: project.repoPath,
+        signal: controller.signal,
       });
+      throwIfAborted(controller.signal);
       if (briefResult.memoryGraph) repo.saveMemoryGraph(project.id, briefResult.memoryGraph);
+      throwIfAborted(controller.signal);
       const session = repo.createOnboardingSession({
         projectId: project.id,
         repoName: project.name,
@@ -177,6 +204,10 @@ export function registerOnboardingRoutes(app: Express, state: ApiState): void {
         },
       });
     } catch (err) {
+      if (isOperationAborted(err)) {
+        sendAbortResponse(res, "Briefing generation cancelled");
+        return;
+      }
       const { status, message } = toErrorResponse(err);
       res.status(status).json({ error: message });
     }
@@ -215,6 +246,7 @@ export function registerOnboardingRoutes(app: Express, state: ApiState): void {
   });
 
   app.post("/projects/:id/onboarding/sessions/:sessionId/messages", async (req: Request, res: Response) => {
+    const controller = requestAbortController(req, res);
     try {
       const project = repo.getProject(req.params.id);
       if (!project) {
@@ -248,10 +280,15 @@ export function registerOnboardingRoutes(app: Express, state: ApiState): void {
         history,
         store,
         repo,
+        signal: controller.signal,
       });
 
       res.json(result);
     } catch (err) {
+      if (isOperationAborted(err)) {
+        sendAbortResponse(res, "Follow-up generation cancelled");
+        return;
+      }
       const { status, message } = toErrorResponse(err);
       res.status(status).json({ error: message });
     }

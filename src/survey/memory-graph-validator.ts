@@ -197,6 +197,8 @@ export function validateMemoryGraph(value: unknown): MemoryGraphValidationResult
   const edges = rawEdges
     .map((edge, index) => parseEdge(edge, index, knownNodeIds, errors))
     .filter((edge): edge is MemoryGraphEdge => edge !== null);
+  const knownEdgeIds = new Set(edges.map((edge) => edge.id));
+  if (knownEdgeIds.size !== edges.length) errors.push("edge ids must be unique");
 
   const inspectedFiles = stringArrayField(value, "inspectedFiles") ?? [];
   const warnings = stringArrayField(value, "warnings") ?? [];

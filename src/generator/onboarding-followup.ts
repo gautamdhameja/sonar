@@ -165,6 +165,7 @@ export async function answerOnboardingFollowup(input: {
   history?: OnboardingFollowupHistoryItem[];
   store: CodeUnitStore;
   repo: ProjectRepo;
+  signal?: AbortSignal;
 }): Promise<OnboardingFollowupResult> {
   const memoryGraph = input.repo.getMemoryGraph(input.session.projectId);
   const memoryGraphText = memoryGraph ? formatMemoryGraphForPrompt(memoryGraph, 18) : undefined;
@@ -191,6 +192,7 @@ export async function answerOnboardingFollowup(input: {
     system,
     user,
     "The previous answer was too long. Return exactly three bullets under 100 words.",
+    { signal: input.signal },
   );
   let answer = completion.content;
   let generationTruncated = completion.truncated;
@@ -200,7 +202,7 @@ export async function answerOnboardingFollowup(input: {
   if (citationVerification.invalidCitations.length > 0) {
     const repairPrompt = buildFollowupCitationRepairPrompt(answer, retrieval.contextUnits, citationVerification);
     const repairStart = Date.now();
-    const repaired = await generateResponse(repairPrompt.system, repairPrompt.user);
+    const repaired = await generateResponse(repairPrompt.system, repairPrompt.user, { signal: input.signal });
     const repairedVerification = verifyCitations(repaired, retrieval.contextUnits);
     generationTime += Date.now() - repairStart;
 

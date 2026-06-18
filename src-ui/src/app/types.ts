@@ -7,4 +7,5 @@ export interface ActiveTask {
   label: string;
   progress?: number;
   detail?: string;
+  canStop?: boolean;
 }

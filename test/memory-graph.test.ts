@@ -69,6 +69,16 @@ test("validateMemoryGraph rejects edges that point at missing nodes", () => {
   assert.ok(result.errors.some((error) => error.includes("to must reference a known node")));
 });
 
+test("validateMemoryGraph rejects duplicate edge ids", () => {
+  const result = validateMemoryGraph({
+    ...validGraph,
+    edges: [validGraph.edges[0], { ...validGraph.edges[0] }],
+  });
+
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => error.includes("edge ids must be unique")));
+});
+
 test("compactMemoryGraph keeps a valid source-backed graph under local-model limits", () => {
   const graph: MemoryGraph = {
     ...validGraph,

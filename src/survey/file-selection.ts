@@ -32,7 +32,7 @@ export function selectSurveyFiles(
   inventory: RepositoryInventory,
   graph: MemoryGraph,
   requests: SurveyPlanFileRequest[],
-  budget: Pick<SurveyBudget, "maxFilesPerIteration" | "maxFilesTotal" | "maxFileBytes">,
+  budget: Pick<SurveyBudget, "maxFilesPerIteration" | "maxFilesTotal">,
 ): SurveyFileSelection {
   const byPath = knownInventoryFiles(inventory);
   const inspected = new Set(graph.inspectedFiles);

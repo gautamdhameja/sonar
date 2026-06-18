@@ -23,7 +23,7 @@ export function isApiRequestAuthorized(
   if (origin && !allowedOrigins.includes(origin)) {
     return { authorized: false, status: 403, error: "Origin is not allowed" };
   }
-  if (configuredToken && !tokensMatch(requestToken, configuredToken)) {
+  if (!configuredToken || !tokensMatch(requestToken, configuredToken)) {
     return { authorized: false, status: 401, error: "Missing or invalid X-Sonar-Token" };
   }
   return { authorized: true };
@@ -91,12 +91,8 @@ export async function startServer(port: number): Promise<RunningServer> {
 }
 
 function assertSafeApiBinding(): void {
-  if (CONFIG.security.apiToken || isLoopbackHost(CONFIG.api.host)) return;
-  throw new Error("SONAR_API_TOKEN is required when SONAR_API_HOST is not a loopback address.");
-}
-
-function isLoopbackHost(host: string): boolean {
-  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  if (CONFIG.security.apiToken) return;
+  throw new Error("SONAR_API_TOKEN is required to start the Sonar API.");
 }
 
 function configureMiddleware(app: express.Express): void {
@@ -148,6 +144,10 @@ function preflight(req: Request, res: Response): void {
 }
 
 function assertApiAccess(req: Request, res: Response, next: NextFunction): void {
+  if (req.method === "GET" && req.path === "/health") {
+    next();
+    return;
+  }
   const decision = isApiRequestAuthorized(
     req.method,
     req.headers.origin,

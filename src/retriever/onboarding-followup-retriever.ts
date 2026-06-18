@@ -5,7 +5,7 @@ import { CONFIG } from "../config";
 import { ProjectRepo } from "../db/project-repo";
 import { CodeUnitStore } from "./unit-store";
 import { graphEnhancedRetrieval } from "./graph-retriever";
-import { RetrievedUnit, safeHybridSearch } from "./hybrid-retriever";
+import { RetrievedUnit } from "./hybrid-retriever";
 import { localExactSearch, localGrepSearch, localLexicalSearch, localOnboardingSearch } from "./local-retriever";
 import { rerankRetrievedResults, RetrievalDiagnostic } from "./reranker";
 import { planQuery, QueryPlan } from "./query-router";
@@ -237,7 +237,7 @@ export async function retrieveOnboardingFollowup(
   }
 
   if (queryPlan.useVector && input.useVector !== false) {
-    retrievedSets.push(await safeHybridSearch(retrievalQuery, input.projectId));
+    retrievedSets.push(localOnboardingSearch(retrievalQuery, input.store, topK));
   }
 
   let retrieved = mergeRetrievedResults(retrievedSets.flat(), topK * 2);

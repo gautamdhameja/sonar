@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { apiBaseUrl } from "../api";
 import type { ClonedRepository, DesktopModelConfig, PreparedRepository, ServiceSnapshot } from "../types";
-import { dockerModelRunnerConfig } from "./constants";
+import { localLlamaConfig } from "./constants";
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && window.__TAURI_INTERNALS__ !== undefined;
@@ -73,7 +73,7 @@ export async function cloneGithubRepository(repository: string): Promise<ClonedR
 
 export async function prepareRepositoryForIndexing(repoPath: string, projectName: string): Promise<PreparedRepository> {
   if (!isTauriRuntime()) {
-    return { localPath: repoPath, indexedPath: repoPath, copiedToDocker: false };
+    return { localPath: repoPath, indexedPath: repoPath };
   }
   return invoke<PreparedRepository>("prepare_repository_for_indexing", { repoPath, projectName });
 }
@@ -81,11 +81,11 @@ export async function prepareRepositoryForIndexing(repoPath: string, projectName
 export async function loadModelConfig(): Promise<DesktopModelConfig> {
   if (!isTauriRuntime()) {
     const stored = window.localStorage.getItem("sonar.modelConfig");
-    if (!stored) return dockerModelRunnerConfig;
+    if (!stored) return localLlamaConfig;
     try {
-      return { ...dockerModelRunnerConfig, ...(JSON.parse(stored) as Partial<DesktopModelConfig>) };
+      return { ...localLlamaConfig, ...(JSON.parse(stored) as Partial<DesktopModelConfig>) };
     } catch {
-      return dockerModelRunnerConfig;
+      return localLlamaConfig;
     }
   }
   return invoke<DesktopModelConfig>("get_model_config");

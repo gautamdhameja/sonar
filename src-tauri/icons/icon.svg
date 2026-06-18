@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sonar app icon">
   <defs>
     <linearGradient id="field" x1="96" y1="42" x2="416" y2="470" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2f7dff"/>
-      <stop offset=".58" stop-color="#0c55d8"/>
-      <stop offset="1" stop-color="#07337f"/>
+      <stop offset="0" stop-color="#dda088"/>
+      <stop offset=".58" stop-color="#cc7d5e"/>
+      <stop offset="1" stop-color="#a85d40"/>
     </linearGradient>
     <linearGradient id="glint" x1="136" y1="72" x2="324" y2="314" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#ffffff" stop-opacity=".36"/>
@@ -13,13 +13,13 @@
   <g transform="translate(46.08 46.08) scale(0.82)">
     <rect x="32" y="32" width="448" height="448" rx="102" fill="url(#field)"/>
     <path d="M112 94c68-36 184-33 258 8 33 18 59 43 75 73V138c0-39-32-71-71-71H138c-39 0-71 32-71 71v50c10-39 24-70 45-94Z" fill="url(#glint)"/>
-    <circle cx="256" cy="256" r="34" fill="#ffffff"/>
-    <circle cx="256" cy="256" r="12" fill="#0b56d9"/>
-    <path d="M187 210a92 92 0 0 1 138 0" fill="none" stroke="#ffffff" stroke-width="27" stroke-linecap="round"/>
-    <path d="M325 302a92 92 0 0 1-138 0" fill="none" stroke="#ffffff" stroke-width="27" stroke-linecap="round"/>
-    <path d="M146 169a150 150 0 0 1 220 0" fill="none" stroke="#cfe2ff" stroke-width="25" stroke-linecap="round"/>
-    <path d="M366 343a150 150 0 0 1-220 0" fill="none" stroke="#cfe2ff" stroke-width="25" stroke-linecap="round"/>
-    <path d="M111 130a203 203 0 0 1 290 0" fill="none" stroke="#9cc4ff" stroke-width="22" stroke-linecap="round"/>
-    <path d="M401 382a203 203 0 0 1-290 0" fill="none" stroke="#9cc4ff" stroke-width="22" stroke-linecap="round"/>
+    <circle cx="256" cy="256" r="34" fill="#fffdf8"/>
+    <circle cx="256" cy="256" r="12" fill="#a85d40"/>
+    <path d="M187 210a92 92 0 0 1 138 0" fill="none" stroke="#fffdf8" stroke-width="27" stroke-linecap="round"/>
+    <path d="M325 302a92 92 0 0 1-138 0" fill="none" stroke="#fffdf8" stroke-width="27" stroke-linecap="round"/>
+    <path d="M146 169a150 150 0 0 1 220 0" fill="none" stroke="#f6d8be" stroke-width="25" stroke-linecap="round"/>
+    <path d="M366 343a150 150 0 0 1-220 0" fill="none" stroke="#f6d8be" stroke-width="25" stroke-linecap="round"/>
+    <path d="M111 130a203 203 0 0 1 290 0" fill="none" stroke="#efd0b8" stroke-width="22" stroke-linecap="round"/>
+    <path d="M401 382a203 203 0 0 1-290 0" fill="none" stroke="#efd0b8" stroke-width="22" stroke-linecap="round"/>
   </g>
 </svg>

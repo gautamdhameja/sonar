@@ -1,14 +1,9 @@
-use std::{
-    collections::hash_map::DefaultHasher,
-    fs,
-    hash::{Hash, Hasher},
-    path::Path,
-};
+use std::fs;
 
 use crate::{
     models::{ClonedRepository, PreparedRepository},
     paths::repository_cache_dir,
-    process::{command_exists, docker_api_container_running, run_docker, run_git},
+    process::{command_exists, run_git},
 };
 
 #[tauri::command]
@@ -60,7 +55,7 @@ pub fn clone_github_repository(repository: String) -> Result<ClonedRepository, S
 #[tauri::command]
 pub fn prepare_repository_for_indexing(
     repo_path: String,
-    project_name: String,
+    _project_name: String,
 ) -> Result<PreparedRepository, String> {
     let source = fs::canonicalize(&repo_path)
         .map_err(|err| format!("Unable to access selected repository: {err}"))?;
@@ -68,42 +63,9 @@ pub fn prepare_repository_for_indexing(
         return Err("Selected repository path is not a directory.".to_string());
     }
 
-    if !docker_api_container_running() {
-        return Ok(PreparedRepository {
-            local_path: source.display().to_string(),
-            indexed_path: source.display().to_string(),
-            copied_to_docker: false,
-        });
-    }
-
-    let repo_name = safe_repository_volume_name(&source, &project_name);
-    let target = format!("/workspace/repos/{repo_name}");
-    run_docker(&[
-        "exec".to_string(),
-        "sonar-api-1".to_string(),
-        "rm".to_string(),
-        "-rf".to_string(),
-        target.clone(),
-    ])?;
-    run_docker(&[
-        "exec".to_string(),
-        "sonar-api-1".to_string(),
-        "mkdir".to_string(),
-        "-p".to_string(),
-        target.clone(),
-    ])?;
-
-    let source_contents = source.join(".");
-    run_docker(&[
-        "cp".to_string(),
-        source_contents.display().to_string(),
-        format!("sonar-api-1:{target}"),
-    ])?;
-
     Ok(PreparedRepository {
         local_path: source.display().to_string(),
-        indexed_path: target,
-        copied_to_docker: true,
+        indexed_path: source.display().to_string(),
     })
 }
 
@@ -154,36 +116,4 @@ fn is_safe_repo_part(value: &str) -> bool {
         && value
             .chars()
             .all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-')
-}
-
-fn safe_repository_volume_name(repo_path: &Path, project_name: &str) -> String {
-    let raw = if project_name.trim().is_empty() {
-        repo_path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("repository")
-            .to_string()
-    } else {
-        project_name.trim().to_string()
-    };
-
-    let sanitized: String = raw
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-' {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect();
-    let trimmed = sanitized.trim_matches('-');
-    let base = if trimmed.is_empty() {
-        "repository".to_string()
-    } else {
-        trimmed.chars().take(64).collect()
-    };
-    let mut hasher = DefaultHasher::new();
-    repo_path.display().to_string().hash(&mut hasher);
-    format!("{base}-{:08x}", hasher.finish() as u32)
 }

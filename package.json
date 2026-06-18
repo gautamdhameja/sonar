@@ -17,7 +17,8 @@
     "package-lock.json"
   ],
   "scripts": {
-    "build": "tsc",
+    "clean:build": "node scripts/clean-build-output.mjs",
+    "build": "npm run clean:build && tsc",
     "build:ui": "vite build",
     "dev:ui": "vite --host 127.0.0.1",
     "format": "biome format --write . && cargo fmt --manifest-path src-tauri/Cargo.toml",
@@ -30,21 +31,18 @@
     "test:integration": "node scripts/run-integration-tests.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run typecheck:ui && npm run test:dev",
     "eval:retrieval": "ts-node src/eval/retrieval-cli.ts",
-    "services:env": "node scripts/ensure-runtime-env.mjs",
-    "services:wait": "node scripts/wait-for-services.mjs",
-    "services:start": "npm run services:env && docker compose -f compose.yml -f compose.models.yml up -d --build && npm run services:wait",
-    "services:stop": "docker compose down --remove-orphans",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "desktop:dev": "tauri dev",
     "desktop:build": "npm run build && npm run build:ui && tauri build --bundles app",
-    "desktop:bundle": "npm run build && npm run build:ui && tauri build"
+    "desktop:bundle": "npm run build && npm run build:ui && tauri build",
+    "release:mac": "npm run desktop:build && npm run release:mac:sign && npm run release:mac:verify",
+    "release:mac:sign": "node scripts/sign-macos-app.mjs",
+    "release:mac:verify": "node scripts/verify-macos-app.mjs"
   },
   "dependencies": {
-    "@qdrant/js-client-rest": "^1.17.0",
     "better-sqlite3": "^12.8.0",
     "express": "^4.22.1",
-    "meilisearch": "^0.41.0",
     "openai": "^6.32.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
@@ -78,6 +76,6 @@
     "react-dom": "^19.2.6",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "vite": "^8.0.14"
+    "vite": "^8.0.16"
   }
 }

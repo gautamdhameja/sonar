@@ -1,8 +1,7 @@
 import path from "path";
 
-export const DEFAULT_CHAT_BASE_URL = "http://localhost:12434/engines/llama.cpp/v1";
-export const DEFAULT_CHAT_MODEL = "hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL";
-export const DEFAULT_EMBEDDING_MODEL = "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M";
+export const DEFAULT_CHAT_BASE_URL = "http://127.0.0.1:8080/v1";
+export const DEFAULT_CHAT_MODEL = "local-model";
 
 export interface SonarConfig {
   api: {
@@ -13,27 +12,6 @@ export interface SonarConfig {
     baseUrl: string;
     model: string;
     apiKey: string;
-  };
-  embedding: {
-    provider: "openai";
-    baseUrl: string;
-    model: string;
-    apiKey: string;
-    maxInputTokens: number;
-    concurrency: number;
-    maxRetries: number;
-    fallbackOnFailure: boolean;
-    maxFallbackRatio: number;
-  };
-  meilisearch: {
-    host: string;
-    apiKey: string;
-  };
-  qdrant: {
-    enabled: boolean;
-    host: string;
-    port: number;
-    vectorSize: number;
   };
   parser: {
     supportedLanguages: readonly string[];
@@ -153,13 +131,6 @@ export function loadConfig(env: Env = process.env): SonarConfig {
   const dbPath = path.resolve(getString(env, "SONAR_DB_PATH", path.join(dataDir, "projects.db")));
   const chatBaseUrl = getUrl(env, "SONAR_CHAT_BASE_URL", DEFAULT_CHAT_BASE_URL);
   const chatModel = getString(env, "SONAR_CHAT_MODEL", DEFAULT_CHAT_MODEL);
-  const embeddingProvider = getString(env, "SONAR_EMBEDDING_PROVIDER", "openai");
-  if (embeddingProvider !== "openai") {
-    throw new Error(`SONAR_EMBEDDING_PROVIDER must be "openai"; received "${embeddingProvider}"`);
-  }
-  const embeddingBaseUrl = getUrl(env, "SONAR_EMBEDDING_BASE_URL", chatBaseUrl);
-  const embeddingModel = getString(env, "SONAR_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL);
-
   return {
     api: {
       host: getString(env, "SONAR_API_HOST", "127.0.0.1"),
@@ -180,27 +151,6 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       baseUrl: chatBaseUrl,
       model: chatModel,
       apiKey: getString(env, "SONAR_CHAT_API_KEY", "not-needed"),
-    },
-    embedding: {
-      provider: embeddingProvider,
-      baseUrl: embeddingBaseUrl,
-      model: embeddingModel,
-      apiKey: getString(env, "SONAR_EMBEDDING_API_KEY", "not-needed"),
-      maxInputTokens: getInteger(env, "SONAR_EMBEDDING_MAX_INPUT_TOKENS", 384),
-      concurrency: getInteger(env, "SONAR_EMBEDDING_CONCURRENCY", 2),
-      maxRetries: getInteger(env, "SONAR_EMBEDDING_MAX_RETRIES", 2),
-      fallbackOnFailure: getBoolean(env, "SONAR_EMBEDDING_FALLBACK_ON_FAILURE", true),
-      maxFallbackRatio: getNumber(env, "SONAR_EMBEDDING_MAX_FALLBACK_RATIO", 0.1),
-    },
-    meilisearch: {
-      host: getUrl(env, "SONAR_MEILI_HOST", "http://localhost:7700"),
-      apiKey: getString(env, "SONAR_MEILI_API_KEY", env.SONAR_API_TOKEN ?? ""),
-    },
-    qdrant: {
-      enabled: getBoolean(env, "SONAR_VECTOR_SEARCH_ENABLED", false),
-      host: getString(env, "SONAR_QDRANT_HOST", "localhost"),
-      port: getInteger(env, "SONAR_QDRANT_PORT", 6333),
-      vectorSize: getInteger(env, "SONAR_QDRANT_VECTOR_SIZE", 768),
     },
     parser: {
       supportedLanguages: [

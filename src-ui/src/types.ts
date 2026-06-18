@@ -26,7 +26,6 @@ export interface ClonedRepository {
 export interface PreparedRepository {
   localPath: string;
   indexedPath: string;
-  copiedToDocker: boolean;
 }
 
 export interface DesktopModelConfig {
@@ -35,10 +34,6 @@ export interface DesktopModelConfig {
   chatBaseUrl: string;
   chatModel: string;
   chatApiKey: string;
-  embeddingBaseUrl: string;
-  embeddingModel: string;
-  embeddingApiKey: string;
-  embeddingVectorSize: number;
   apiToken: string;
 }
 

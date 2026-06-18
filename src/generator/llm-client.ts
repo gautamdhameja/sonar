@@ -17,6 +17,7 @@ export interface LlmCompletion {
 
 export interface LlmCompletionOptions {
   label?: string;
+  signal?: AbortSignal;
 }
 
 type TokenLimitParam = "max_tokens" | "max_completion_tokens";
@@ -80,7 +81,7 @@ function shouldDisableLocalReasoning(): boolean {
   if (process.env.SONAR_DISABLE_MODEL_REASONING?.toLowerCase() === "false") return false;
   try {
     const hostname = new URL(CONFIG.chat.baseUrl).hostname;
-    return ["localhost", "127.0.0.1", "::1", "0.0.0.0", "host.docker.internal"].includes(hostname);
+    return ["localhost", "127.0.0.1", "::1", "0.0.0.0"].includes(hostname);
   } catch {
     return false;
   }
@@ -118,20 +119,26 @@ export async function generateCompletion(
       ...localReasoningOptions,
     };
     const completion = await client.chat.completions
-      .create({
-        ...request,
-        [preferredTokenLimitParam]: CONFIG.generator.maxResponseTokens,
-      })
+      .create(
+        {
+          ...request,
+          [preferredTokenLimitParam]: CONFIG.generator.maxResponseTokens,
+        },
+        { signal: options.signal },
+      )
       .catch((err) => {
         const rejectedParam = unsupportedParameter(err);
         if (rejectedParam !== preferredTokenLimitParam) throw err;
 
         preferredTokenLimitParam = preferredTokenLimitParam === "max_tokens" ? "max_completion_tokens" : "max_tokens";
         logger.info(`Retrying LLM generation with ${preferredTokenLimitParam}`);
-        return client.chat.completions.create({
-          ...request,
-          [preferredTokenLimitParam]: CONFIG.generator.maxResponseTokens,
-        });
+        return client.chat.completions.create(
+          {
+            ...request,
+            [preferredTokenLimitParam]: CONFIG.generator.maxResponseTokens,
+          },
+          { signal: options.signal },
+        );
       });
 
     const choice = completion.choices[0];
@@ -153,12 +160,16 @@ export async function generateCompletion(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error(`LLM failed: ${label}; durationMs=${Date.now() - started}; error=${message}`);
-    throw new Error(`LLM generation failed: ${message}`);
+    throw new Error("LLM generation failed");
   }
 }
 
-export async function generateResponse(system: string, user: string): Promise<string> {
-  const completion = await generateCompletion(system, user);
+export async function generateResponse(
+  system: string,
+  user: string,
+  options: LlmCompletionOptions = {},
+): Promise<string> {
+  const completion = await generateCompletion(system, user, options);
   return completion.content;
 }
 
@@ -166,13 +177,15 @@ export async function generateCompletionWithLengthRetry(
   system: string,
   user: string,
   retryInstruction: string,
+  options: LlmCompletionOptions = {},
 ): Promise<LlmCompletion> {
-  const completion = await generateCompletion(system, user);
+  const completion = await generateCompletion(system, user, options);
   if (!completion.truncated && completion.content.trim() !== "") return completion;
 
   const retry = await generateCompletion(
     system,
     [user, "", "## Retry Constraint", retryInstruction, "Preserve valid source citations."].join("\n"),
+    options,
   );
   return retry;
 }

@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { backfillEmptyBriefingSections, sanitizeTruncatedBriefingPart } from "../src/generator/onboarding";
+import {
+  backfillEmptyBriefingSections,
+  sanitizeTruncatedBriefingPart,
+  sourceListWithCitations,
+} from "../src/generator/onboarding";
 import { normalizeInvalidCitations, verifyCitations } from "../src/generator/citation-verifier";
 import { graphSourceUnits } from "../src/generator/source-fallback";
 import path from "node:path";
+import { CodeUnitStore } from "../src/retriever/unit-store";
 
 const fixtureRoot = (...parts: string[]) => path.join(process.cwd(), "test", "fixtures", ...parts);
 
@@ -155,6 +160,51 @@ test("graphSourceUnits makes unsupported-language graph evidence citation-checka
 
   const verification = verifyCitations("The tool has a C entry point [src/main.c:1-12].", units);
   assert.deepEqual(verification.invalidCitations, []);
+});
+
+test("graphSourceUnits rejects graph sources outside inspected repository files", async () => {
+  const units = await graphSourceUnits(fixtureRoot("survey-c-project"), {
+    projectId: "project-1",
+    generatedAt: "2026-06-17T00:00:00.000Z",
+    summary: "C project",
+    inspectedFiles: ["src/main.c"],
+    warnings: [],
+    nodes: [
+      {
+        id: "unsafe",
+        type: "file",
+        label: "unsafe",
+        summary: "Unsafe source should be ignored",
+        confidence: "high",
+        sources: [{ filePath: "../survey-sparse-docs/README.md", startLine: 1, endLine: 3 }],
+      },
+      {
+        id: "uninspected",
+        type: "file",
+        label: "uninspected",
+        summary: "Uninspected source should be ignored",
+        confidence: "high",
+        sources: [{ filePath: "src/cache.c", startLine: 1, endLine: 3 }],
+      },
+    ],
+    edges: [],
+  });
+
+  assert.deepEqual(units, []);
+});
+
+test("sourceListWithCitations canonicalizes unique basename citations", async () => {
+  const units = [unit("src/llama/config.ts", 4, 16)];
+  const store = new CodeUnitStore();
+  await store.loadFromUnits(units);
+
+  const sources = sourceListWithCitations(units, ["config.ts:4-16"], store);
+
+  assert.ok(sources.some((source) => source.filePath === "src/llama/config.ts" && source.lines === "4-16"));
+  assert.equal(
+    sources.some((source) => source.filePath === "config.ts"),
+    false,
+  );
 });
 
 test("normalizeInvalidCitations maps broad file citations back to supplied context ranges", () => {

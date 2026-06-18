@@ -1,4 +1,4 @@
-import { RetrievedUnit, safeHybridSearch } from "../retriever/hybrid-retriever";
+import { RetrievedUnit } from "../retriever/hybrid-retriever";
 import { CodeUnitStore } from "../retriever/unit-store";
 import { expandContext } from "../context/expander";
 import { graphEnhancedRetrieval } from "../retriever/graph-retriever";
@@ -99,13 +99,21 @@ export async function answerQuery(
   }
 
   if (queryPlan.useVector) {
-    retrievedSets.push(await safeHybridSearch(query, projectId));
+    retrievedSets.push(localOnboardingSearch(query, store, CONFIG.retriever.fusedTopK));
   }
 
   let retrieved = mergeRetrievedResults(retrievedSets.flat(), CONFIG.retriever.fusedTopK * 2);
 
   if (retrieved.length === 0) {
-    retrieved = await safeHybridSearch(query, projectId);
+    retrieved = mergeRetrievedResults(
+      [
+        ...localExactSearch(query, store, CONFIG.retriever.fusedTopK),
+        ...localGrepSearch(query, store, CONFIG.retriever.fusedTopK * 2),
+        ...localLexicalSearch(query, store, CONFIG.retriever.fusedTopK),
+        ...localOnboardingSearch(query, store, CONFIG.retriever.fusedTopK),
+      ],
+      CONFIG.retriever.fusedTopK * 2,
+    );
   }
 
   const reranked = rerankRetrievedResults(query, queryPlan.intent, retrieved, store, CONFIG.retriever.fusedTopK);

@@ -1,5 +1,6 @@
 mod config;
 mod export;
+mod llama_sidecar;
 mod models;
 mod paths;
 mod process;

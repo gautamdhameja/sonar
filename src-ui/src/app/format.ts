@@ -25,16 +25,17 @@ export function formatMs(ms: number): string {
 export function friendlyErrorMessage(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
   const lower = raw.toLowerCase();
-  if (lower.includes("docker is not installed") || lower.includes("not available on path")) {
-    return "Docker Desktop is required to run Sonar's local indexing services. Install Docker Desktop, then restart Sonar.";
+  if (lower.includes("no bundled api sidecar") || lower.includes("npm is not available")) {
+    return "Sonar could not start its local API. Install dependencies and run the desktop app from the project checkout.";
   }
-  if (
-    lower.includes("cannot connect to the docker daemon") ||
-    lower.includes("docker daemon") ||
-    lower.includes("is the docker daemon running") ||
-    lower.includes("connection refused")
-  ) {
-    return "Docker Desktop is not ready. Start Docker Desktop, wait for it to finish starting, then restart Sonar.";
+  if (lower.includes("not available on path")) {
+    return raw;
+  }
+  if (lower.includes("local llama.cpp is not running")) {
+    return raw;
+  }
+  if (lower.includes("connection refused")) {
+    return "Sonar could not reach the selected local endpoint. Start the local runtime or update the model settings.";
   }
   if (lower.includes("failed to fetch") || lower.includes("networkerror")) {
     return "Sonar could not reach its local API. Start the local runtime, then try again.";

@@ -1,14 +1,14 @@
 # Getting Started
 
-Sonar runs as a desktop app backed by local indexing services. The app manages those services for you.
+Sonar runs as a desktop app backed by a local API and embedded SQLite project store. The app starts the local API for you.
 
 The product goal is simple: create a useful, cited briefing from a repository using a local or modest model. Sonar first builds a repository inventory, surveys selected source files into a small memory graph, and then writes the briefing from that map plus source excerpts. It is best for high-level project understanding: what the project does, who it serves, the main workflows, important systems, risks, and questions to ask the team. It is not meant to replace deep code review, debugging, refactoring, or implementation work.
 
 Prerequisites:
 
-- Docker Desktop
-- Docker Compose 2.38 or newer
 - Git, if you want Sonar to clone GitHub repositories for you
+- Node.js 22.x, 23.x, 24.x, or 25.x when running from source
+- A local OpenAI-compatible model server, or an OpenAI-compatible API endpoint
 
 Start the desktop app:
 
@@ -19,19 +19,20 @@ npm run desktop:dev
 
 On first launch, Sonar asks you to choose a model source:
 
-- **Local Docker model** starts Docker Model Runner for generation.
+- **Local llama.cpp** uses a local OpenAI-compatible generation server on your machine. The default endpoint is `http://127.0.0.1:8080/v1`, and you can edit it during setup.
 - **API endpoint** uses your configured OpenAI-compatible cloud or self-hosted generation endpoint.
 
 After you save the model source, future launches use the saved choice automatically.
 
-The local services are:
+The local runtime is:
 
-- Sonar API on `http://localhost:3001`
-- Meilisearch on `http://localhost:7700`
+- Sonar API on `http://127.0.0.1:3001`
+- SQLite project store under `~/.sonar`
 
-If you choose **Local Docker model**, Docker Model Runner also starts:
+If you choose **Local llama.cpp**, Sonar expects:
 
-- a chat model, defaulting to `hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL`
+- an OpenAI-compatible local model server at the endpoint configured in the app, or
+- for the default endpoint, a future packaged sidecar binary at `~/.sonar/bin/llama-server` and a model at `~/.sonar/models/default.gguf`
 
 If you choose **API endpoint**, configure:
 
@@ -47,4 +48,4 @@ If a repository contains other source languages, Sonar shows a warning after ind
 
 ## Privacy Boundary
 
-The Docker-first stack does not mount your home directory. Docker can only see repositories imported into Sonar's private `/workspace/repos` volume. When you select a local folder in the desktop UI, Sonar copies that selected repository into the volume and indexes the copied path.
+Sonar indexes only the GitHub clone or local folder you explicitly choose in the desktop UI. It does not mount your home directory into a container because there is no container runtime in the default flow.

@@ -19,7 +19,10 @@ export function toErrorResponse(err: unknown): { status: number; message: string
     return { status: 400, message: err.message };
   }
   if (err instanceof Error && err.message.startsWith("LLM generation failed:")) {
-    return { status: 502, message: err.message };
+    return { status: 502, message: "Model provider request failed" };
+  }
+  if (err instanceof Error && err.message === "LLM generation failed") {
+    return { status: 502, message: "Model provider request failed" };
   }
   logger.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
   return { status: 500, message: "Internal server error" };

@@ -7,7 +7,11 @@ export interface StructuredValidation<T> {
   errors: string[];
 }
 
-export type StructuredCompletion = (system: string, user: string) => Promise<LlmCompletion>;
+export type StructuredCompletion = (
+  system: string,
+  user: string,
+  options?: { signal?: AbortSignal },
+) => Promise<LlmCompletion>;
 
 export interface GenerateStructuredJsonOptions<T> {
   system: string;
@@ -16,6 +20,7 @@ export interface GenerateStructuredJsonOptions<T> {
   complete?: StructuredCompletion;
   maxRepairAttempts?: number;
   label?: string;
+  signal?: AbortSignal;
 }
 
 export type StructuredJsonResult<T> =
@@ -118,8 +123,8 @@ export async function generateStructuredJson<T>(
   for (let attempt = 1; attempt <= maxRepairAttempts + 1; attempt += 1) {
     const label = options.label ? `${options.label} attempt ${attempt}` : undefined;
     const completion = complete
-      ? await complete(options.system, user)
-      : await generateCompletion(options.system, user, { label });
+      ? await complete(options.system, user, { signal: options.signal })
+      : await generateCompletion(options.system, user, { label, signal: options.signal });
     rawContent = completion.content;
     truncated = completion.truncated;
 

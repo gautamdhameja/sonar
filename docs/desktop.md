@@ -6,27 +6,28 @@ Sonar is built for high-level codebase briefings. It helps non-technical and sem
 
 ## Prerequisites
 
-- Docker Desktop
 - Git installed locally if you want Sonar to clone GitHub repositories for you
+- Node.js 22.x, 23.x, 24.x, or 25.x when running from source
+- A local OpenAI-compatible model server or an OpenAI-compatible API endpoint
 
 ## First-Run Flow
 
 1. Open Sonar.
-2. On first launch, choose **Local Docker model** or **API endpoint**.
-3. Let the app start the local Docker services.
+2. On first launch, choose **Local llama.cpp** or **API endpoint**.
+3. Let the app start the local Sonar API.
 4. Paste a GitHub repository URL or select a local folder.
 5. Create a codebase briefing. Sonar inventories the repository, surveys selected files into a memory graph, and writes a cited briefing from that map.
 6. Ask follow-up questions in the same session.
 7. Copy or export the briefing as Markdown if you want to share it.
 
-## Local Services
+## Local Runtime
 
-- Meilisearch on `http://localhost:7700` for BM25 and keyword search.
-- Sonar API on `http://localhost:3001`.
+- Sonar API on `http://127.0.0.1:3001`.
+- SQLite project data under `~/.sonar`.
 
-To use local generation, choose **Local Docker model**. To use cloud generation or a separately hosted OpenAI-compatible local model, choose **API endpoint**.
+When running from source, the desktop shell starts the API through `npm run dev`. A packaged build can provide a native API sidecar at `~/.sonar/bin/sonar-api` or through `SONAR_API_SERVER_PATH`.
 
-If the model server runs on the host machine and the API runs in Docker, the desktop app translates `localhost` and `127.0.0.1` model endpoints to `host.docker.internal` for the API container. Keep the URL shown in the UI as the normal desktop URL.
+To use local generation, choose **Local llama.cpp** and configure the local OpenAI-compatible endpoint. The default is `http://127.0.0.1:8080/v1`; if you use a different port or local runtime, update the endpoint during setup. To use cloud generation or another hosted model, choose **API endpoint**.
 
 ## Desktop Configuration
 
@@ -38,21 +39,37 @@ The desktop config is stored at:
 
 Do not commit this file. It may contain API keys.
 
-The Docker runtime env is stored at:
+The local runtime token is stored at:
 
 ```text
-.sonar/runtime.env
+~/.sonar/runtime.env
 ```
 
 This file is generated locally and ignored by git.
 
 ## Repository Options
 
-- Paste a GitHub repository URL. Sonar clones it locally, imports that selected repository into Docker's private Sonar repository volume, and indexes the imported copy.
-- Select an existing local repository with the native folder picker. Only that selected repository is copied into Docker's private Sonar repository volume.
+- Paste a GitHub repository URL. Sonar clones it into `~/.sonar/repositories` and indexes that clone.
+- Select an existing local repository with the native folder picker. Sonar indexes the selected path directly.
 
 ## Language Coverage Warning
 
 When Sonar indexes a repository, it scans for common source file extensions outside the supported parser set. If it finds unsupported languages, the desktop app shows a warning with file counts. You can still create the briefing, and the survey may use lightweight signals from those files, but unsupported source files are not fully parsed into the code index.
 
 Supported code parsers today cover TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, and C#. Markdown and MDX are indexed as documentation.
+
+## Release Build
+
+Build and verify a local macOS app bundle:
+
+```bash
+npm run release:mac
+```
+
+By default this applies an ad-hoc signature so `codesign --verify --deep --strict` passes on the local machine. For public macOS distribution, sign with an Apple Developer ID Application certificate:
+
+```bash
+SONAR_MAC_SIGN_IDENTITY="Developer ID Application: Your Team Name (TEAMID)" npm run release:mac
+```
+
+After Developer ID signing, notarize and staple the app or installer using your Apple Developer account before distributing it outside your own machine.

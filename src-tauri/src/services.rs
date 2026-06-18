@@ -1,24 +1,41 @@
-use std::{process::Command, time::Duration};
+use std::{
+    fs,
+    io::Write,
+    process::Command,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 use crate::{
     config::{
-        chat_base_url, desktop_model_config, desktop_model_setup_complete, ensure_runtime_env,
-        runtime_api_token, save_desktop_model_config,
+        chat_base_url, desktop_model_config, desktop_model_setup_complete, runtime_api_token,
+        save_desktop_model_config, DEFAULT_CHAT_BASE_URL,
     },
+    llama_sidecar::{missing_llama_sidecar_message, start_llama_sidecar_if_available},
     models::{DesktopModelConfig, ServiceSnapshot, ServiceStatus},
-    paths::repo_root,
+    paths::{repo_root, sonar_home},
     process::command_exists,
 };
 
 const API_BASE_URL: &str = "http://127.0.0.1:3001";
 const API_HEALTH_URL: &str = "http://127.0.0.1:3001/health";
-const API_DEPENDENCIES_URL: &str = "http://127.0.0.1:3001/health/dependencies";
-const MEILI_HEALTH_URL: &str = "http://127.0.0.1:7700/health";
+static RUNTIME_OPERATION_ACTIVE: AtomicBool = AtomicBool::new(false);
 
-#[derive(Clone, Copy)]
-enum ModelRuntimeMode {
-    DockerModels,
-    ApiEndpoints,
+struct RuntimeOperationGuard;
+
+impl RuntimeOperationGuard {
+    fn acquire() -> Result<Self, String> {
+        RUNTIME_OPERATION_ACTIVE
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .map(|_| Self)
+            .map_err(|_| "Another Sonar runtime operation is already running.".to_string())
+    }
+}
+
+impl Drop for RuntimeOperationGuard {
+    fn drop(&mut self) {
+        RUNTIME_OPERATION_ACTIVE.store(false, Ordering::Release);
+    }
 }
 
 #[tauri::command]
@@ -26,34 +43,15 @@ pub async fn service_snapshot() -> ServiceSnapshot {
     let model_config = desktop_model_config();
     let model_setup_complete = desktop_model_setup_complete();
     let chat = chat_base_url();
-    let mut services = vec![
-        service(
-            "sonar",
-            "Sonar API",
-            API_HEALTH_URL,
-            true,
-            Some(&model_config.api_token),
-        )
-        .await,
-        service("meilisearch", "Meilisearch", MEILI_HEALTH_URL, true, None).await,
-    ];
+    let mut services = vec![service("sonar", "Sonar API", API_HEALTH_URL, true, None, None).await];
 
     if model_setup_complete {
-        let model_label = if uses_managed_models(&model_config) {
-            "Docker model services"
+        let model_label = if uses_local_model(&model_config) {
+            "Local model API"
         } else {
-            "Configured model APIs"
+            "Configured model API"
         };
-        services.push(
-            service(
-                "chat",
-                model_label,
-                API_DEPENDENCIES_URL,
-                true,
-                Some(&model_config.api_token),
-            )
-            .await,
-        );
+        services.push(model_service("chat", model_label, &model_config).await);
     }
 
     ServiceSnapshot {
@@ -65,36 +63,25 @@ pub async fn service_snapshot() -> ServiceSnapshot {
 
 #[tauri::command]
 pub async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
-    let model_setup_complete = desktop_model_setup_complete();
-    if !model_setup_complete {
-        return Ok(service_snapshot().await);
-    }
+    let _guard = RuntimeOperationGuard::acquire()?;
 
-    let model_config = desktop_model_config();
     let before = service_snapshot().await;
     let sonar_needs_reconcile = before
         .services
         .iter()
         .any(|service| service.id == "sonar" && service.state != "ready");
-    let local_models_need_reconcile = uses_managed_models(&model_config)
-        && before
-            .services
-            .iter()
-            .any(|service| service.id == "chat" && service.state != "ready");
 
-    if before
-        .services
-        .iter()
-        .any(|service| service.id == "meilisearch" && service.state != "ready")
-        || before
-            .services
-            .iter()
-            .any(|service| service.id == "sonar" && service.state != "ready")
-        || local_models_need_reconcile
-    {
-        start_docker_services(sonar_needs_reconcile, selected_runtime_mode())?;
+    if sonar_needs_reconcile {
+        start_api_service(false)?;
         let api_token = runtime_api_token()?;
         wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45)).await?;
+    }
+    let model_config = desktop_model_config();
+    if desktop_model_setup_complete()
+        && uses_local_model(&model_config)
+        && uses_default_local_endpoint(&model_config)
+    {
+        ensure_local_model_runtime(&model_config).await?;
     }
 
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -108,136 +95,145 @@ pub fn get_model_config() -> DesktopModelConfig {
 
 #[tauri::command]
 pub async fn save_model_config(config: DesktopModelConfig) -> Result<ServiceSnapshot, String> {
+    let _guard = RuntimeOperationGuard::acquire()?;
     save_desktop_model_config(&config)?;
-    start_docker_services(true, selected_runtime_mode())?;
+    start_api_service(true)?;
     let api_token = runtime_api_token()?;
     wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45)).await?;
-    wait_for_url(
-        API_DEPENDENCIES_URL,
-        Some(&api_token),
-        Duration::from_secs(180),
-    )
-    .await?;
+    let model_config = desktop_model_config();
+    if uses_local_model(&model_config) && uses_default_local_endpoint(&model_config) {
+        ensure_local_model_runtime(&model_config).await?;
+    } else {
+        wait_for_model(&model_config, Duration::from_secs(180)).await?;
+    }
     tokio::time::sleep(Duration::from_millis(500)).await;
     Ok(service_snapshot().await)
 }
 
-fn start_docker_services(
-    force_recreate: bool,
-    runtime_mode: ModelRuntimeMode,
-) -> Result<(), String> {
-    if !command_exists("docker") {
-        return Err("Docker is not installed or not available on PATH".to_string());
+fn start_api_service(force_restart: bool) -> Result<(), String> {
+    if force_restart {
+        stop_managed_api_service()?;
+    }
+    if !force_restart && is_api_ready() {
+        return Ok(());
+    }
+    let data_dir = sonar_home()?;
+    fs::create_dir_all(&data_dir)
+        .map_err(|err| format!("Unable to create Sonar data directory: {err}"))?;
+    let log_path = data_dir.join("api.log");
+    let stdout = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|err| format!("Unable to open Sonar API log: {err}"))?;
+    let stderr = stdout
+        .try_clone()
+        .map_err(|err| format!("Unable to prepare Sonar API log: {err}"))?;
+    let model_config = desktop_model_config();
+    let api_token = runtime_api_token()?;
+    let mut command = api_command()?;
+    let child = command
+        .env("SONAR_API_TOKEN", &api_token)
+        .env("SONAR_ALLOW_ANY_REPO_ROOT", "true")
+        .env("SONAR_DATA_DIR", data_dir.to_string_lossy().as_ref())
+        .env("SONAR_CHAT_MODEL", &model_config.chat_model)
+        .env("SONAR_CHAT_BASE_URL", &model_config.chat_base_url)
+        .env("SONAR_CHAT_API_KEY", &model_config.chat_api_key)
+        .stdout(stdout)
+        .stderr(stderr)
+        .spawn()
+        .map_err(|err| format!("Unable to start Sonar API: {err}"))?;
+    write_managed_api_pid(child.id())
+}
+
+fn api_command() -> Result<Command, String> {
+    if let Some(path) = configured_api_server_path()? {
+        let mut command = Command::new(path);
+        command.args(["--port", "3001"]);
+        return Ok(command);
+    }
+
+    if !command_exists("npm") {
+        return Err(
+            "Sonar API could not start because no bundled API sidecar was found and npm is not available for source development."
+                .to_string(),
+        );
     }
 
     let root = repo_root()?;
-    let compose_file = root.join("compose.yml");
-    let runtime_env = ensure_runtime_env()?;
-    let model_config = desktop_model_config();
-    let api_token = runtime_env.api_token;
-    let meili_master_key = runtime_env.meili_master_key;
-    if force_recreate {
-        run_compose(
-            compose_command(
-                &root,
-                &compose_file,
-                &model_config,
-                &api_token,
-                &meili_master_key,
-                runtime_mode,
-            )
-            .args(["down", "--remove-orphans"]),
-            "docker compose down",
-        )?;
-    }
-
-    run_compose(
-        compose_command(
-            &root,
-            &compose_file,
-            &model_config,
-            &api_token,
-            &meili_master_key,
-            runtime_mode,
-        )
-        .args(["up", "-d", "--build"]),
-        "docker compose up",
-    )
-}
-
-fn compose_command(
-    root: &std::path::Path,
-    compose_file: &std::path::Path,
-    model_config: &DesktopModelConfig,
-    api_token: &str,
-    meili_master_key: &str,
-    runtime_mode: ModelRuntimeMode,
-) -> Command {
-    let mut command = Command::new("docker");
-    command.arg("compose").arg("-f").arg(compose_file);
-    match runtime_mode {
-        ModelRuntimeMode::DockerModels => {
-            command.arg("-f").arg(root.join("compose.models.yml"));
-        }
-        ModelRuntimeMode::ApiEndpoints => {
-            command.arg("-f").arg(root.join("compose.endpoints.yml"));
-        }
-    }
+    let mut command = Command::new("npm");
     command
         .current_dir(root)
-        .env("SONAR_CHAT_MODEL", &model_config.chat_model)
-        .env("SONAR_CHAT_API_KEY", &model_config.chat_api_key)
-        .env("SONAR_API_TOKEN", api_token)
-        .env("SONAR_MEILI_MASTER_KEY", meili_master_key)
-        .env("SONAR_MEILI_API_KEY", meili_master_key)
-        .env("MEILI_MASTER_KEY", meili_master_key);
-    if matches!(runtime_mode, ModelRuntimeMode::ApiEndpoints) {
-        command.env(
-            "SONAR_CHAT_BASE_URL",
-            docker_reachable_url(&model_config.chat_base_url),
-        );
-    }
-    command
+        .args(["run", "dev", "--", "--port", "3001"]);
+    Ok(command)
 }
 
-fn run_compose(command: &mut Command, label: &str) -> Result<(), String> {
-    let output = command
-        .output()
-        .map_err(|err| format!("{label} could not start: {err}"))?;
-    if output.status.success() {
-        return Ok(());
+fn configured_api_server_path() -> Result<Option<std::path::PathBuf>, String> {
+    if let Ok(path) = std::env::var("SONAR_API_SERVER_PATH") {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            let path = std::path::PathBuf::from(trimmed);
+            if path.is_file() {
+                return Ok(Some(path));
+            }
+            return Err(format!(
+                "SONAR_API_SERVER_PATH does not point to a file: {}",
+                path.display()
+            ));
+        }
     }
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let details = [stderr.trim(), stdout.trim()]
-        .into_iter()
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n");
-    if details.is_empty() {
-        Err(format!("{label} exited with {}", output.status))
-    } else {
-        Err(format!("{label} exited with {}:\n{details}", output.status))
-    }
+    let path = sonar_home()?.join("bin").join("sonar-api");
+    Ok(path.is_file().then_some(path))
 }
 
-fn uses_managed_models(model_config: &DesktopModelConfig) -> bool {
+fn uses_local_model(model_config: &DesktopModelConfig) -> bool {
     model_config.model_mode == "local"
 }
 
-fn selected_runtime_mode() -> ModelRuntimeMode {
-    if uses_managed_models(&desktop_model_config()) {
-        ModelRuntimeMode::DockerModels
-    } else {
-        ModelRuntimeMode::ApiEndpoints
-    }
+fn uses_default_local_endpoint(model_config: &DesktopModelConfig) -> bool {
+    model_config.chat_base_url.trim().trim_end_matches('/') == DEFAULT_CHAT_BASE_URL
 }
 
-fn docker_reachable_url(value: &str) -> String {
-    value
-        .replace("http://localhost:", "http://host.docker.internal:")
-        .replace("http://127.0.0.1:", "http://host.docker.internal:")
+fn is_api_ready() -> bool {
+    std::net::TcpStream::connect(("127.0.0.1", 3001)).is_ok()
+}
+
+fn managed_api_pid_path() -> Result<std::path::PathBuf, String> {
+    Ok(sonar_home()?.join("api.pid"))
+}
+
+fn write_managed_api_pid(pid: u32) -> Result<(), String> {
+    let path = managed_api_pid_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("Unable to create Sonar data directory: {err}"))?;
+    }
+    let mut file = fs::File::create(path)
+        .map_err(|err| format!("Unable to write Sonar API process id: {err}"))?;
+    file.write_all(pid.to_string().as_bytes())
+        .map_err(|err| format!("Unable to write Sonar API process id: {err}"))
+}
+
+fn stop_managed_api_service() -> Result<(), String> {
+    let path = managed_api_pid_path()?;
+    let Ok(pid) = fs::read_to_string(&path) else {
+        return Ok(());
+    };
+    let pid = pid.trim();
+    if pid.is_empty() {
+        let _ = fs::remove_file(path);
+        return Ok(());
+    }
+    let status = Command::new("kill")
+        .arg(pid)
+        .status()
+        .map_err(|err| format!("Unable to stop previous Sonar API process: {err}"))?;
+    if !status.success() && is_api_ready() {
+        return Err(format!("Unable to stop previous Sonar API process {pid}."));
+    }
+    let _ = fs::remove_file(path);
+    Ok(())
 }
 
 async fn service(
@@ -246,8 +242,9 @@ async fn service(
     url: &str,
     managed: bool,
     api_token: Option<&str>,
+    bearer_token: Option<&str>,
 ) -> ServiceStatus {
-    match check_url(url, api_token).await {
+    match check_url(url, api_token, bearer_token).await {
         Ok(()) => ServiceStatus {
             id,
             label,
@@ -267,11 +264,45 @@ async fn service(
     }
 }
 
+async fn model_service(
+    id: &'static str,
+    label: &'static str,
+    model_config: &DesktopModelConfig,
+) -> ServiceStatus {
+    let url = format!(
+        "{}/models",
+        model_config.chat_base_url.trim_end_matches('/')
+    );
+    let bearer = if model_config.chat_api_key.trim().is_empty()
+        || model_config.chat_api_key.trim() == "not-needed"
+    {
+        None
+    } else {
+        Some(model_config.chat_api_key.as_str())
+    };
+    let mut status = service(
+        id,
+        label,
+        &url,
+        uses_local_model(model_config),
+        None,
+        bearer,
+    )
+    .await;
+    if uses_local_model(model_config)
+        && uses_default_local_endpoint(model_config)
+        && status.state != "ready"
+    {
+        status.detail = missing_llama_sidecar_message();
+    }
+    status
+}
+
 async fn wait_for_url(url: &str, api_token: Option<&str>, timeout: Duration) -> Result<(), String> {
     let started = std::time::Instant::now();
     let mut last_error = "not checked yet".to_string();
     while started.elapsed() < timeout {
-        match check_url(url, api_token).await {
+        match check_url(url, api_token, None).await {
             Ok(()) => return Ok(()),
             Err(err) => last_error = err,
         }
@@ -283,7 +314,49 @@ async fn wait_for_url(url: &str, api_token: Option<&str>, timeout: Duration) -> 
     ))
 }
 
-async fn check_url(url: &str, api_token: Option<&str>) -> Result<(), String> {
+async fn wait_for_model(
+    model_config: &DesktopModelConfig,
+    timeout: Duration,
+) -> Result<(), String> {
+    let url = format!(
+        "{}/models",
+        model_config.chat_base_url.trim_end_matches('/')
+    );
+    let bearer = if model_config.chat_api_key.trim().is_empty()
+        || model_config.chat_api_key.trim() == "not-needed"
+    {
+        None
+    } else {
+        Some(model_config.chat_api_key.as_str())
+    };
+    let started = std::time::Instant::now();
+    let mut last_error = "not checked yet".to_string();
+    while started.elapsed() < timeout {
+        match check_url(&url, None, bearer).await {
+            Ok(()) => return Ok(()),
+            Err(err) => last_error = err,
+        }
+        tokio::time::sleep(Duration::from_millis(750)).await;
+    }
+    Err(format!(
+        "Timed out waiting for model endpoint {url} after {}s: {last_error}",
+        timeout.as_secs()
+    ))
+}
+
+async fn ensure_local_model_runtime(model_config: &DesktopModelConfig) -> Result<(), String> {
+    let started_or_running = start_llama_sidecar_if_available(model_config)?;
+    if started_or_running {
+        return wait_for_model(model_config, Duration::from_secs(180)).await;
+    }
+    Err(missing_llama_sidecar_message())
+}
+
+async fn check_url(
+    url: &str,
+    api_token: Option<&str>,
+    bearer_token: Option<&str>,
+) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(2))
         .build()
@@ -291,6 +364,9 @@ async fn check_url(url: &str, api_token: Option<&str>) -> Result<(), String> {
     let mut request = client.get(url);
     if let Some(token) = api_token.filter(|token| !token.trim().is_empty()) {
         request = request.header("X-Sonar-Token", token);
+    }
+    if let Some(token) = bearer_token.filter(|token| !token.trim().is_empty()) {
+        request = request.bearer_auth(token);
     }
     let response = request.send().await.map_err(|err| err.to_string())?;
     if response.status().is_success() {

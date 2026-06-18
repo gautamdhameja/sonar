@@ -117,7 +117,7 @@ function defaultFocus(): string[] {
 function isLocalChatEndpoint(): boolean {
   try {
     const hostname = new URL(CONFIG.chat.baseUrl).hostname;
-    return ["localhost", "127.0.0.1", "::1", "0.0.0.0", "host.docker.internal"].includes(hostname);
+    return ["localhost", "127.0.0.1", "::1", "0.0.0.0"].includes(hostname);
   } catch {
     return false;
   }
@@ -132,28 +132,45 @@ function sourceList(units: CodeUnit[]) {
   }));
 }
 
-function sourceListWithCitations(units: CodeUnit[], citations: string[], store: CodeUnitStore) {
+export function sourceListWithCitations(units: CodeUnit[], citations: string[], store: CodeUnitStore) {
   const sources = sourceList(units);
   const seen = new Set(sources.map((source) => `${source.filePath}:${source.lines}`));
+  const basenameCounts = new Map<string, number>();
+  for (const unit of units) {
+    const basename = unit.filePath.split("/").at(-1) ?? unit.filePath;
+    basenameCounts.set(basename, (basenameCounts.get(basename) ?? 0) + 1);
+  }
 
   for (const citation of citations) {
     const match = citation.match(/^(.+):(\d+)(?:-(\d+))?$/);
     if (!match) continue;
-    const filePath = match[1];
+    const citedPath = match[1];
     const startLine = Number.parseInt(match[2], 10);
     const endLine = match[3] ? Number.parseInt(match[3], 10) : startLine;
     if (!Number.isFinite(startLine) || !Number.isFinite(endLine)) continue;
+    const matchingUnit =
+      units.find((unit) => unit.filePath === citedPath && startLine >= unit.startLine && endLine <= unit.endLine) ??
+      units.find((unit) => {
+        const basename = unit.filePath.split("/").at(-1) ?? unit.filePath;
+        return (
+          basenameCounts.get(basename) === 1 &&
+          basename === citedPath &&
+          startLine >= unit.startLine &&
+          endLine <= unit.endLine
+        );
+      });
+    const filePath = matchingUnit?.filePath ?? citedPath;
     const lines = `${startLine}-${endLine}`;
     const key = `${filePath}:${lines}`;
     if (seen.has(key)) continue;
 
-    const matchingUnit = store
-      .getUnitsByFile(filePath)
-      .find((unit) => startLine >= unit.startLine && endLine <= unit.endLine);
+    const storedUnit =
+      matchingUnit ??
+      store.getUnitsByFile(filePath).find((unit) => startLine >= unit.startLine && endLine <= unit.endLine);
     sources.push({
       filePath,
-      name: matchingUnit?.name ?? filePath.split("/").at(-1) ?? filePath,
-      kind: matchingUnit?.kind ?? "module",
+      name: storedUnit?.name ?? filePath.split("/").at(-1) ?? filePath,
+      kind: storedUnit?.kind ?? "module",
       lines,
     });
     seen.add(key);
@@ -609,12 +626,13 @@ async function generateBriefingPart(
     sections: string[];
     workflowPlanText?: string;
     memoryGraphText?: string;
+    signal?: AbortSignal;
   },
 ): Promise<{ content: string; generationTime: number; truncated: boolean }> {
   const prompt = buildOnboardingBriefPartPrompt(contextUnits, options);
   const label = `briefing-part ${options.repoName}: ${options.sections.join(" + ")}`;
   const started = Date.now();
-  const completion = await generateCompletion(prompt.system, prompt.user, { label });
+  const completion = await generateCompletion(prompt.system, prompt.user, { label, signal: options.signal });
   let generationTime = Date.now() - started;
 
   if (!completion.truncated) {
@@ -631,7 +649,7 @@ async function generateBriefingPart(
       "The previous answer was too long. Return a shorter version under 140 words total.",
       "Keep the same requested section headings and preserve citations.",
     ].join("\n"),
-    { label: `${label} retry-shorter` },
+    { label: `${label} retry-shorter`, signal: options.signal },
   );
   generationTime += Date.now() - retryStarted;
 
@@ -656,6 +674,7 @@ export async function generateOnboardingBrief(
     persona?: Persona;
     repoRoot?: string;
     memoryGraph?: MemoryGraph;
+    signal?: AbortSignal;
   },
 ): Promise<OnboardingBriefResult> {
   const audience = options.audience?.trim() || "A teammate trying to understand this repository";
@@ -681,6 +700,7 @@ export async function generateOnboardingBrief(
         repoRoot: options.repoRoot,
         projectId: options.projectId,
         repoName: options.repoName,
+        signal: options.signal,
       });
       memoryGraph = survey.graph;
       surveyFallbackUsed = survey.fallbackUsed;
@@ -746,6 +766,7 @@ export async function generateOnboardingBrief(
         sections: sectionContext.sections,
         workflowPlanText,
         memoryGraphText,
+        signal: options.signal,
       }),
     );
   }
@@ -770,6 +791,7 @@ export async function generateOnboardingBrief(
     const repairPrompt = buildCitationRepairPrompt(brief, contextUnits, citationVerification);
     const repairedCompletion = await generateCompletion(repairPrompt.system, repairPrompt.user, {
       label: `briefing-citation-repair ${options.repoName}`,
+      signal: options.signal,
     });
     const repairedBrief = repairedCompletion.content;
     const repairedVerification = verifyCitations(repairedBrief, contextUnits);
@@ -777,7 +799,7 @@ export async function generateOnboardingBrief(
     if (
       !repairedCompletion.truncated &&
       repairedVerification.invalidCitations.length === 0 &&
-      repairedVerification.uncitedClaims.length < citationVerification.uncitedClaims.length
+      repairedVerification.uncitedClaims.length <= citationVerification.uncitedClaims.length
     ) {
       brief = repairedBrief;
       citationVerification = repairedVerification;

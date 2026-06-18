@@ -9,7 +9,7 @@ import {
   setApiToken,
 } from "./api";
 import { buildBriefingMarkdown } from "./app/briefingMarkdown";
-import { defaultBriefingRole, defaultQuestion, dockerModelRunnerConfig } from "./app/constants";
+import { defaultBriefingRole, defaultQuestion, localLlamaConfig } from "./app/constants";
 import { saveMarkdownFile } from "./app/exportMarkdown";
 import { friendlyErrorMessage, runtimeState, safeFileName } from "./app/format";
 import {
@@ -68,11 +68,12 @@ export function App() {
   const [analysisStopRequested, setAnalysisStopRequested] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [modelConfig, setModelConfig] = useState<DesktopModelConfig>(dockerModelRunnerConfig);
+  const [modelConfig, setModelConfig] = useState<DesktopModelConfig>(localLlamaConfig);
   const [modelSetupOpen, setModelSetupOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const analysisAbortController = useRef<AbortController | null>(null);
+  const followupInFlight = useRef(false);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -84,7 +85,7 @@ export function App() {
   const canAnalyze = repositorySource === "github" ? githubRepository.trim().length > 0 : repoPath.trim().length > 0;
   const isCreatingBriefing = activeTask?.kind === "analyze" || activeTask?.kind === "brief";
   const runtime = runtimeState(snapshot);
-  const runtimeBlocker = error?.includes("Docker Desktop") ? error : null;
+  const runtimeBlocker = error?.includes("Sonar could not start") || error?.includes("local llama.cpp") ? error : null;
   const runtimeReady = modelConfig.modelSetupComplete && runtime === "ready";
   const runtimeBusy = activeTask?.kind === "bootstrap" || activeTask?.kind === "settings";
   const hasBrief = session !== null;
@@ -208,6 +209,7 @@ export function App() {
         label: "Importing GitHub repository",
         detail: "Cloning the selected repository into Sonar's local workspace.",
         progress: 12,
+        canStop: false,
       });
       const cloned = await cloneGithubRepository(githubRepository);
       stopIfRequested();
@@ -220,8 +222,9 @@ export function App() {
     setActiveTask({
       kind: "analyze",
       label: "Preparing selected repository",
-      detail: "Copying only the selected repository into the Docker workspace.",
+      detail: "Preparing the selected repository for local indexing.",
       progress: repositorySource === "github" ? 28 : 18,
+      canStop: false,
     });
     const prepared = await prepareRepositoryForIndexing(pathToIndex, nameToIndex);
     stopIfRequested();
@@ -232,6 +235,7 @@ export function App() {
       label: "Indexing repository",
       detail: "Parsing files, building the search index, and preparing workflow evidence.",
       progress: 48,
+      canStop: true,
     });
     const indexed = await indexProject(pathToIndex, nameToIndex, controller.signal);
     stopIfRequested();
@@ -282,6 +286,7 @@ export function App() {
         label: "Surveying repository and writing briefing",
         detail: "Building a source-backed project map, then turning it into a role-aware briefing.",
         progress: canAnalyze ? 64 : 35,
+        canStop: true,
       });
       const result = await createOnboardingSession(projectId, briefingRole, controller.signal);
       setSession(result);
@@ -331,6 +336,7 @@ export function App() {
         label: "Re-indexing selected repository",
         detail: "Parsing the current repository copy and rebuilding local search evidence.",
         progress: 45,
+        canStop: true,
       });
       const indexed = await indexProject(selectedProject.repoPath, selectedProject.name, controller.signal);
       await refreshProjects();
@@ -343,6 +349,7 @@ export function App() {
         label: "Surveying repository and writing fresh briefing",
         detail: "Rebuilding the project map from source evidence, then generating a new briefing.",
         progress: 64,
+        canStop: true,
       });
       const result = await createOnboardingSession(indexed.projectId, briefingRole, controller.signal);
       setSession(result);
@@ -366,6 +373,8 @@ export function App() {
 
   async function handleFollowup() {
     if (!selectedProjectId || !session || !question.trim()) return;
+    if (followupInFlight.current) return;
+    followupInFlight.current = true;
     setError(null);
     setNotice(null);
     setActiveTask({ kind: "followup", label: "Answering follow-up" });
@@ -376,6 +385,7 @@ export function App() {
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {
+      followupInFlight.current = false;
       setActiveTask(null);
     }
   }

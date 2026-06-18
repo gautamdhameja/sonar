@@ -132,16 +132,12 @@ export const briefingRoleProfiles = {
   },
 } satisfies Record<BriefingRole, BriefingRoleProfile>;
 
-export const dockerModelRunnerConfig: DesktopModelConfig = {
+export const localLlamaConfig: DesktopModelConfig = {
   modelSetupComplete: false,
   modelMode: "local",
-  chatBaseUrl: "http://localhost:12434/engines/llama.cpp/v1",
-  chatModel: "hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL",
+  chatBaseUrl: "http://127.0.0.1:8080/v1",
+  chatModel: "local-model",
   chatApiKey: "not-needed",
-  embeddingBaseUrl: "http://localhost:12434/engines/v1",
-  embeddingModel: "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M",
-  embeddingApiKey: "not-needed",
-  embeddingVectorSize: 768,
   apiToken: "",
 };
 
@@ -151,10 +147,6 @@ export const openAiCompatibleConfig: DesktopModelConfig = {
   chatBaseUrl: "https://api.openai.com/v1",
   chatModel: "gpt-4.1-mini",
   chatApiKey: "",
-  embeddingBaseUrl: "https://api.openai.com/v1",
-  embeddingModel: "text-embedding-3-small",
-  embeddingApiKey: "",
-  embeddingVectorSize: 1536,
   apiToken: "",
 };
 

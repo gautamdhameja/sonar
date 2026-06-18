@@ -229,7 +229,7 @@ async function readExcerpt(
 async function consolidateGraph(
   graph: MemoryGraph,
   inventory: RepositoryInventory,
-  options: Pick<RepositorySurveyOptions, "repoName" | "complete">,
+  options: Pick<RepositorySurveyOptions, "repoName" | "complete" | "signal">,
 ): Promise<MemoryGraph> {
   if (graph.nodes.length === 0) return graph;
   if (!options.complete && shouldUseDeterministicConsolidation()) return compactMemoryGraph(graph);
@@ -240,6 +240,7 @@ async function consolidateGraph(
     complete: options.complete,
     maxRepairAttempts: 0,
     label: `survey-consolidate ${options.repoName}`,
+    signal: options.signal,
     validate: (value) => {
       const validation = validateMemoryGraph(value);
       return { valid: validation.valid, value: validation.graph, errors: validation.errors };
@@ -318,6 +319,7 @@ async function validateGraphPass(
     complete: options.complete,
     maxRepairAttempts: 1,
     label: `survey-validate ${options.repoName}`,
+    signal: options.signal,
     validate: validateSurveyObservation,
   });
 
@@ -342,7 +344,7 @@ async function validateGraphPass(
 function shouldUseDeterministicConsolidation(): boolean {
   try {
     const hostname = new URL(CONFIG.chat.baseUrl).hostname;
-    return ["localhost", "127.0.0.1", "::1", "0.0.0.0", "host.docker.internal"].includes(hostname);
+    return ["localhost", "127.0.0.1", "::1", "0.0.0.0"].includes(hostname);
   } catch {
     return false;
   }
@@ -371,6 +373,7 @@ export async function runIterativeRepositorySurvey(options: RepositorySurveyOpti
       complete: options.complete,
       maxRepairAttempts: 1,
       label: `survey-plan ${options.repoName} iteration ${iteration + 1}`,
+      signal: options.signal,
       validate: validateSurveyPlan,
     });
     const requestedFiles = planResult.ok ? planResult.value.files : [];
@@ -404,6 +407,7 @@ export async function runIterativeRepositorySurvey(options: RepositorySurveyOpti
       complete: options.complete,
       maxRepairAttempts: 1,
       label: `survey-observe ${options.repoName} iteration ${iteration + 1}`,
+      signal: options.signal,
       validate: validateSurveyObservation,
     });
     if (!observationResult.ok) {
@@ -430,7 +434,11 @@ export async function runIterativeRepositorySurvey(options: RepositorySurveyOpti
     warnings.push(...validation.warnings.map((warning) => `Graph validation pass: ${warning}`));
   }
 
-  graph = await consolidateGraph(graph, inventory, { repoName: options.repoName, complete: options.complete });
+  graph = await consolidateGraph(graph, inventory, {
+    repoName: options.repoName,
+    complete: options.complete,
+    signal: options.signal,
+  });
   graph = {
     ...graph,
     warnings: [...new Set([...graph.warnings, ...warnings])],

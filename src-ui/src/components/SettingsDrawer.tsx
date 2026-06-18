@@ -1,5 +1,5 @@
 import { Cloud, RefreshCw, Save, Server, X } from "lucide-react";
-import { dockerModelRunnerConfig, openAiCompatibleConfig } from "../app/constants";
+import { localLlamaConfig, openAiCompatibleConfig } from "../app/constants";
 import { stateLabel } from "../app/format";
 import type { ActiveTask } from "../app/types";
 import type { DesktopModelConfig, Project, ServiceSnapshot } from "../types";
@@ -32,8 +32,9 @@ export function SettingsDrawer({
   onSelectProject,
 }: SettingsDrawerProps) {
   const updateModelConfig = (patch: Partial<DesktopModelConfig>) => onModelConfigChange({ ...modelConfig, ...patch });
-  const useDockerLocal = () => onModelConfigChange({ ...dockerModelRunnerConfig, apiToken: modelConfig.apiToken });
+  const useLocalModel = () => onModelConfigChange({ ...localLlamaConfig, apiToken: modelConfig.apiToken });
   const useApiEndpoint = () => onModelConfigChange({ ...openAiCompatibleConfig, apiToken: modelConfig.apiToken });
+  const runtimeBusy = activeTask?.kind === "bootstrap" || activeTask?.kind === "settings";
 
   return (
     <div className="drawer-backdrop" role="presentation">
@@ -51,7 +52,7 @@ export function SettingsDrawer({
         <section className="drawer-section">
           <div className="section-title-row">
             <h3>Local services</h3>
-            <button className="secondary compact-button" onClick={onBootstrap} type="button">
+            <button className="secondary compact-button" disabled={runtimeBusy} onClick={onBootstrap} type="button">
               <RefreshCw size={15} />
               Check
             </button>
@@ -103,13 +104,13 @@ export function SettingsDrawer({
           <div className="model-mode-grid">
             <button
               className={modelConfig.modelMode === "local" ? "model-mode active" : "model-mode"}
-              onClick={useDockerLocal}
+              onClick={useLocalModel}
               type="button"
             >
               <Server size={18} />
               <span>
-                <strong>Local Docker model</strong>
-                <small>Use Docker Model Runner for generation.</small>
+                <strong>Local llama.cpp</strong>
+                <small>Use a local OpenAI-compatible llama.cpp server.</small>
               </span>
             </button>
             <button
@@ -127,24 +128,22 @@ export function SettingsDrawer({
 
           <h3>{modelConfig.modelMode === "local" ? "Local model settings" : "API endpoint settings"}</h3>
           <div className="settings-grid">
-            {modelConfig.modelMode === "api" && (
-              <label className="field">
-                <span>Generation endpoint</span>
-                <input
-                  value={modelConfig.chatBaseUrl}
-                  onChange={(event) => updateModelConfig({ chatBaseUrl: event.target.value })}
-                  placeholder="https://api.openai.com/v1 or http://localhost:8080/v1"
-                />
-              </label>
-            )}
+            <label className="field">
+              <span>Generation endpoint</span>
+              <input
+                value={modelConfig.chatBaseUrl}
+                onChange={(event) => updateModelConfig({ chatBaseUrl: event.target.value })}
+                placeholder={
+                  modelConfig.modelMode === "local" ? "http://127.0.0.1:8080/v1" : "https://api.openai.com/v1"
+                }
+              />
+            </label>
             <label className="field">
               <span>Generation model</span>
               <input
                 value={modelConfig.chatModel}
                 onChange={(event) => updateModelConfig({ chatModel: event.target.value })}
-                placeholder={
-                  modelConfig.modelMode === "local" ? "hf.co/unsloth/gemma-4-E4B-it-GGUF:UD-Q4_K_XL" : "gpt-4.1-mini"
-                }
+                placeholder={modelConfig.modelMode === "local" ? "local-model" : "gpt-4.1-mini"}
               />
             </label>
             {modelConfig.modelMode === "api" && (
@@ -160,14 +159,9 @@ export function SettingsDrawer({
             )}
           </div>
           <div className="preset-row">
-            <button
-              className="primary"
-              disabled={activeTask?.kind === "settings"}
-              onClick={onSaveModelConfig}
-              type="button"
-            >
+            <button className="primary" disabled={runtimeBusy} onClick={onSaveModelConfig} type="button">
               <Save size={16} />
-              Save and restart API
+              Save and restart runtime
             </button>
           </div>
         </section>

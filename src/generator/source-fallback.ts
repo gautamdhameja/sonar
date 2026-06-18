@@ -49,8 +49,12 @@ async function readLineRange(
   startLine: number,
   endLine: number,
 ): Promise<string | null> {
+  if (!isSafeRepoRelativePath(filePath)) return null;
   try {
-    const fullPath = path.join(repoRoot, filePath);
+    const root = await fs.realpath(repoRoot);
+    const fullPath = await fs.realpath(path.join(root, filePath));
+    const relative = path.relative(root, fullPath);
+    if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) return null;
     const text = await fs.readFile(fullPath, "utf-8");
     return text
       .split(/\r?\n/)
@@ -61,9 +65,21 @@ async function readLineRange(
   }
 }
 
+function isSafeRepoRelativePath(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, "/");
+  return (
+    normalized.trim().length > 0 &&
+    !path.isAbsolute(normalized) &&
+    !normalized.split("/").includes("..") &&
+    !normalized.split("/").includes("")
+  );
+}
+
 export async function graphSourceUnits(repoRoot: string, graph: MemoryGraph): Promise<CodeUnit[]> {
   const units: CodeUnit[] = [];
+  const inspectedFiles = new Set(graph.inspectedFiles);
   for (const source of graphSources(graph)) {
+    if (!inspectedFiles.has(source.filePath)) continue;
     const code = await readLineRange(repoRoot, source.filePath, source.startLine, source.endLine);
     if (code === null) continue;
     units.push({

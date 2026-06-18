@@ -24,27 +24,6 @@ pub fn run_git(args: &[&str], current_dir: Option<&Path>) -> Result<(), String> 
     run_and_format_error(command, "git")
 }
 
-pub fn run_docker(args: &[String]) -> Result<(), String> {
-    let mut command = Command::new("docker");
-    command.args(args);
-    run_and_format_error(command, "docker")
-}
-
-pub fn docker_api_container_running() -> bool {
-    let output = Command::new("docker")
-        .args(["inspect", "-f", "{{.State.Running}}", "sonar-api-1"])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output();
-
-    match output {
-        Ok(output) if output.status.success() => {
-            String::from_utf8_lossy(&output.stdout).trim() == "true"
-        }
-        _ => false,
-    }
-}
-
 fn run_and_format_error(mut command: Command, name: &str) -> Result<(), String> {
     let output = command
         .stdin(Stdio::null())

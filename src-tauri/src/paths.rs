@@ -58,5 +58,5 @@ pub fn repository_cache_dir() -> Result<PathBuf, String> {
 }
 
 fn is_sonar_root(path: &Path) -> bool {
-    path.join("package.json").is_file() && path.join("compose.yml").is_file()
+    path.join("package.json").is_file() && path.join("src-tauri").is_dir()
 }
