@@ -111,10 +111,16 @@ function initSchema(db: Database.Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_onboarding_messages_session ON onboarding_messages(session_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS project_memory_graphs (
+      project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+      graph_json TEXT NOT NULL,
+      generated_at TEXT NOT NULL
+    );
   `);
 
   migrateSchema(db);
-  db.pragma("user_version = 3");
+  db.pragma("user_version = 4");
 }
 
 function migrateSchema(db: Database.Database): void {

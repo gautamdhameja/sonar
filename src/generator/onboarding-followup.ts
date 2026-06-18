@@ -3,6 +3,7 @@ import { CONFIG } from "../config";
 import { OnboardingSession, ProjectRepo } from "../db/project-repo";
 import { CodeUnitStore } from "../retriever/unit-store";
 import { OnboardingFollowupIntent, retrieveOnboardingFollowup } from "../retriever/onboarding-followup-retriever";
+import { formatMemoryGraphForPrompt } from "../survey/memory-graph";
 import { buildPersonaGuidance } from "./persona-guidance";
 import { generateCompletionWithLengthRetry, generateResponse } from "./llm-client";
 import { removeUncitedClaims, verifyCitations, CitationVerification } from "./citation-verifier";
@@ -68,6 +69,7 @@ function buildFollowupPrompt(input: {
   question: string;
   intent: OnboardingFollowupIntent;
   contextUnits: CodeUnit[];
+  memoryGraphText?: string;
 }): { system: string; user: string } {
   const system = [
     `You are Sonar, a local codebase briefing assistant for "${input.session.repoName}".`,
@@ -85,6 +87,7 @@ function buildFollowupPrompt(input: {
     '6. Separate observed facts from inferences. Mark inferences with "(inferred)".',
     "7. If the user asks for debugging, refactoring, line-by-line code explanation, or implementation decisions, give a brief orientation-level answer from the context and say that detailed code work should be handled by an engineer or coding agent with full repository context.",
     "8. Do not present Sonar as a replacement for a deep code review, debugger, or implementation assistant.",
+    "9. Use the Repository Memory Graph only to orient broad answers. Do not cite graph text unless the same file range appears in Code Context.",
   ].join("\n");
 
   const user = [
@@ -102,6 +105,9 @@ function buildFollowupPrompt(input: {
     "## Codebase Briefing (Orientation Only)",
     trimText(input.session.brief, 300),
     "",
+    ...(input.memoryGraphText
+      ? ["## Repository Memory Graph (Orientation Only)", trimText(input.memoryGraphText, 1800), ""]
+      : []),
     "## Rolling Conversation Summary",
     "Follow-up answers are not persisted. Use only the recent in-memory messages below for this app session.",
     "",
@@ -160,6 +166,8 @@ export async function answerOnboardingFollowup(input: {
   store: CodeUnitStore;
   repo: ProjectRepo;
 }): Promise<OnboardingFollowupResult> {
+  const memoryGraph = input.repo.getMemoryGraph(input.session.projectId);
+  const memoryGraphText = memoryGraph ? formatMemoryGraphForPrompt(memoryGraph, 18) : undefined;
   const retrieval = await retrieveOnboardingFollowup({
     query: input.question,
     projectId: input.session.projectId,
@@ -175,6 +183,7 @@ export async function answerOnboardingFollowup(input: {
     question: input.question,
     intent: retrieval.intent,
     contextUnits: retrieval.contextUnits,
+    memoryGraphText,
   });
 
   const generationStart = Date.now();
@@ -242,7 +251,7 @@ export async function answerOnboardingFollowup(input: {
     retrievalTime: retrieval.retrievalTime,
     generationTime,
     generationTruncated,
-    graphEnhanced: retrieval.graphEnhanced,
+    graphEnhanced: retrieval.graphEnhanced || Boolean(memoryGraph),
     citationVerification,
     queryPlanReason: retrieval.queryPlan.reason,
   };

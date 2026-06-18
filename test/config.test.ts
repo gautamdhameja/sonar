@@ -20,6 +20,7 @@ test("loadConfig provides local defaults", () => {
   assert.equal(config.qdrant.vectorSize, 768);
   assert.equal(config.storage.dbPath, "/tmp/sonar-home/.sonar/projects.db");
   assert.equal(config.api.host, "127.0.0.1");
+  assert.equal(config.generator.maxResponseTokens, 1800);
   assert.deepEqual(config.security.allowedRepoRoots, [process.cwd()]);
   assert.equal(config.security.allowAnyRepoRoot, false);
 });

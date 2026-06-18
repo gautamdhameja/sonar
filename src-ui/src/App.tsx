@@ -279,9 +279,9 @@ export function App() {
 
       setActiveTask({
         kind: "brief",
-        label: "Writing codebase briefing",
-        detail: "Retrieving evidence and generating the initial role-aware briefing.",
-        progress: canAnalyze ? 82 : 35,
+        label: "Surveying repository and writing briefing",
+        detail: "Building a source-backed project map, then turning it into a role-aware briefing.",
+        progress: canAnalyze ? 64 : 35,
       });
       const result = await createOnboardingSession(projectId, briefingRole, controller.signal);
       setSession(result);
@@ -340,9 +340,9 @@ export function App() {
 
       setActiveTask({
         kind: "brief",
-        label: "Writing fresh codebase briefing",
-        detail: "Retrieving evidence from the new index and generating a new briefing.",
-        progress: 82,
+        label: "Surveying repository and writing fresh briefing",
+        detail: "Rebuilding the project map from source evidence, then generating a new briefing.",
+        progress: 64,
       });
       const result = await createOnboardingSession(indexed.projectId, briefingRole, controller.signal);
       setSession(result);

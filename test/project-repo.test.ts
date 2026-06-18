@@ -80,6 +80,53 @@ test("ProjectRepo replaces an indexed project in a single repository transaction
   assert.equal(repo.getDependencyEdges(second.id).length, 1);
 });
 
+test("ProjectRepo persists and replaces project memory graphs", async () => {
+  const { ProjectRepo } = await import("../src/db/project-repo");
+  const { getDatabase } = await import("../src/db/schema");
+  const repo = new ProjectRepo();
+  const project = repo.replaceProjectIndex({
+    id: "project-graph-1",
+    name: "Graph Repo",
+    repoPath: "/tmp/repo-graph",
+    units: [unit({ id: "graph-unit-1", filePath: "src/main.ts" })],
+    edges: [],
+  });
+
+  repo.saveMemoryGraph(project.id, {
+    projectId: project.id,
+    generatedAt: "2026-06-17T00:00:00.000Z",
+    summary: "A graph-backed briefing memory.",
+    inspectedFiles: ["src/main.ts"],
+    warnings: [],
+    nodes: [
+      {
+        id: "repo",
+        type: "repository",
+        label: "Graph Repo",
+        summary: "The repository has a source-backed entry point.",
+        confidence: "high",
+        sources: [{ filePath: "src/main.ts", startLine: 1, endLine: 1 }],
+      },
+    ],
+    edges: [],
+  });
+
+  assert.equal(repo.getMemoryGraph(project.id)?.nodes[0].label, "Graph Repo");
+
+  getDatabase().prepare("UPDATE project_memory_graphs SET graph_json = ? WHERE project_id = ?").run("{bad", project.id);
+  assert.equal(repo.getMemoryGraph(project.id), null);
+
+  const replacement = repo.replaceProjectIndex({
+    id: "project-graph-2",
+    name: "Graph Repo",
+    repoPath: "/tmp/repo-graph",
+    units: [unit({ id: "graph-unit-2", filePath: "src/new.ts" })],
+    edges: [],
+  });
+  assert.equal(repo.getMemoryGraph(project.id), null);
+  assert.equal(repo.getMemoryGraph(replacement.id), null);
+});
+
 test("ProjectRepo persists onboarding sessions and supports legacy messages", async () => {
   const { ProjectRepo } = await import("../src/db/project-repo");
   const { DEFAULT_PERSONA } = await import("../src/persona/types");

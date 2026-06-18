@@ -21,6 +21,11 @@ function findBestNeedleOffset(code: string, needles: string[]): number {
   return -1;
 }
 
+function findMarkdownHeadingOffset(code: string): number {
+  const match = code.match(/^#\s+\S.*$/m);
+  return match?.index ?? -1;
+}
+
 export function truncateLargeUnits(units: CodeUnit[], maxTokens: number, maxUnitRatio = 0.4, query = ""): CodeUnit[] {
   const maxSingleUnit = Math.floor(maxTokens * maxUnitRatio);
   const needles = extractNeedlesForCitationOrPacking(query);
@@ -29,7 +34,10 @@ export function truncateLargeUnits(units: CodeUnit[], maxTokens: number, maxUnit
 
     const charLimit = maxSingleUnit * 3;
     const evidenceOffset = findBestNeedleOffset(unit.code, needles);
-    const rawStart = evidenceOffset === -1 ? 0 : Math.max(0, evidenceOffset - Math.floor(charLimit / 2));
+    const markdownOffset =
+      evidenceOffset === -1 && /\.(md|mdx)$/i.test(unit.filePath) ? findMarkdownHeadingOffset(unit.code) : -1;
+    const bestOffset = evidenceOffset !== -1 ? evidenceOffset : markdownOffset;
+    const rawStart = bestOffset === -1 ? 0 : Math.max(0, bestOffset - Math.floor(charLimit / 4));
     const snippetStart = rawStart === 0 ? 0 : unit.code.lastIndexOf("\n", rawStart) + 1;
     const snippetEnd = Math.min(unit.code.length, snippetStart + charLimit);
     const truncatedCode = unit.code.slice(snippetStart, snippetEnd);

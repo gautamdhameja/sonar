@@ -5,7 +5,7 @@ import { logger } from "../utils/logger";
 const client = new OpenAI({
   baseURL: CONFIG.chat.baseUrl,
   apiKey: CONFIG.chat.apiKey,
-  timeout: 120_000,
+  timeout: chatTimeoutMs(),
   maxRetries: 1,
 });
 
@@ -15,9 +15,20 @@ export interface LlmCompletion {
   truncated: boolean;
 }
 
+export interface LlmCompletionOptions {
+  label?: string;
+}
+
 type TokenLimitParam = "max_tokens" | "max_completion_tokens";
 
 let preferredTokenLimitParam: TokenLimitParam = defaultTokenLimitParam();
+
+function chatTimeoutMs(): number {
+  const raw = process.env.SONAR_CHAT_TIMEOUT_MS;
+  if (!raw || raw.trim() === "") return 300_000;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 300_000;
+}
 
 function defaultTokenLimitParam(): TokenLimitParam {
   try {
@@ -56,8 +67,47 @@ function unsupportedParameter(err: unknown): string | null {
   return null;
 }
 
-export async function generateCompletion(system: string, user: string): Promise<LlmCompletion> {
+function roughTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+function defaultLabel(system: string): string {
+  const firstLine = system.split(/\r?\n/, 1)[0]?.trim();
+  return firstLine ? firstLine.slice(0, 90) : "LLM generation";
+}
+
+function shouldDisableLocalReasoning(): boolean {
+  if (process.env.SONAR_DISABLE_MODEL_REASONING?.toLowerCase() === "false") return false;
   try {
+    const hostname = new URL(CONFIG.chat.baseUrl).hostname;
+    return ["localhost", "127.0.0.1", "::1", "0.0.0.0", "host.docker.internal"].includes(hostname);
+  } catch {
+    return false;
+  }
+}
+
+export async function generateCompletion(
+  system: string,
+  user: string,
+  options: LlmCompletionOptions = {},
+): Promise<LlmCompletion> {
+  const label = options.label ?? defaultLabel(system);
+  const disableLocalReasoning = shouldDisableLocalReasoning();
+  const started = Date.now();
+  const promptChars = system.length + user.length;
+  logger.info(
+    `LLM start: ${label}; model=${CONFIG.chat.model}; promptChars=${promptChars}; promptTokens≈${roughTokens(
+      `${system}\n${user}`,
+    )}; maxResponseTokens=${CONFIG.generator.maxResponseTokens}; tokenParam=${preferredTokenLimitParam}; reasoningDisabled=${disableLocalReasoning}`,
+  );
+  try {
+    const localReasoningOptions = disableLocalReasoning
+      ? {
+          chat_template_kwargs: {
+            enable_thinking: false,
+          },
+        }
+      : {};
     const request = {
       model: CONFIG.chat.model,
       messages: [
@@ -65,6 +115,7 @@ export async function generateCompletion(system: string, user: string): Promise<
         { role: "user" as const, content: user },
       ],
       temperature: CONFIG.generator.temperature,
+      ...localReasoningOptions,
     };
     const completion = await client.chat.completions
       .create({
@@ -85,14 +136,23 @@ export async function generateCompletion(system: string, user: string): Promise<
 
     const choice = completion.choices[0];
     const finishReason = choice.finish_reason ?? null;
+    const content = choice.message.content ?? "";
+    const messageWithReasoning = choice.message as unknown as { reasoning_content?: unknown };
+    const reasoningContent =
+      typeof messageWithReasoning.reasoning_content === "string" ? messageWithReasoning.reasoning_content : "";
+    logger.info(
+      `LLM done: ${label}; durationMs=${Date.now() - started}; finish=${finishReason ?? "unknown"}; contentChars=${
+        content.length
+      }; reasoningChars=${reasoningContent.length}; visibleEmpty=${content.trim() === ""}`,
+    );
     return {
-      content: choice.message.content ?? "",
+      content,
       finishReason,
       truncated: finishReason === "length",
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.error("LLM generation failed:", message);
+    logger.error(`LLM failed: ${label}; durationMs=${Date.now() - started}; error=${message}`);
     throw new Error(`LLM generation failed: ${message}`);
   }
 }

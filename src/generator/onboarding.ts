@@ -17,10 +17,30 @@ import {
   isDocumentationFile,
 } from "../retriever/source-classifier";
 import { CodeUnitStore } from "../retriever/unit-store";
+import {
+  compactMemoryGraph,
+  formatMemoryGraphForPrompt,
+  MemoryGraph,
+  MemoryGraphNode,
+  MemoryGraphSourceRef,
+} from "../survey/memory-graph";
+import { runIterativeRepositorySurvey } from "../survey/iterative-survey";
 import { logger } from "../utils/logger";
-import { removeUncitedClaims, verifyCitations, CitationVerification } from "./citation-verifier";
+import {
+  normalizeInvalidCitations,
+  removeInvalidCitationClaims,
+  removeUncitedClaims,
+  removeWeaklySupportedAiClaims,
+  removeWeaklySupportedPrivacyClaims,
+  removeWeaklySupportedSecurityAccessClaims,
+  removeWeaklySupportedSharingClaims,
+  removeWeaklySupportedUsageClaims,
+  verifyCitations,
+  CitationVerification,
+} from "./citation-verifier";
 import { generateCompletion } from "./llm-client";
 import { buildCitationRepairPrompt, buildOnboardingBriefPartPrompt } from "./onboarding-prompt";
+import { graphSourceUnits } from "./source-fallback";
 
 export interface OnboardingBriefResult {
   projectId: string;
@@ -35,6 +55,9 @@ export interface OnboardingBriefResult {
   citationVerification: CitationVerification;
   repaired: boolean;
   retrievalDiagnostics: OnboardingRetrievalDiagnostic[];
+  memoryGraph?: MemoryGraph;
+  surveyTime?: number;
+  surveyFallbackUsed?: boolean;
 }
 
 const ONBOARDING_QUERY_PLAN: QueryPlan = {
@@ -60,6 +83,7 @@ const BRIEFING_PARTS = [
   ["Main Systems And Ownership Areas", "Data, Privacy, And Operational Notes"],
   ["Risks Or Open Questions", "Glossary For A Non-Deeply-Technical Reader"],
 ];
+const BRIEFING_SECTIONS = [...new Set(BRIEFING_PARTS.flat())];
 
 const COMPLETE_LINE_PATTERN = /(?:[.!?)]|]|\|)$/;
 
@@ -88,6 +112,15 @@ function defaultFocus(): string[] {
     "data, privacy, and operational risks",
     "questions to ask the team",
   ];
+}
+
+function isLocalChatEndpoint(): boolean {
+  try {
+    const hostname = new URL(CONFIG.chat.baseUrl).hostname;
+    return ["localhost", "127.0.0.1", "::1", "0.0.0.0", "host.docker.internal"].includes(hostname);
+  } catch {
+    return false;
+  }
 }
 
 function sourceList(units: CodeUnit[]) {
@@ -169,10 +202,14 @@ function uniqueDiagnostics(diagnostics: OnboardingRetrievalDiagnostic[]): Onboar
 
 function selectOnboardingContext(units: CodeUnit[], maxTokens: number, query: string, maxUnitRatio = 0.18): CodeUnit[] {
   const truncated = truncateLargeUnits(units, maxTokens, maxUnitRatio, query);
+  const prioritized = uniqueUnits([
+    ...truncated.filter((unit) => classifyBriefingEvidence(unit.filePath).includes("overview_docs")).slice(0, 2),
+    ...truncated,
+  ]);
   const selected: CodeUnit[] = [];
   let total = 0;
 
-  for (const unit of truncated) {
+  for (const unit of prioritized) {
     const tokens = estimateTokens(unit.code);
     if (total + tokens > maxTokens) continue;
     selected.push(unit);
@@ -353,6 +390,215 @@ export function sanitizeTruncatedBriefingPart(content: string, sections: string[
   return output.join("\n\n");
 }
 
+function cite(unit: CodeUnit): string {
+  return `[${unit.filePath}:${unit.startLine}-${unit.endLine}]`;
+}
+
+function firstEvidence(units: CodeUnit[], buckets: BriefingEvidenceBucket[]): CodeUnit | undefined {
+  return units.find((unit) => classifyBriefingEvidence(unit.filePath).some((bucket) => buckets.includes(bucket)));
+}
+
+function fallbackEvidence(units: CodeUnit[]): {
+  entry?: CodeUnit;
+  ui?: CodeUnit;
+  api?: CodeUnit;
+  data?: CodeUnit;
+  auth?: CodeUnit;
+  ops?: CodeUnit;
+} {
+  return {
+    entry: firstEvidence(units, ["overview_docs", "stack_config", "operations_config", "api_handlers"]),
+    ui: firstEvidence(units, ["routes_pages"]),
+    api: firstEvidence(units, ["api_handlers"]),
+    data: firstEvidence(units, ["storage_files"]),
+    auth: firstEvidence(units, ["auth_security"]),
+    ops: firstEvidence(units, ["workflow_jobs", "analytics_tracking"]),
+  };
+}
+
+function joinCitations(...units: Array<CodeUnit | undefined>): string {
+  return uniqueUnits(units.filter((unit): unit is CodeUnit => Boolean(unit)))
+    .slice(0, 3)
+    .map(cite)
+    .join(" ");
+}
+
+function citationForGraphSource(source: MemoryGraphSourceRef, units: CodeUnit[]): string | null {
+  const unit = units.find(
+    (candidate) =>
+      candidate.filePath === source.filePath &&
+      source.startLine >= candidate.startLine &&
+      source.endLine <= candidate.endLine,
+  );
+  if (unit) return `[${source.filePath}:${source.startLine}-${source.endLine}]`;
+
+  const overlappingUnit = units.find(
+    (candidate) =>
+      candidate.filePath === source.filePath &&
+      candidate.startLine <= source.endLine &&
+      candidate.endLine >= source.startLine,
+  );
+  return overlappingUnit ? cite(overlappingUnit) : null;
+}
+
+function citationForGraphNode(node: MemoryGraphNode, units: CodeUnit[]): string | null {
+  for (const source of node.sources) {
+    const citation = citationForGraphSource(source, units);
+    if (citation) return citation;
+  }
+  return null;
+}
+
+function graphNodesWithCitations(
+  memoryGraph: MemoryGraph | undefined,
+  units: CodeUnit[],
+): Array<{
+  node: MemoryGraphNode;
+  citation: string;
+}> {
+  if (!memoryGraph) return [];
+  return memoryGraph.nodes
+    .map((node) => ({ node, citation: citationForGraphNode(node, units) }))
+    .filter((item): item is { node: MemoryGraphNode; citation: string } => Boolean(item.citation));
+}
+
+function nodeLine(item: { node: MemoryGraphNode; citation: string }): string {
+  return `- **${item.node.label}**: ${cleanGraphSummary(item.node.summary)} ${item.citation}.`;
+}
+
+function cleanGraphSummary(summary: string): string {
+  return summary.replace(/\s+Evidence:\s+.*$/i, "").trim();
+}
+
+function buildGraphSectionFallback(
+  section: string,
+  units: CodeUnit[],
+  memoryGraph: MemoryGraph | undefined,
+): string | null {
+  const graphItems = graphNodesWithCitations(memoryGraph, units);
+  if (graphItems.length === 0) return null;
+
+  const workflows = graphItems.filter((item) => item.node.type === "workflow");
+  const systems = graphItems.filter((item) => ["area", "workflow", "boundary", "state"].includes(item.node.type));
+  const riskItems = graphItems.filter((item) => item.node.type === "risk");
+  const stateOrBoundary = graphItems.filter((item) => ["state", "boundary"].includes(item.node.type));
+  const top = (items: typeof graphItems, count: number) => items.slice(0, count);
+  const primary = top(systems.length > 0 ? systems : graphItems, 3);
+  const primaryLabels = primary.map((item) => item.node.label).join(", ");
+
+  switch (section) {
+    case "Product In One Paragraph":
+      return `The inspected evidence shows ${primaryLabels} as central repository responsibilities; treat this as a source-backed orientation, not a complete product description ${primary.map((item) => item.citation).join(" ")}.`;
+    case "Who Uses It And Why":
+      return `The inspected context does not prove exact personas. It does show workflows likely used by people operating, configuring, or extending the project: ${primaryLabels} ${primary.map((item) => item.citation).join(" ")}.`;
+    case "Codebase Product Map":
+      return top(systems.length > 0 ? systems : graphItems, 5)
+        .map(nodeLine)
+        .join("\n");
+    case "Top User Workflows":
+      return top(workflows.length > 0 ? workflows : systems, 5)
+        .map(
+          (item, index) =>
+            `${index + 1}. **${item.node.label}**: ${cleanGraphSummary(item.node.summary)} ${item.citation}.`,
+        )
+        .join("\n");
+    case "Main Systems And Ownership Areas":
+      return top(systems.length > 0 ? systems : graphItems, 5)
+        .map(nodeLine)
+        .join("\n");
+    case "Data, Privacy, And Operational Notes":
+      if (stateOrBoundary.length > 0) return top(stateOrBoundary, 4).map(nodeLine).join("\n");
+      return `The inspected graph does not expose enough state, boundary, privacy, or operational evidence for a strong claim; review the central workflows before making risk decisions ${primary.map((item) => item.citation).join(" ")}.`;
+    case "Risks Or Open Questions":
+      if (riskItems.length > 0) return top(riskItems, 4).map(nodeLine).join("\n");
+      return `- Confirm edge cases, failure modes, and operational boundaries around ${primaryLabels}; the inspected graph is useful but not exhaustive ${primary.map((item) => item.citation).join(" ")}.`;
+    case "Glossary For A Non-Deeply-Technical Reader":
+      return top(graphItems, 5)
+        .map((item) => `- **${item.node.label}**: ${cleanGraphSummary(item.node.summary)} ${item.citation}.`)
+        .join("\n");
+    default:
+      return null;
+  }
+}
+
+function buildSectionFallback(section: string, units: CodeUnit[], memoryGraph?: MemoryGraph): string {
+  const graphFallback = buildGraphSectionFallback(section, units, memoryGraph);
+  if (graphFallback) return graphFallback;
+
+  const evidence = fallbackEvidence(units);
+  const coreCitation = joinCitations(evidence.entry, evidence.ui, evidence.api, units[0]);
+  const workflowCitation = joinCitations(evidence.ui, evidence.api, evidence.data, units[0]);
+  const riskCitation = joinCitations(evidence.auth, evidence.data, evidence.ops, evidence.api, units[0]);
+
+  switch (section) {
+    case "Product In One Paragraph":
+      return `The selected source evidence shows a repository with identifiable entry, workflow, or configuration code; treat this as a cautious source-backed orientation until broader context is inspected ${coreCitation}.`;
+    case "Who Uses It And Why":
+      return `The provided context does not prove exact user personas, but it does show source-backed workflows or operations that people use, run, configure, or maintain ${workflowCitation}.`;
+    case "Codebase Product Map":
+      return [
+        `- **Runtime or entry area**: Startup or top-level code is represented in the selected evidence ${joinCitations(evidence.entry, units[0])}.`,
+        `- **Workflow area**: The selected evidence includes code that coordinates repository behavior ${joinCitations(evidence.ui, evidence.api, evidence.data, units[0])}.`,
+        `- **Configuration or operations area**: Configuration, security, or operational evidence should be reviewed before making broader claims ${riskCitation}.`,
+      ].join("\n");
+    case "Top User Workflows":
+      return `1. **Primary repository workflow**: Follow the selected entry, workflow, and state/configuration files before making stronger workflow claims ${workflowCitation}.`;
+    case "Main Systems And Ownership Areas":
+      return [
+        `- **Runtime and delivery**: Startup or execution evidence is present ${joinCitations(evidence.entry, evidence.api, units[0])}.`,
+        `- **Workflow coordination**: Selected files appear to coordinate repository behavior ${workflowCitation}.`,
+        `- **State or configuration**: Persistence, configuration, service, or storage files should be reviewed as likely ownership boundaries ${joinCitations(evidence.data, evidence.auth, units[0])}.`,
+      ].join("\n");
+    case "Data, Privacy, And Operational Notes":
+      return `The selected evidence is enough to flag state, configuration, security, or operational review as important, but not enough to make broad privacy or compliance claims ${riskCitation}.`;
+    case "Risks Or Open Questions":
+      return `- Confirm the complete lifecycle, configuration model, and operational failure paths with broader source review before treating this briefing as complete ${riskCitation}.`;
+    case "Glossary For A Non-Deeply-Technical Reader":
+      return [
+        `- **Entry point**: Code that starts or wires the application ${joinCitations(evidence.entry, units[0])}.`,
+        `- **Workflow code**: Code that coordinates a user, operator, or system task ${workflowCitation}.`,
+        `- **State or configuration**: Files that shape how the project stores data, reads settings, or controls behavior ${joinCitations(evidence.data, evidence.auth, units[0])}.`,
+      ].join("\n");
+    default:
+      return `Not enough source-backed evidence was available for this section ${coreCitation}.`;
+  }
+}
+
+function shouldBackfillSection(body: string): boolean {
+  const normalized = body.trim();
+  return (
+    normalized.length === 0 ||
+    /^not found in provided context\.?$/i.test(normalized) ||
+    !/\[[^\]\n]+:\d+(?:-\d+)?\]/.test(normalized)
+  );
+}
+
+export function backfillEmptyBriefingSections(
+  brief: string,
+  sections: string[],
+  units: CodeUnit[],
+  memoryGraph?: MemoryGraph,
+): string {
+  if (units.length === 0) return brief;
+
+  let next = brief;
+  for (const section of sections) {
+    const match = next.match(sectionPattern(section));
+    if (!match || match.index === undefined) continue;
+
+    const start = match.index + match[0].length;
+    const nextHeadingIndex = next.slice(start).search(/^###\s+/m);
+    const end = nextHeadingIndex >= 0 ? start + nextHeadingIndex : next.length;
+    const body = next.slice(start, end);
+    if (!shouldBackfillSection(body)) continue;
+
+    const fallback = `\n${buildSectionFallback(section, units, memoryGraph)}\n\n`;
+    next = `${next.slice(0, start)}${fallback}${next.slice(end).replace(/^\n+/, "")}`;
+  }
+
+  return next.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 async function generateBriefingPart(
   contextUnits: CodeUnit[],
   options: {
@@ -362,11 +608,13 @@ async function generateBriefingPart(
     persona: Persona;
     sections: string[];
     workflowPlanText?: string;
+    memoryGraphText?: string;
   },
 ): Promise<{ content: string; generationTime: number; truncated: boolean }> {
   const prompt = buildOnboardingBriefPartPrompt(contextUnits, options);
+  const label = `briefing-part ${options.repoName}: ${options.sections.join(" + ")}`;
   const started = Date.now();
-  const completion = await generateCompletion(prompt.system, prompt.user);
+  const completion = await generateCompletion(prompt.system, prompt.user, { label });
   let generationTime = Date.now() - started;
 
   if (!completion.truncated) {
@@ -383,6 +631,7 @@ async function generateBriefingPart(
       "The previous answer was too long. Return a shorter version under 140 words total.",
       "Keep the same requested section headings and preserve citations.",
     ].join("\n"),
+    { label: `${label} retry-shorter` },
   );
   generationTime += Date.now() - retryStarted;
 
@@ -405,6 +654,8 @@ export async function generateOnboardingBrief(
     audience?: string;
     focus?: string[];
     persona?: Persona;
+    repoRoot?: string;
+    memoryGraph?: MemoryGraph;
   },
 ): Promise<OnboardingBriefResult> {
   const audience = options.audience?.trim() || "A teammate trying to understand this repository";
@@ -418,13 +669,55 @@ export async function generateOnboardingBrief(
   ].join(" ");
 
   const retrievalStart = Date.now();
+  let memoryGraph = options.memoryGraph;
+  let surveyTime = 0;
+  let surveyFallbackUsed = false;
+  const localOptimized = isLocalChatEndpoint();
+
+  if (!memoryGraph && options.repoRoot && !localOptimized) {
+    const surveyStart = Date.now();
+    try {
+      const survey = await runIterativeRepositorySurvey({
+        repoRoot: options.repoRoot,
+        projectId: options.projectId,
+        repoName: options.repoName,
+      });
+      memoryGraph = survey.graph;
+      surveyFallbackUsed = survey.fallbackUsed;
+      surveyTime = Date.now() - surveyStart;
+    } catch (err) {
+      surveyFallbackUsed = true;
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn(`Repository survey failed; falling back to retrieval-first briefing: ${message}`);
+      surveyTime = Date.now() - surveyStart;
+    }
+  } else if (localOptimized) {
+    surveyFallbackUsed = true;
+    logger.info("Using compact local-model briefing path; skipping LLM survey graph generation");
+  }
+
   const workflowPlan = buildBriefingWorkflowPlan(store);
   const workflowPlanText = workflowPlanToPrompt(workflowPlan);
+  const compactBriefing = localOptimized;
+  const promptGraph =
+    memoryGraph && compactBriefing
+      ? compactMemoryGraph(memoryGraph, 10, 8)
+      : memoryGraph
+        ? compactMemoryGraph(memoryGraph, 18, 12)
+        : undefined;
+  const memoryGraphText = promptGraph ? formatMemoryGraphForPrompt(promptGraph, compactBriefing ? 10 : 18) : undefined;
+  const graphUnits = memoryGraph && options.repoRoot ? await graphSourceUnits(options.repoRoot, memoryGraph) : [];
   const sectionContexts = BRIEFING_PARTS.map((sections) => ({
     sections,
     ...retrieveContextForSections(store, query, sections, workflowPlan),
   }));
-  const contextUnits = uniqueUnits(sectionContexts.flatMap((sectionContext) => sectionContext.contextUnits));
+  const rawContextUnits = uniqueUnits([
+    ...graphUnits,
+    ...sectionContexts.flatMap((sectionContext) => sectionContext.contextUnits),
+  ]);
+  const contextUnits = compactBriefing
+    ? selectOnboardingContext(rawContextUnits, CONFIG.generator.maxContextTokens, query, 0.1)
+    : rawContextUnits;
   const retrievalDiagnostics = uniqueDiagnostics(
     sectionContexts.flatMap((sectionContext) => sectionContext.diagnostics),
   );
@@ -432,7 +725,18 @@ export async function generateOnboardingBrief(
 
   const generationStart = Date.now();
   const generatedParts = [];
-  for (const sectionContext of sectionContexts) {
+  const generationContexts = compactBriefing
+    ? [
+        {
+          sections: BRIEFING_SECTIONS,
+          contextUnits,
+        },
+      ]
+    : sectionContexts.map((sectionContext) => ({
+        sections: sectionContext.sections,
+        contextUnits: uniqueUnits([...graphUnits, ...sectionContext.contextUnits]),
+      }));
+  for (const sectionContext of generationContexts) {
     generatedParts.push(
       await generateBriefingPart(sectionContext.contextUnits, {
         repoName: options.repoName,
@@ -441,6 +745,7 @@ export async function generateOnboardingBrief(
         persona,
         sections: sectionContext.sections,
         workflowPlanText,
+        memoryGraphText,
       }),
     );
   }
@@ -451,15 +756,27 @@ export async function generateOnboardingBrief(
   let repaired = false;
 
   if (citationVerification.invalidCitations.length > 0) {
+    const normalizedBrief = normalizeInvalidCitations(brief, contextUnits, citationVerification);
+    const normalizedVerification = verifyCitations(normalizedBrief, contextUnits);
+    if (normalizedVerification.invalidCitations.length < citationVerification.invalidCitations.length) {
+      brief = normalizedBrief;
+      citationVerification = normalizedVerification;
+      repaired = true;
+    }
+  }
+
+  if (citationVerification.invalidCitations.length > 0) {
     const repairStart = Date.now();
     const repairPrompt = buildCitationRepairPrompt(brief, contextUnits, citationVerification);
-    const repairedCompletion = await generateCompletion(repairPrompt.system, repairPrompt.user);
+    const repairedCompletion = await generateCompletion(repairPrompt.system, repairPrompt.user, {
+      label: `briefing-citation-repair ${options.repoName}`,
+    });
     const repairedBrief = repairedCompletion.content;
     const repairedVerification = verifyCitations(repairedBrief, contextUnits);
 
     if (
       !repairedCompletion.truncated &&
-      repairedVerification.invalidCitations.length <= citationVerification.invalidCitations.length &&
+      repairedVerification.invalidCitations.length === 0 &&
       repairedVerification.uncitedClaims.length < citationVerification.uncitedClaims.length
     ) {
       brief = repairedBrief;
@@ -470,6 +787,29 @@ export async function generateOnboardingBrief(
     generationTime += Date.now() - repairStart;
   }
 
+  if (citationVerification.invalidCitations.length > 0) {
+    const normalizedBrief = normalizeInvalidCitations(brief, contextUnits, citationVerification);
+    const normalizedVerification = verifyCitations(normalizedBrief, contextUnits);
+    if (normalizedVerification.invalidCitations.length < citationVerification.invalidCitations.length) {
+      brief = normalizedBrief;
+      citationVerification = normalizedVerification;
+      repaired = true;
+    }
+  }
+
+  if (citationVerification.invalidCitations.length > 0) {
+    const scrubbedBrief = removeInvalidCitationClaims(brief, citationVerification);
+    const scrubbedVerification = verifyCitations(scrubbedBrief, contextUnits);
+    if (
+      scrubbedBrief.length >= Math.max(120, brief.length * 0.25) &&
+      scrubbedVerification.invalidCitations.length < citationVerification.invalidCitations.length
+    ) {
+      brief = scrubbedBrief;
+      citationVerification = scrubbedVerification;
+      repaired = true;
+    }
+  }
+
   if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
     const scrubbedBrief = removeUncitedClaims(brief, citationVerification);
     const scrubbedVerification = verifyCitations(scrubbedBrief, contextUnits);
@@ -477,6 +817,60 @@ export async function generateOnboardingBrief(
       scrubbedBrief.length >= Math.max(120, brief.length * 0.35) &&
       scrubbedVerification.uncitedClaims.length < citationVerification.uncitedClaims.length
     ) {
+      brief = scrubbedBrief;
+      citationVerification = scrubbedVerification;
+      repaired = true;
+    }
+  }
+
+  if (citationVerification.invalidCitations.length === 0) {
+    const scrubbedBrief = removeWeaklySupportedAiClaims(
+      removeWeaklySupportedPrivacyClaims(
+        removeWeaklySupportedSecurityAccessClaims(
+          removeWeaklySupportedUsageClaims(
+            removeWeaklySupportedSharingClaims(brief, citationVerification),
+            citationVerification,
+          ),
+          citationVerification,
+        ),
+        citationVerification,
+      ),
+      citationVerification,
+    );
+    if (scrubbedBrief !== brief) {
+      const scrubbedVerification = verifyCitations(scrubbedBrief, contextUnits);
+      if (
+        scrubbedVerification.valid ||
+        scrubbedVerification.uncitedClaims.length <= citationVerification.uncitedClaims.length
+      ) {
+        brief = scrubbedBrief;
+        citationVerification = scrubbedVerification;
+        repaired = true;
+      }
+    }
+  }
+
+  if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
+    const scrubbedBrief = removeUncitedClaims(brief, citationVerification);
+    const scrubbedVerification = verifyCitations(scrubbedBrief, contextUnits);
+    if (scrubbedBrief !== brief) {
+      brief = scrubbedBrief;
+      citationVerification = scrubbedVerification;
+      repaired = true;
+    }
+  }
+
+  const backfilledBrief = backfillEmptyBriefingSections(brief, BRIEFING_SECTIONS, contextUnits, memoryGraph);
+  if (backfilledBrief !== brief) {
+    brief = backfilledBrief;
+    citationVerification = verifyCitations(brief, contextUnits);
+    repaired = true;
+  }
+
+  if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
+    const scrubbedBrief = removeUncitedClaims(brief, citationVerification);
+    const scrubbedVerification = verifyCitations(scrubbedBrief, contextUnits);
+    if (scrubbedBrief !== brief) {
       brief = scrubbedBrief;
       citationVerification = scrubbedVerification;
       repaired = true;
@@ -496,5 +890,8 @@ export async function generateOnboardingBrief(
     citationVerification,
     repaired,
     retrievalDiagnostics,
+    memoryGraph,
+    surveyTime,
+    surveyFallbackUsed,
   };
 }

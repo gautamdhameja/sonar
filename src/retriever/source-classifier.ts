@@ -16,7 +16,7 @@ export type BriefingEvidenceBucket =
   | "operations_config";
 
 export function isTestFile(filePath: string): boolean {
-  return /(^|\/)(tests?|__tests__)\/|(\.|-)(test|spec)\.[tj]sx?$|(^|\/)test_[^/]+\.py$|(^|\/)[^/]+_test\.py$/.test(
+  return /(^|\/)(tests?|__tests__)\/|(\.|-)(test|spec)\.[tj]sx?$|(^|\/)test_[^/]+\.[^.]+$|(^|\/)[^/]+_test\.[^.]+$/.test(
     filePath,
   );
 }
@@ -25,11 +25,30 @@ export function isDocumentationFile(filePath: string): boolean {
   return /^(readme|docs\/|.*\.mdx?$)/i.test(filePath);
 }
 
+export function isProductOverviewDoc(filePath: string): boolean {
+  const normalized = filePath.toLowerCase();
+  return (
+    /^readme\.mdx?$/.test(normalized) ||
+    /^docs\/readme\.mdx?$/.test(normalized) ||
+    /^docs\/(index|overview|introduction|getting-started|quick-start|about)\.mdx?$/.test(normalized) ||
+    /^docs\/content\/[^/]+\/(_index|overview|introduction|getting-started|quick-start|about)\.mdx?$/.test(normalized)
+  );
+}
+
+export function isNarrowReferenceDoc(filePath: string): boolean {
+  const normalized = filePath.toLowerCase();
+  if (!isDocumentationFile(normalized) || isProductOverviewDoc(normalized)) return false;
+  return /(^|\/)(functions?|methods?|_common|reference|api|commands?|quick-reference)\//.test(normalized);
+}
+
 export function isBriefingNoiseFile(filePath: string): boolean {
   const normalized = filePath.toLowerCase();
   return (
     /(^|\/)(\.agents|\.cursor|\.github|node_modules|public\/vendor|vendor|dist|build|coverage)\//.test(normalized) ||
+    /(^|\/)(proto\/gen|gen|generated)\//.test(normalized) ||
+    /(^|\/)docs\/(plans|superpowers)\//.test(normalized) ||
     /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb|cargo\.lock|pipfile\.lock)$/.test(normalized) ||
+    /\.pb\.go$/.test(normalized) ||
     /\.min\.[cm]?[jt]sx?$/.test(normalized) ||
     /\.(png|jpe?g|gif|webp|svg|ico|pdf|map)$/.test(normalized)
   );
@@ -40,15 +59,33 @@ export function classifyBriefingEvidence(filePath: string): BriefingEvidenceBuck
   const buckets = new Set<BriefingEvidenceBucket>();
 
   if (/^(readme\.mdx?|docs\/.*\.mdx?|security\.mdx?)$/.test(normalized)) buckets.add("overview_docs");
+  if (isDocumentationFile(normalized)) {
+    if (/(auth|security|permission|token|oauth|saml|scim|ssrf|verify|verification)/.test(normalized)) {
+      buckets.add("auth_security");
+    }
+    if (/(deployment|deploy|infra|ops|configuration|config|settings)/.test(normalized)) {
+      buckets.add("operations_config");
+    }
+    return [...buckets];
+  }
+
   if (
-    /(^|\/)(package\.json|.*config\.[cm]?[jt]s|.*config\.json|tsconfig\.json|vercel\.json|dockerfile|compose.*\.ya?ml)$/.test(
+    /(^|\/)(package\.json|go\.mod|cargo\.toml|pyproject\.toml|requirements\.txt|pom\.xml|build\.gradle|settings\.gradle|cmakelists\.txt|makefile|.*\.csproj|.*\.sln|.*config\.[cm]?[jt]s|.*config\.json|tsconfig\.json|vercel\.json|dockerfile|compose.*\.ya?ml)$/.test(
       normalized,
-    )
+    ) ||
+    /(^|\/)(docker-compose|compose)\.ya?ml$/.test(normalized)
   ) {
     buckets.add("stack_config");
     buckets.add("operations_config");
   }
-  if (/prisma\/schema\/|schema\.prisma|models?\//.test(normalized)) buckets.add("data_model");
+  if (
+    /prisma\/schema\/|schema\.prisma|(^|\/)(models?|store|stores|domain|entities|repository|repositories|db|database)\//.test(
+      normalized,
+    ) ||
+    /(^|\/)(models?|store|schema|repository)\.[^.]+$/.test(normalized)
+  ) {
+    buckets.add("data_model");
+  }
   if (
     (/^(app|pages)\//.test(normalized) && !/^(app|pages)\/api\//.test(normalized)) ||
     /(^|\/)(routes?|views?|pages|screens|ui|components)\//.test(normalized)
@@ -58,7 +95,10 @@ export function classifyBriefingEvidence(filePath: string): BriefingEvidenceBuck
   if (
     /^(app|pages)\/api\//.test(normalized) ||
     /\/api\//.test(normalized) ||
-    /(^|\/)(controllers?|handlers?|endpoints?|resources?)\//.test(normalized)
+    /(^|\/)(controllers?|handlers?|endpoints?|resources?|services?)\//.test(normalized) ||
+    /(^|\/)([^/]+_service|[^/]+service|[^/]+_handler|[^/]+handler|[^/]+_controller|[^/]+controller|router|routes?|server)\.[^.]+$/.test(
+      normalized,
+    )
   ) {
     buckets.add("api_handlers");
   }
@@ -70,7 +110,7 @@ export function classifyBriefingEvidence(filePath: string): BriefingEvidenceBuck
   ) {
     buckets.add("auth_security");
   }
-  if (/(upload|storage|blob|object-store|files?|assets?|process|convert|conversion)/.test(normalized)) {
+  if (/(upload|storage|blob|object-store|files?|assets?|attachments?|process|convert|conversion)/.test(normalized)) {
     buckets.add("storage_files");
   }
   if (/(analytics|tracking|views?|visits?|events?|metrics?|activity|reports?)/.test(normalized)) {
@@ -87,6 +127,13 @@ export function classifyBriefingEvidence(filePath: string): BriefingEvidenceBuck
   }
   if (/(^|\/)(ai|chat|vector-store|vector|embedding|agent)/.test(normalized)) {
     buckets.add("ai_features");
+  }
+  if (
+    /(^|\/)(cmd|cli|commands?|server|config|configs|settings|deployment|deploy|infra|ops)\//.test(normalized) ||
+    /(^|\/)(main|server|application|program|config|settings)\.[^.]+$/.test(normalized) ||
+    /(^|\/)[^/]*(build|builder|engine|pipeline|orchestrat)[^/]*\.[^.]+$/.test(normalized)
+  ) {
+    buckets.add("operations_config");
   }
 
   return [...buckets];

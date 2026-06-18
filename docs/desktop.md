@@ -15,7 +15,7 @@ Sonar is built for high-level codebase briefings. It helps non-technical and sem
 2. On first launch, choose **Local Docker model** or **API endpoint**.
 3. Let the app start the local Docker services.
 4. Paste a GitHub repository URL or select a local folder.
-5. Create a codebase briefing.
+5. Create a codebase briefing. Sonar inventories the repository, surveys selected files into a memory graph, and writes a cited briefing from that map.
 6. Ask follow-up questions in the same session.
 7. Copy or export the briefing as Markdown if you want to share it.
 
@@ -53,6 +53,6 @@ This file is generated locally and ignored by git.
 
 ## Language Coverage Warning
 
-When Sonar indexes a repository, it scans for common source file extensions outside the supported parser set. If it finds unsupported languages, the desktop app shows a warning with file counts. You can still create the briefing, but unsupported source files are not part of the code index.
+When Sonar indexes a repository, it scans for common source file extensions outside the supported parser set. If it finds unsupported languages, the desktop app shows a warning with file counts. You can still create the briefing, and the survey may use lightweight signals from those files, but unsupported source files are not fully parsed into the code index.
 
 Supported code parsers today cover TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, and C#. Markdown and MDX are indexed as documentation.

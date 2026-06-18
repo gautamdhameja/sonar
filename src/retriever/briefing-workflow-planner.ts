@@ -16,6 +16,20 @@ export interface BriefingDomainEntity {
   score: number;
 }
 
+export interface BriefingCentralFile {
+  filePath: string;
+  lines: string;
+  score: number;
+  reasons: string[];
+  evidence: CodeUnit;
+}
+
+export interface BriefingGroundingSignal {
+  label: string;
+  description: string;
+  evidence: CodeUnit[];
+}
+
 export interface BriefingWorkflowTrace {
   id: string;
   name: string;
@@ -28,6 +42,8 @@ export interface BriefingWorkflowTrace {
 export interface BriefingWorkflowPlan {
   productHypothesis: string;
   productSignals: string[];
+  centralFiles: BriefingCentralFile[];
+  groundingSignals: BriefingGroundingSignal[];
   domainEntities: BriefingDomainEntity[];
   workflows: BriefingWorkflowTrace[];
   lifecycleEvidence: CodeUnit[];
@@ -50,11 +66,30 @@ const WORKFLOW_BLUEPRINTS: WorkflowBlueprint[] = [
     name: "Create, process, and manage core content",
     description:
       "How users create or upload the central object in the product and how the application stores or prepares it.",
-    terms: ["item", "record", "document", "upload", "file", "content", "process", "convert", "asset", "resource"],
+    terms: [
+      "item",
+      "record",
+      "document",
+      "note",
+      "memo",
+      "post",
+      "entry",
+      "upload",
+      "file",
+      "content",
+      "process",
+      "convert",
+      "asset",
+      "resource",
+    ],
     pathPatterns: [
       /items?/,
       /records?/,
       /documents?/,
+      /notes?/,
+      /memos?/,
+      /posts?/,
+      /entries?/,
       /uploads?/,
       /files?/,
       /process/,
@@ -62,7 +97,19 @@ const WORKFLOW_BLUEPRINTS: WorkflowBlueprint[] = [
       /resources?/,
     ],
     buckets: ["routes_pages", "api_handlers", "data_model", "storage_files", "workflow_jobs"],
-    coreEntityTerms: ["item", "record", "document", "file", "asset", "content", "resource"],
+    coreEntityTerms: [
+      "item",
+      "record",
+      "document",
+      "note",
+      "memo",
+      "post",
+      "entry",
+      "file",
+      "asset",
+      "content",
+      "resource",
+    ],
   },
   {
     id: "sharing-access",
@@ -125,6 +172,10 @@ const WORKFLOW_BLUEPRINTS: WorkflowBlueprint[] = [
 
 const PRODUCT_SIGNAL_TERMS = [
   "document",
+  "note",
+  "memo",
+  "post",
+  "entry",
   "link",
   "item",
   "record",
@@ -233,7 +284,7 @@ function titleizeTerm(term: string): string {
 function entityCategory(name: string): string {
   const normalized = name.toLowerCase();
   if (/(user|account|session|team|member|invite)/.test(normalized)) return "account";
-  if (/(document|file|asset|content|page)/.test(normalized)) return "content";
+  if (/(document|note|memo|post|entry|file|asset|content|page)/.test(normalized)) return "content";
   if (/(link|share|view|viewer|visit|recipient|portal|space|access)/.test(normalized)) return "sharing";
   if (/(workflow|job|webhook|integration|trigger)/.test(normalized)) return "automation";
   if (/(plan|subscription|invoice|price|billing|limit)/.test(normalized)) return "commercial";
@@ -245,7 +296,11 @@ function entityScore(entityName: string, unit: CodeUnit): number {
   const normalized = `${entityName} ${unit.filePath}`.toLowerCase();
   let score = 20;
   if (/prisma\/schema\//.test(unit.filePath.toLowerCase())) score += 35;
-  if (/(item|record|document|link|team|user|view|viewer|recipient|portal|space)/.test(normalized)) score += 25;
+  if (
+    /(item|record|document|note|memo|post|entry|link|team|user|view|viewer|recipient|portal|space)/.test(normalized)
+  ) {
+    score += 25;
+  }
   if (/(conversation|message|oauth)/.test(normalized)) score += 8;
   if (/(billing|subscription|plan|limit|workflow)/.test(normalized)) score += 14;
   return score;
@@ -319,6 +374,145 @@ function collectProductSignals(units: CodeUnit[], entities: BriefingDomainEntity
     .map(([term]) => titleizeTerm(term));
 }
 
+function reasonedScore(reason: string, score: number): { reason: string; score: number } {
+  return { reason, score };
+}
+
+function centralityReasons(unit: CodeUnit): Array<{ reason: string; score: number }> {
+  const normalizedPath = unit.filePath.toLowerCase();
+  const text = normalizedText(unit);
+  const reasons: Array<{ reason: string; score: number }> = [];
+
+  if (unit.kind === "module") reasons.push(reasonedScore("file-level module anchor", 16));
+  if (/(^|\/)(app|main|index|server|router|routes|program|application)\.[cm]?[jt]sx?$/.test(normalizedPath)) {
+    reasons.push(reasonedScore("entry or orchestration path", 58));
+  }
+  if (
+    /(^|\/)(app|main|index|server|router|routes|program|application)\.(py|go|rs|java|cs|c|cpp)$/.test(normalizedPath)
+  ) {
+    reasons.push(reasonedScore("entry or orchestration path", 58));
+  }
+  if (
+    /^(package\.json|cargo\.toml|pyproject\.toml|go\.mod|pom\.xml|build\.gradle|vite\.config\.)/.test(normalizedPath)
+  ) {
+    reasons.push(reasonedScore("project configuration boundary", 34));
+  }
+
+  const importScore = Math.min(36, unit.imports.length * 6);
+  if (importScore > 0) reasons.push(reasonedScore("imports other project code or dependencies", importScore));
+
+  const exportScore = Math.min(24, unit.exportedNames.length * 4);
+  if (exportScore > 0) reasons.push(reasonedScore("exports reusable symbols", exportScore));
+
+  const callScore = Math.min(40, unit.calledFunctions.length * 3);
+  if (callScore > 0) reasons.push(reasonedScore("coordinates function calls", callScore));
+
+  if (/\b(usestate|usereducer|setstate|createstore|configurestore|reducer|state|store|signal|atom)\b/.test(text)) {
+    reasons.push(reasonedScore("state or data ownership signal", 48));
+  }
+  if (/\b(add|create|update|delete|remove|toggle|filter|submit|save|load|handle[a-z][a-z0-9_]*)\b/.test(text)) {
+    reasons.push(reasonedScore("user action orchestration signal", 28));
+  }
+  if (/\b(fetch|axios|request|response|route|router|listen|http|api|controller|handler)\b/.test(text)) {
+    reasons.push(reasonedScore("external or request boundary signal", 24));
+  }
+  if (
+    /\b(localstorage|sessionstorage|indexeddb|sqlite|postgres|mysql|redis|writefile|readfile|fs\.|save|persist)\b/.test(
+      text,
+    )
+  ) {
+    reasons.push(reasonedScore("persistence or storage signal", 24));
+  }
+  if (isDocumentationFile(unit.filePath)) reasons.push(reasonedScore("documentation context", 8));
+  if (isTestFile(unit.filePath)) reasons.push(reasonedScore("test file penalty", -60));
+  if (unit.isVendored) reasons.push(reasonedScore("vendored file penalty", -100));
+
+  return reasons;
+}
+
+function selectCentralFiles(units: CodeUnit[]): BriefingCentralFile[] {
+  return units
+    .filter((unit) => unit.kind === "module" && !unit.isVendored && !isBriefingNoiseFile(unit.filePath))
+    .map((unit) => {
+      const reasons = centralityReasons(unit);
+      const score = reasons.reduce((total, item) => total + item.score, 0);
+      return {
+        filePath: unit.filePath,
+        lines: lineRange(unit),
+        score,
+        reasons: reasons
+          .filter((item) => item.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 4)
+          .map((item) => item.reason),
+        evidence: unit,
+      };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.filePath.localeCompare(b.filePath))
+    .slice(0, 12);
+}
+
+function topSignalEvidence(
+  units: CodeUnit[],
+  pattern: RegExp,
+  options: { label: string; description: string; pathPattern?: RegExp; max?: number },
+): BriefingGroundingSignal | null {
+  const evidence = units
+    .filter((unit) => unit.kind === "module" && !unit.isVendored && !isBriefingNoiseFile(unit.filePath))
+    .map((unit) => {
+      const text = normalizedText(unit);
+      let score = 0;
+      if (pattern.test(text)) score += 50;
+      if (options.pathPattern?.test(unit.filePath.toLowerCase())) score += 25;
+      score += Math.min(18, unit.calledFunctions.length * 2);
+      score += Math.min(12, unit.imports.length * 2);
+      return { unit, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.unit.filePath.localeCompare(b.unit.filePath))
+    .slice(0, options.max ?? 5)
+    .map((entry) => entry.unit);
+
+  if (evidence.length === 0) return null;
+  return { label: options.label, description: options.description, evidence };
+}
+
+function buildGroundingSignals(units: CodeUnit[]): BriefingGroundingSignal[] {
+  const signals = [
+    topSignalEvidence(units, /\b(usestate|usereducer|setstate|state|store|reducer|signal|atom)\b/, {
+      label: "State or data ownership",
+      description: "Files that appear to own in-memory state, mutable data, or orchestration around data changes.",
+      pathPattern: /(^|\/)(app|main|store|state|reducer|model|models?)\./,
+    }),
+    topSignalEvidence(
+      units,
+      /\b(add|create|update|delete|remove|toggle|filter|submit|handle[a-z][a-z0-9_]*|on[a-z][a-z0-9_]*)\b/,
+      {
+        label: "User action flow",
+        description: "Files that connect user actions or commands to state changes and downstream behavior.",
+        pathPattern: /(^|\/)(app|main|index|controller|handler|route|view|screen|component)/,
+      },
+    ),
+    topSignalEvidence(units, /\b(fetch|axios|request|response|router|route|listen|http|api|controller|handler)\b/, {
+      label: "External or request boundary",
+      description: "Files that expose or call network, HTTP, route, API, or request/response boundaries.",
+      pathPattern: /(^|\/)(api|routes?|controllers?|handlers?|server|client)\//,
+    }),
+    topSignalEvidence(
+      units,
+      /\b(localstorage|sessionstorage|indexeddb|sqlite|postgres|mysql|redis|writefile|readfile|fs\.|save|persist)\b/,
+      {
+        label: "Persistence or storage",
+        description: "Files that show local storage, database, filesystem, cache, or persistence behavior.",
+        pathPattern: /(^|\/)(db|database|storage|persistence|models?|repositories?)\//,
+      },
+    ),
+  ];
+
+  return signals.filter((signal): signal is BriefingGroundingSignal => Boolean(signal));
+}
+
 function buildProductHypothesis(signals: string[], entities: BriefingDomainEntity[]): string {
   const entityNames = entities.slice(0, 7).map((entity) => entity.name);
   const signalText = signals.length > 0 ? signals.join(", ") : "application structure";
@@ -365,6 +559,9 @@ function lifecycleEvidenceScore(unit: CodeUnit, rule: LifecycleEvidenceRule): nu
   const text = normalizedText(unit);
   const buckets = classifyBriefingEvidence(unit.filePath);
   let score = 0;
+  const coreEntityFile =
+    /(^|\/)(memo|note|post|entry|document|record|item)(?:_service|service)?\.[^.]+$/.test(normalized) ||
+    /(^|\/)(memo|note|post|entry|document|record|item)\.[^.]+$/.test(normalized);
 
   const pathMatches = termMatches(normalized, rule.pathTerms);
   const codeMatches = termMatches(text, rule.codeTerms);
@@ -375,10 +572,22 @@ function lifecycleEvidenceScore(unit: CodeUnit, rule: LifecycleEvidenceRule): nu
     if (buckets.includes(bucket)) score += 16;
   }
   if (unit.kind === "module") score += 8;
+  if (coreEntityFile) score += 52;
   if (/(^|\/)(index|route|handler|controller|service|manager|processor|workflow|pipeline)\.[^.]+$/.test(normalized)) {
     score += 12;
   }
-  if (/schema\.prisma$|models?\//.test(normalized) && rule.buckets.includes("data_model")) score += 10;
+  if (/(^|\/)([^/]+_service|[^/]+service)\.[^.]+$/.test(normalized)) score += 24;
+  if (/(^|\/)([^/]+_converter|[^/]+converter|[^/]+_helpers?|[^/]+helpers?)\.[^.]+$/.test(normalized)) {
+    score -= 24;
+  }
+  if (
+    /schema\.prisma$|(^|\/)(models?|store|stores|domain|entities|repository|repositories|db|database)\//.test(
+      normalized,
+    ) &&
+    rule.buckets.includes("data_model")
+  ) {
+    score += 10;
+  }
   if (/\/(demo|test|spec|fixture|mock|export-[^/]+)\./.test(normalized)) score -= 35;
   return score;
 }
@@ -471,6 +680,8 @@ export function buildBriefingWorkflowPlan(store: CodeUnitStore): BriefingWorkflo
   const units = usableUnits(store.getAllUnits());
   const entities = extractDomainEntities(units);
   const productSignals = collectProductSignals(units, entities);
+  const centralFiles = selectCentralFiles(units);
+  const groundingSignals = buildGroundingSignals(units);
   const lifecycleEvidence = selectLifecycleEvidence(units);
   const workflows = WORKFLOW_BLUEPRINTS.map((blueprint) => {
     const selected = selectWorkflowEvidence(units, blueprint, entities);
@@ -488,6 +699,7 @@ export function buildBriefingWorkflowPlan(store: CodeUnitStore): BriefingWorkflo
     .slice(0, 6);
 
   const centralEvidence = uniqueUnits([
+    ...centralFiles.map((file) => file.evidence),
     ...units.filter((unit) => /^readme\.mdx?$/i.test(unit.filePath) || /^package\.json$/i.test(unit.filePath)),
     ...lifecycleEvidence,
     ...entities
@@ -499,6 +711,8 @@ export function buildBriefingWorkflowPlan(store: CodeUnitStore): BriefingWorkflo
   return {
     productHypothesis: buildProductHypothesis(productSignals, entities),
     productSignals,
+    centralFiles,
+    groundingSignals,
     domainEntities: entities,
     workflows,
     lifecycleEvidence,
@@ -516,6 +730,28 @@ export function workflowPlanToPrompt(plan: BriefingWorkflowPlan): string {
 
   if (plan.productSignals.length > 0) {
     lines.push(`Product signals: ${plan.productSignals.join(", ")}`);
+  }
+
+  if (plan.centralFiles.length > 0) {
+    lines.push("", "Repository grounding map:", "Central files to consider first for ownership and system-map claims:");
+    for (const file of plan.centralFiles.slice(0, 8)) {
+      const reasons = file.reasons.length > 0 ? ` Reasons: ${file.reasons.join(", ")}.` : "";
+      lines.push(`- ${file.filePath} [${sourceKey(file.evidence)}].${reasons}`);
+    }
+  }
+
+  if (plan.groundingSignals.length > 0) {
+    lines.push("", "Grounding signals:");
+    for (const signal of plan.groundingSignals) {
+      const refs = signal.evidence
+        .slice(0, 4)
+        .map((unit) => `[${sourceKey(unit)}]`)
+        .join(" ");
+      lines.push(`- ${signal.label}: ${signal.description} Evidence: ${refs}`);
+    }
+    lines.push(
+      "- If a subsystem is not represented in these signals or the source context, describe it as not shown in inspected context instead of assuming it exists.",
+    );
   }
 
   if (plan.domainEntities.length > 0) {
