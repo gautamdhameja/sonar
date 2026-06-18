@@ -12,6 +12,7 @@ export interface OnboardingBriefOptions {
 export interface OnboardingBriefPartOptions extends OnboardingBriefOptions {
   sections: string[];
   workflowPlanText?: string;
+  memoryGraphText?: string;
 }
 
 function sourceKey(unit: CodeUnit): string {
@@ -19,6 +20,7 @@ function sourceKey(unit: CodeUnit): string {
 }
 
 function wordLimitForSections(sections: string[]): number {
+  if (sections.length > 4) return 850;
   if (sections.includes("Top User Workflows")) return 420;
   if (sections.includes("Main Systems And Ownership Areas")) return 360;
   if (sections.includes("Codebase Product Map")) return 320;
@@ -33,9 +35,9 @@ function sectionSpecificContract(sections: string[]): string[] {
       "## Section-Specific Contract",
       "For `Top User Workflows`:",
       "- Write a numbered list of concrete end-to-end user or operator journeys.",
-      "- Prefer this order when supported by source context: create/upload the core object, process/store it, share or publish it, recipient/user access, tracking/analytics, billing/limits, optional AI or integrations.",
+      "- Prefer workflows shown by the Repository grounding map and source context. Common shapes include create/open, edit/update, process/compute, save/persist, share/access, report/observe, configure/administer, and operate/recover.",
       "- Cite implementation files for each workflow when they are present. Use schema-only citations only when no route/API/service/component evidence is provided for that workflow.",
-      "- Do not list OAuth, generic authentication, or AI as top workflows before upload/share/access/tracking/billing unless the repository is primarily an OAuth, auth, or AI product.",
+      "- Do not list OAuth, generic authentication, infrastructure, or AI as top workflows unless the source context shows they are central to this repository.",
       "- Do not say implementation evidence is missing when the Source Context includes route/API/service/component files for that workflow.",
       "",
     );
@@ -87,7 +89,14 @@ export function buildOnboardingBriefPartPrompt(
     "11. Do not output generic missing-data checklists such as input -> state -> display unless the provided context actually supports those stages.",
     "12. Prioritize the central product workflows from the internal workflow map when it is provided.",
     "13. Stay at briefing depth: explain what the system does, where the important areas are, and what to ask next. Avoid line-by-line implementation detail unless it changes the high-level understanding.",
-    "14. In `Top User Workflows`, prefer end-to-end product journeys such as create/upload, process/store, share or publish, recipient/user access, tracking/analytics, and billing/limits. Mention AI, OAuth, or generic auth only after those core workflows unless the source context shows they are the main product.",
+    "14. In `Top User Workflows`, prefer end-to-end journeys shown by source evidence: create/open, edit/update, process/compute, save/persist, share/access, report/observe, configure/administer, or operate/recover. Mention AI, OAuth, generic auth, billing, or infrastructure only when the source context shows they are central.",
+    "15. Precision beats completeness: a shorter cautious claim is better than a detailed unsupported claim.",
+    "16. For ownership, architecture, state, data, persistence, backend, API, security, or privacy claims, anchor the answer in the Repository grounding map when present and cite the supporting source context.",
+    "17. Do not say a subsystem exists unless the grounding map or source context shows it. If evidence is absent, say it is not shown in the inspected context; do not make an absolute repository-wide absence claim.",
+    "18. When central files are listed, use them first for `Codebase Product Map`, `Top User Workflows`, and `Main Systems And Ownership Areas` unless the source context clearly contradicts them.",
+    "19. Do not treat access tokens, API keys, OAuth, sessions, or credential settings as user-facing sharing evidence unless the source context also shows recipient/share-link/public-view/invite behavior. Otherwise describe them as authentication or API access.",
+    "20. Do not default to web-app vocabulary such as screens, routes, frontend, backend, or API unless the grounding map or source context directly supports those concepts.",
+    "21. Use repository-native wording from the grounding map: CLI, library, compiler, parser, renderer, build pipeline, static site generator, desktop app, service, or whatever the inspected evidence actually shows.",
   ].join("\n");
 
   const parts: string[] = [
@@ -110,6 +119,11 @@ export function buildOnboardingBriefPartPrompt(
 
   if (options.workflowPlanText) {
     parts.push(options.workflowPlanText);
+    parts.push("");
+  }
+
+  if (options.memoryGraphText) {
+    parts.push(options.memoryGraphText);
     parts.push("");
   }
 

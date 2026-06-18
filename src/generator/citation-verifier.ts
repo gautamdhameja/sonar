@@ -63,6 +63,10 @@ function parseCitation(value: string): { filePath: string; startLine?: number; e
   };
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function parseLineOnlyCitation(value: string): { startLine: number; endLine: number } | null {
   const match = value.trim().match(/^(\d+)(?:-(\d+))?$/);
   if (!match) return null;
@@ -192,4 +196,218 @@ export function removeUncitedClaims(answer: string, verification: CitationVerifi
   }
 
   return next.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+export function removeInvalidCitationClaims(answer: string, verification: CitationVerification): string {
+  if (verification.invalidCitations.length === 0) return answer;
+
+  let next = answer;
+  for (const citation of verification.invalidCitations) {
+    const lines = next.split("\n");
+    const filtered = lines.filter((line) => !line.includes(citation));
+    if (filtered.length !== lines.length) {
+      next = filtered.join("\n");
+      continue;
+    }
+    next = next.replace(new RegExp(`\\[[^\\]]*${escapeRegExp(citation)}[^\\]]*\\]`, "g"), "");
+    next = next.replace(new RegExp(escapeRegExp(citation), "g"), "");
+  }
+
+  return next.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function citationFilePath(citation: string): string {
+  const parsed = parseCitation(citation);
+  return parsed?.filePath ?? normalizeCitation(citation);
+}
+
+function lineCitations(line: string, verification: CitationVerification): string[] {
+  return verification.citations.filter((citation) => line.includes(citation));
+}
+
+function isRecipientSharingEvidence(filePath: string): boolean {
+  return /(share|sharing|share-?link|recipient|invite|invitation|public|viewer|portal|link)/i.test(filePath);
+}
+
+function isWeakCredentialSharingClaim(line: string, verification: CitationVerification): boolean {
+  if (!/\b(shar(?:e|es|ed|ing)|recipient|public access|invite|invitation)\b/i.test(line)) return false;
+
+  const citations = lineCitations(line, verification);
+  if (citations.length === 0) return false;
+  const filePaths = citations.map(citationFilePath);
+  if (filePaths.some(isRecipientSharingEvidence)) return false;
+
+  return /\b(access tokens?|api keys?|oauth|sessions?|credentials?|auth tokens?|personal tokens?|access|permissions?|private|public|control)\b/i.test(
+    line,
+  );
+}
+
+function isUserFacingAiEvidence(filePath: string): boolean {
+  return /(readme|docs?\/|guide|feature|route|router|page|screen|component|chat|assistant|copilot|agent|workflow)/i.test(
+    filePath,
+  );
+}
+
+function isWeakInternalAiClaim(line: string, verification: CitationVerification): boolean {
+  if (!/\b(ai|artificial intelligence|llm|model|assistant|copilot|agent)\b/i.test(line)) return false;
+
+  const citations = lineCitations(line, verification);
+  if (citations.length === 0) return false;
+  const filePaths = citations.map(citationFilePath);
+  if (filePaths.some(isUserFacingAiEvidence)) return false;
+
+  return filePaths.every((filePath) =>
+    /(^|\/)(internal|pkg|lib|services?)\/.*\b(ai|llm|model|provider|gemini|openai)\b/i.test(filePath),
+  );
+}
+
+function isWeakCollaborationOrAutomationClaim(line: string, verification: CitationVerification): boolean {
+  const claimsCollaboration = /\b(collaborat(?:e|es|ed|ing|ion)|shared content|team|teams)\b/i.test(line);
+  const claimsAutomation = /\b(automat(?:e|es|ed|ing|ion)|workflow automation|webhook|integration)\b/i.test(line);
+  if (!claimsCollaboration && !claimsAutomation) return false;
+
+  const citations = lineCitations(line, verification);
+  if (citations.length === 0) return false;
+  const filePaths = citations.map(citationFilePath);
+
+  const hasCollaborationEvidence = filePaths.some((filePath) =>
+    /(share|sharing|collab|team|member|comment|recipient|invite|public|viewer)/i.test(filePath),
+  );
+  const hasAutomationEvidence = filePaths.some((filePath) =>
+    /(webhook|workflow|automation|integration|job|queue|event|trigger)/i.test(filePath),
+  );
+
+  return (claimsCollaboration && !hasCollaborationEvidence) || (claimsAutomation && !hasAutomationEvidence);
+}
+
+function isAccessControlEvidence(filePath: string): boolean {
+  return /(auth|permission|access|acl|policy|middleware|route|router|handler|session|user|account|share|invite)/i.test(
+    filePath,
+  );
+}
+
+function isWeakSecurityAccessClaim(line: string, verification: CitationVerification): boolean {
+  if (
+    !/\b(access controls?|controls?\s+access|access\s+and\s+permissions?|authentication|unauthorized|protect(?:s|ed|ing)?|sensitive routes?|content access|secure handling of routes|permissions?\s+(?:for|to|over)?\s*(?:users?|content|routes?|accounts?))\b/i.test(
+      line,
+    )
+  ) {
+    return false;
+  }
+
+  const citations = lineCitations(line, verification);
+  if (citations.length === 0) return false;
+  const filePaths = citations.map(citationFilePath);
+  if (filePaths.some(isAccessControlEvidence)) return false;
+
+  return filePaths.some((filePath) => /(security|config|settings?)/i.test(filePath));
+}
+
+function isPrivacyEvidence(filePath: string): boolean {
+  return /(privacy|analytics|tracking|telemetry|metrics|data-collection|consent)/i.test(filePath);
+}
+
+function isWeakPrivacyClaim(line: string, verification: CitationVerification): boolean {
+  if (!/\b(privacy|collects?|collection|transmits?|user data|analytics|tracking|telemetry)\b/i.test(line)) return false;
+
+  const citations = lineCitations(line, verification);
+  if (citations.length === 0) return false;
+  const filePaths = citations.map(citationFilePath);
+  if (filePaths.some(isPrivacyEvidence)) return false;
+
+  return true;
+}
+
+export function removeWeaklySupportedSharingClaims(answer: string, verification: CitationVerification): string {
+  const lines = answer.split("\n");
+  const filtered = lines.filter((line) => !isWeakCredentialSharingClaim(line, verification));
+  if (filtered.length === lines.length) return answer;
+  return filtered
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function removeWeaklySupportedUsageClaims(answer: string, verification: CitationVerification): string {
+  const lines = answer.split("\n");
+  const filtered = lines.filter((line) => !isWeakCollaborationOrAutomationClaim(line, verification));
+  if (filtered.length === lines.length) return answer;
+  return filtered
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function removeWeaklySupportedAiClaims(answer: string, verification: CitationVerification): string {
+  const lines = answer.split("\n");
+  const filtered = lines.filter((line) => !isWeakInternalAiClaim(line, verification));
+  if (filtered.length === lines.length) return answer;
+  return filtered
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function removeWeaklySupportedSecurityAccessClaims(answer: string, verification: CitationVerification): string {
+  const lines = answer.split("\n");
+  const filtered = lines.filter((line) => !isWeakSecurityAccessClaim(line, verification));
+  if (filtered.length === lines.length) return answer;
+  return filtered
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function removeWeaklySupportedPrivacyClaims(answer: string, verification: CitationVerification): string {
+  const lines = answer.split("\n");
+  const filtered = lines.filter((line) => !isWeakPrivacyClaim(line, verification));
+  if (filtered.length === lines.length) return answer;
+  return filtered
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function normalizeInvalidCitations(
+  answer: string,
+  contextUnits: CodeUnit[],
+  verification: CitationVerification,
+): string {
+  if (verification.invalidCitations.length === 0) return answer;
+
+  let next = answer;
+  const basenameCounts = new Map<string, number>();
+  for (const unit of contextUnits) {
+    const basename = normalizeCitation(path.basename(unit.filePath));
+    basenameCounts.set(basename, (basenameCounts.get(basename) ?? 0) + 1);
+  }
+
+  for (const citation of verification.invalidCitations) {
+    const parsed = parseCitation(citation);
+    if (!parsed) continue;
+    const candidates = contextUnits.filter((unit) => {
+      const filePath = normalizeCitation(unit.filePath);
+      const basename = normalizeCitation(path.basename(unit.filePath));
+      return parsed.filePath === filePath || (basenameCounts.get(basename) === 1 && parsed.filePath === basename);
+    });
+    if (candidates.length === 0) continue;
+
+    const startLine = parsed.startLine ?? 1;
+    const endLine = parsed.endLine ?? startLine;
+    const ranked = candidates
+      .map((unit) => {
+        const overlapStart = Math.max(unit.startLine, startLine);
+        const overlapEnd = Math.min(unit.endLine, endLine);
+        const overlap = Math.max(0, overlapEnd - overlapStart + 1);
+        const containsStart = startLine >= unit.startLine && startLine <= unit.endLine ? 1 : 0;
+        return { unit, score: overlap * 10 + containsStart };
+      })
+      .sort((a, b) => b.score - a.score || a.unit.startLine - b.unit.startLine);
+    const replacementUnit = ranked[0]?.unit;
+    if (!replacementUnit) continue;
+    const replacement = `${replacementUnit.filePath}:${replacementUnit.startLine}-${replacementUnit.endLine}`;
+    next = next.replace(new RegExp(escapeRegExp(citation), "g"), replacement);
+  }
+
+  return next;
 }

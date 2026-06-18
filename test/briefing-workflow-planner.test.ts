@@ -90,3 +90,71 @@ test("workflowPlanToPrompt emits a compact source-backed map for generation", as
   assert.match(text, /Mandatory lifecycle evidence/);
   assert.match(text, /\[prisma\/schema\/share-link\.prisma:1-1\]/);
 });
+
+test("buildBriefingWorkflowPlan ranks generic orchestration files ahead of leaf components", async () => {
+  const store = new CodeUnitStore();
+  await store.loadFromUnits([
+    unit(
+      "src/App.jsx",
+      [
+        "import Form from './components/Form.jsx';",
+        "import Todo from './components/Todo.jsx';",
+        "import FilterButton from './components/FilterButton.jsx';",
+        "export default function App() {",
+        "  const [tasks, setTasks] = useState(DATA);",
+        "  const [filter, setFilter] = useState('All');",
+        "  function addTask(name) { setTasks([...tasks, { name }]); }",
+        "  function toggleTaskCompleted(id) { setTasks(tasks.map(task => task.id === id ? { ...task, completed: !task.completed } : task)); }",
+        "  function deleteTask(id) { setTasks(tasks.filter(task => task.id !== id)); }",
+        "  return <Form addTask={addTask} />;",
+        "}",
+      ].join("\n"),
+    ),
+    unit(
+      "src/components/Form.jsx",
+      [
+        "export default function Form(props) {",
+        "  const [name, setName] = useState('');",
+        "  function handleSubmit(e) { props.addTask(name); }",
+        "  return <form onSubmit={handleSubmit} />;",
+        "}",
+      ].join("\n"),
+    ),
+    unit("src/components/Todo.jsx", "export default function Todo(props) { return <li>{props.name}</li>; }"),
+    unit("src/components/FilterButton.jsx", "export default function FilterButton(props) { return <button />; }"),
+  ]);
+
+  const plan = buildBriefingWorkflowPlan(store);
+  const prompt = workflowPlanToPrompt(plan);
+
+  assert.equal(plan.centralFiles[0]?.filePath, "src/App.jsx");
+  assert.ok(plan.centralFiles[0]?.reasons.includes("state or data ownership signal"));
+  assert.ok(plan.groundingSignals.some((signal) => signal.label === "State or data ownership"));
+  assert.ok(plan.groundingSignals.some((signal) => signal.label === "User action flow"));
+  assert.match(prompt, /Repository grounding map/);
+  assert.match(prompt, /src\/App\.jsx \[src\/App\.jsx:1-11\]/);
+  assert.match(prompt, /If a subsystem is not represented/);
+});
+
+test("buildBriefingWorkflowPlan treats note domains as core content", async () => {
+  const store = new CodeUnitStore();
+  await store.loadFromUnits([
+    unit("README.md", "# Notes\nSelf-hosted note taking."),
+    unit("server/router/api/v1/note_service.go", "func CreateNote() { createNote(); updateNote(); deleteNote(); }"),
+    unit("store/note.go", "type Note struct { Content string; Visibility string }"),
+    unit("web/src/components/NoteEditor/index.tsx", "export function NoteEditor() { return createNote(); }"),
+    unit(
+      "web/src/components/CreateAccessTokenDialog.tsx",
+      "export function CreateAccessTokenDialog() { return createToken(); }",
+    ),
+  ]);
+
+  const plan = buildBriefingWorkflowPlan(store);
+  const prompt = workflowPlanToPrompt(plan);
+
+  assert.match(plan.productHypothesis, /Note/);
+  assert.ok(plan.domainEntities.some((entity) => entity.name === "Note"));
+  assert.ok(plan.workflows.some((workflow) => workflow.id === "content-lifecycle"));
+  assert.ok(plan.centralEvidence.some((item) => item.filePath === "server/router/api/v1/note_service.go"));
+  assert.match(prompt, /note_service\.go/);
+});

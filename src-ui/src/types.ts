@@ -101,6 +101,12 @@ export interface OnboardingSessionResponse {
     generationTime: number;
     generationTruncated?: boolean;
   };
+  survey?: {
+    timeMs: number;
+    fallbackUsed: boolean;
+    graphNodeCount: number;
+    graphEdgeCount: number;
+  };
 }
 
 export interface FollowupResponse {

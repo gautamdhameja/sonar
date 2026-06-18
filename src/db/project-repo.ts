@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from "uuid";
 import { logger } from "../utils/logger";
 import { DEFAULT_PERSONA, Persona } from "../persona/types";
 import type { CitationVerification } from "../generator/citation-verifier";
+import { MemoryGraph } from "../survey/memory-graph";
+import { validateMemoryGraph } from "../survey/memory-graph-validator";
 
 export interface SourceRef {
   filePath: string;
@@ -111,6 +113,12 @@ interface OnboardingMessageRow {
   sources_json: string;
   citation_verification_json: string | null;
   created_at: string;
+}
+
+interface MemoryGraphRow {
+  project_id: string;
+  graph_json: string;
+  generated_at: string;
 }
 
 function rowToProject(row: ProjectRow): Project {
@@ -349,6 +357,39 @@ export class ProjectRepo {
     this.db
       .prepare("UPDATE projects SET summary = ?, summary_generated_at = ? WHERE id = ?")
       .run(summary, new Date().toISOString(), id);
+  }
+
+  saveMemoryGraph(projectId: string, graph: MemoryGraph): void {
+    const validation = validateMemoryGraph(graph);
+    if (!validation.valid || !validation.graph) {
+      throw new Error(`Invalid memory graph: ${validation.errors.join("; ")}`);
+    }
+
+    this.db
+      .prepare(
+        `INSERT INTO project_memory_graphs (project_id, graph_json, generated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(project_id) DO UPDATE SET graph_json = excluded.graph_json, generated_at = excluded.generated_at`,
+      )
+      .run(projectId, JSON.stringify(validation.graph), validation.graph.generatedAt);
+  }
+
+  getMemoryGraph(projectId: string): MemoryGraph | null {
+    const row = this.db
+      .prepare("SELECT project_id, graph_json, generated_at FROM project_memory_graphs WHERE project_id = ?")
+      .get(projectId) as MemoryGraphRow | undefined;
+    if (!row) return null;
+
+    try {
+      const parsed = JSON.parse(row.graph_json) as unknown;
+      const validation = validateMemoryGraph(parsed);
+      if (validation.valid && validation.graph) return validation.graph;
+      logger.warn(`Invalid memory graph JSON for ${projectId}; ignoring graph: ${validation.errors.join("; ")}`);
+      return null;
+    } catch {
+      logger.warn(`Corrupt memory graph JSON for ${projectId}; ignoring graph`);
+      return null;
+    }
   }
 
   insertCodeUnits(projectId: string, units: CodeUnit[]): void {

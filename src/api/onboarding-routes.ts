@@ -111,7 +111,9 @@ export function registerOnboardingRoutes(app: Express, state: ApiState): void {
         audience: onboardingRequest.audience,
         focus: onboardingRequest.focus,
         persona,
+        repoRoot: project.repoPath,
       });
+      if (result.memoryGraph) repo.saveMemoryGraph(project.id, result.memoryGraph);
       res.json(result);
     } catch (err) {
       const { status, message } = toErrorResponse(err);
@@ -147,7 +149,9 @@ export function registerOnboardingRoutes(app: Express, state: ApiState): void {
         audience: onboardingRequest.audience,
         focus: onboardingRequest.focus,
         persona,
+        repoRoot: project.repoPath,
       });
+      if (briefResult.memoryGraph) repo.saveMemoryGraph(project.id, briefResult.memoryGraph);
       const session = repo.createOnboardingSession({
         projectId: project.id,
         repoName: project.name,
@@ -163,7 +167,15 @@ export function registerOnboardingRoutes(app: Express, state: ApiState): void {
         generationTruncated: briefResult.generationTruncated,
       });
 
-      res.json(sessionResponse(session));
+      res.json({
+        ...sessionResponse(session),
+        survey: {
+          timeMs: briefResult.surveyTime ?? 0,
+          fallbackUsed: briefResult.surveyFallbackUsed ?? false,
+          graphNodeCount: briefResult.memoryGraph?.nodes.length ?? 0,
+          graphEdgeCount: briefResult.memoryGraph?.edges.length ?? 0,
+        },
+      });
     } catch (err) {
       const { status, message } = toErrorResponse(err);
       res.status(status).json({ error: message });

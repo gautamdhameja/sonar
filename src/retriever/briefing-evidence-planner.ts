@@ -5,6 +5,8 @@ import {
   classifyBriefingEvidence,
   isBriefingNoiseFile,
   isDocumentationFile,
+  isNarrowReferenceDoc,
+  isProductOverviewDoc,
   isTestFile,
 } from "./source-classifier";
 import { CodeUnitStore } from "./unit-store";
@@ -41,9 +43,17 @@ export interface BriefingEvidencePlan {
 }
 
 const SECTION_BUCKETS: Record<string, BriefingEvidenceBucket[]> = {
-  "Product In One Paragraph": ["overview_docs", "stack_config", "data_model", "routes_pages"],
-  "Who Uses It And Why": ["overview_docs", "data_model", "routes_pages", "billing_limits", "analytics_tracking"],
+  "Product In One Paragraph": ["overview_docs", "stack_config", "operations_config", "data_model", "routes_pages"],
+  "Who Uses It And Why": [
+    "overview_docs",
+    "operations_config",
+    "data_model",
+    "routes_pages",
+    "billing_limits",
+    "analytics_tracking",
+  ],
   "Codebase Product Map": [
+    "operations_config",
     "data_model",
     "routes_pages",
     "api_handlers",
@@ -56,6 +66,7 @@ const SECTION_BUCKETS: Record<string, BriefingEvidenceBucket[]> = {
     "ai_features",
   ],
   "Top User Workflows": [
+    "operations_config",
     "routes_pages",
     "api_handlers",
     "data_model",
@@ -133,11 +144,29 @@ function baseWorkflowKey(filePath: string): string {
 function highSignalPathScore(filePath: string, bucket: BriefingEvidenceBucket): number {
   const normalized = filePath.toLowerCase();
   let score = 0;
+  const coreEntityFile =
+    /(^|\/)(memo|note|post|entry|document|record|item)(?:_service|service)?\.[^.]+$/.test(normalized) ||
+    /(^|\/)(memo|note|post|entry|document|record|item)\.[^.]+$/.test(normalized);
 
+  if (isProductOverviewDoc(filePath)) score += 120;
+  if (isNarrowReferenceDoc(filePath)) score -= bucket === "overview_docs" ? 75 : 45;
   if (/^readme\.mdx?$/.test(normalized)) score += 90;
-  if (/^package\.json$/.test(normalized)) score += 85;
+  if (
+    /^(package\.json|go\.mod|cargo\.toml|pyproject\.toml|requirements\.txt|pom\.xml|build\.gradle|settings\.gradle|cmakelists\.txt|makefile|[^/]+\.csproj|[^/]+\.sln)$/.test(
+      normalized,
+    )
+  ) {
+    score += 85;
+  }
   if (/^middleware\.[tj]s$/.test(normalized)) score += 80;
-  if (/prisma\/schema\/|schema\.prisma$|models?\//.test(normalized)) score += 75;
+  if (
+    /prisma\/schema\/|schema\.prisma$|(^|\/)(models?|store|stores|domain|entities|repository|repositories|db|database)\//.test(
+      normalized,
+    ) ||
+    /(^|\/)(models?|store|schema|repository)\.[^.]+$/.test(normalized)
+  ) {
+    score += 75;
+  }
   if (/^(pages|app)\/view\//.test(normalized) || /(^|\/)(views?|pages|screens|portal)\//.test(normalized)) {
     score += 55;
   }
@@ -145,20 +174,36 @@ function highSignalPathScore(filePath: string, bucket: BriefingEvidenceBucket): 
   if (
     /^(pages|app)\/api\//.test(normalized) ||
     /\/api\//.test(normalized) ||
-    /(^|\/)(controllers?|handlers?|endpoints?|resources?)\//.test(normalized)
+    /(^|\/)(controllers?|handlers?|endpoints?|resources?|services?)\//.test(normalized) ||
+    /(^|\/)([^/]+_service|[^/]+service|[^/]+_handler|[^/]+handler|[^/]+_controller|[^/]+controller|router|routes?|server)\.[^.]+$/.test(
+      normalized,
+    )
   ) {
-    score += 48;
+    score += 56;
   }
+  if (/(^|\/)(main|server|application|program|router|routes?)\.[^.]+$/.test(normalized)) score += 58;
+  if (/(^|\/)(cmd|cli|commands?)\//.test(normalized)) score += 64;
+  if (/(^|\/)(build|builder|site|sites?|engine|orchestrat|pipeline)/.test(normalized)) score += 44;
   if (/(create|new|upload|import|submit|process|convert|ingest|sync)/.test(normalized)) score += 35;
-  if (/(share|link|invite|access|view|viewer|public|portal|room|space)/.test(normalized)) score += 35;
+  if (/(memo|note|post|entry|item|record|document|content)/.test(normalized)) score += 32;
+  if (coreEntityFile) score += bucket === "data_model" || bucket === "api_handlers" ? 80 : 36;
+  if (bucket === "data_model" && /(^|\/)([^/]+_share|[^/]+_relation|attachment)\.[^.]+$/.test(normalized)) {
+    score -= 28;
+  }
+  if (/(share|link|invite|viewer|public|portal|room|space)/.test(normalized)) score += 35;
+  if (/(^|\/)(access|token|tokens|api-?key|credentials?)\b/.test(normalized) && bucket === "auth_security") {
+    score += 24;
+  }
   if (/(analytics|tracking|event|metric|dashboard|report|visit|view)/.test(normalized)) score += 35;
   if (/(auth|session|login|permission|security|token|oauth|middleware)/.test(normalized)) score += 35;
-  if (/(storage|file|asset|blob|s3|upload|download|import)/.test(normalized)) score += 35;
+  if (/(storage|file|asset|blob|s3|upload|download|import|attachment)/.test(normalized)) score += 35;
   if (/(billing|plan|limit|subscription|checkout|invoice|stripe|usage)/.test(normalized)) score += 35;
   if (/(workflow|job|queue|trigger|webhook|integration|automation)/.test(normalized)) score += 30;
   if (/(ai|chat|assistant|embedding|vector|model)/.test(normalized)) score += bucket === "ai_features" ? 35 : 8;
   if (/\/export-[^/]+\.[cm]?[jt]sx?$/.test(normalized)) score -= 65;
   if (/\/demo\.[tj]sx?$|_demo\.[tj]sx?$/.test(normalized)) score -= 30;
+  if (/(^|\/)([^/]+_service|[^/]+service)\.[^.]+$/.test(normalized)) score += 24;
+  if (/(^|\/)([^/]+_converter|[^/]+converter|[^/]+_helpers?|[^/]+helpers?)\.[^.]+$/.test(normalized)) score -= 24;
 
   return score;
 }
@@ -227,7 +272,8 @@ function selectBucketUnits(units: CodeUnit[], bucket: BriefingEvidenceBucket, bu
   for (const entry of scored) {
     const dir = directoryKey(entry.unit.filePath);
     const workflow = baseWorkflowKey(entry.unit.filePath);
-    if ((directoryCounts.get(dir) ?? 0) >= 2) continue;
+    const directoryLimit = bucket === "api_handlers" || bucket === "data_model" ? 4 : 2;
+    if ((directoryCounts.get(dir) ?? 0) >= directoryLimit) continue;
     const workflowLimit = workflow.startsWith("export-") ? 1 : 2;
     if ((workflowCounts.get(workflow) ?? 0) >= workflowLimit) continue;
 
@@ -238,6 +284,41 @@ function selectBucketUnits(units: CodeUnit[], bucket: BriefingEvidenceBucket, bu
   }
 
   return selected;
+}
+
+function needsProductGrounding(sections: string[]): boolean {
+  return sections.some((section) => /product|who uses|map|workflow|glossary/i.test(section));
+}
+
+function selectProductOverviewUnits(units: CodeUnit[], sections: string[]): CodeUnit[] {
+  if (!needsProductGrounding(sections)) return [];
+
+  return units
+    .filter((unit) => isProductOverviewDoc(unit.filePath))
+    .map((unit) => ({ unit, score: scoreForBucket(unit, "overview_docs") }))
+    .sort((a, b) => b.score - a.score || a.unit.filePath.localeCompare(b.unit.filePath))
+    .slice(0, 2)
+    .map((entry) => entry.unit);
+}
+
+function selectCodeGroundingUnits(units: CodeUnit[], requiredBuckets: BriefingEvidenceBucket[]): CodeUnit[] {
+  const groundingBuckets = requiredBuckets.filter((bucket) =>
+    ["routes_pages", "api_handlers", "data_model", "operations_config", "storage_files", "workflow_jobs"].includes(
+      bucket,
+    ),
+  );
+  if (groundingBuckets.length === 0) return [];
+
+  return units
+    .filter((unit) => !isDocumentationFile(unit.filePath))
+    .map((unit) => ({
+      unit,
+      score: Math.max(...groundingBuckets.map((bucket) => scoreForBucket(unit, bucket))),
+    }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((a, b) => b.score - a.score || a.unit.filePath.localeCompare(b.unit.filePath))
+    .slice(0, 4)
+    .map((entry) => entry.unit);
 }
 
 function uniqueBucketsForSections(sections: string[]): BriefingEvidenceBucket[] {
@@ -272,7 +353,9 @@ export function planBriefingEvidence(store: CodeUnitStore, sections: string[]): 
     if (selected.length > 0) selectedByBucket.set(bucket, selected);
   }
 
-  const units = uniqueUnits([...selectedByBucket.values()].flat());
+  const productOverviewUnits = selectProductOverviewUnits(candidates, sections);
+  const codeGroundingUnits = selectCodeGroundingUnits(candidates, requiredBuckets);
+  const units = uniqueUnits([...productOverviewUnits, ...codeGroundingUnits, ...selectedByBucket.values()].flat());
   const coveredBuckets = new Set<BriefingEvidenceBucket>();
   for (const unit of units) {
     for (const bucket of classifyBriefingEvidence(unit.filePath)) {

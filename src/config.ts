@@ -234,7 +234,7 @@ export function loadConfig(env: Env = process.env): SonarConfig {
     },
     generator: {
       maxContextTokens: getInteger(env, "SONAR_MAX_CONTEXT_TOKENS", 1800),
-      maxResponseTokens: getInteger(env, "SONAR_MAX_RESPONSE_TOKENS", 900),
+      maxResponseTokens: getInteger(env, "SONAR_MAX_RESPONSE_TOKENS", 1800),
       temperature: getNumber(env, "SONAR_TEMPERATURE", 0.1),
     },
     storage: {

@@ -2,7 +2,7 @@
 
 Sonar runs as a desktop app backed by local indexing services. The app manages those services for you.
 
-The product goal is simple: create a useful, cited briefing from a repository using a local or modest model. Sonar is best for high-level project understanding: what the project does, who it serves, the main workflows, important systems, risks, and questions to ask the team. It is not meant to replace deep code review, debugging, refactoring, or implementation work.
+The product goal is simple: create a useful, cited briefing from a repository using a local or modest model. Sonar first builds a repository inventory, surveys selected source files into a small memory graph, and then writes the briefing from that map plus source excerpts. It is best for high-level project understanding: what the project does, who it serves, the main workflows, important systems, risks, and questions to ask the team. It is not meant to replace deep code review, debugging, refactoring, or implementation work.
 
 Prerequisites:
 
@@ -43,7 +43,7 @@ After setup, paste a GitHub repository URL or select a local repository folder, 
 
 Sonar has the best code coverage for repositories written in TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, and C#. Markdown and MDX files are indexed as documentation.
 
-If a repository contains other source languages, Sonar shows a warning after indexing with the unsupported language names and file counts. Unsupported source files are skipped from code indexing, so the generated briefing may be incomplete or rely more heavily on docs.
+If a repository contains other source languages, Sonar shows a warning after indexing with the unsupported language names and file counts. Unsupported source files can still contribute inventory-level signals, but they are not fully parsed into code units. The generated briefing may be incomplete when those languages contain the central product logic.
 
 ## Privacy Boundary
 

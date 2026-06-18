@@ -10,9 +10,10 @@ Sonar is optimized for high-level orientation. For fine-grained debugging, refac
 
 - Generates source-grounded briefings for an indexed repository.
 - Supports session-aware follow-up questions for orientation, risks, workflows, systems, and source navigation.
-- Uses exact lookup, grep-like lexical search, BM25, graph expansion, workflow planning, and briefing-specific ranking.
+- Builds a deterministic repository inventory, asks the model to inspect selected source files, and stores a source-backed memory graph before writing the initial briefing.
+- Uses exact lookup, grep-like lexical search, BM25, graph expansion, workflow planning, and briefing-specific ranking for follow-up questions and source lookup.
 - Returns source lists and citation verification diagnostics with generated answers.
-- Persists projects, sessions, messages, source files, and rolling conversation summaries in SQLite.
+- Persists projects, sessions, source files, generated memory graphs, and rolling conversation summaries in SQLite.
 - Runs as a Tauri desktop app backed by a local HTTP API.
 - Supports Docker Model Runner defaults or custom OpenAI-compatible cloud/local model endpoints.
 - Lets users copy or export generated briefings as Markdown.
@@ -21,7 +22,7 @@ Sonar is intended to produce strong source-grounded briefing drafts, especially 
 
 ## Language Support
 
-Sonar currently indexes TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C#, Markdown/MDX, plus selected JSON and Prisma schema files as text evidence. Repositories that mainly use other source languages can still be imported, but unsupported source files are skipped from code indexing. In those cases, briefings may be incomplete or more dependent on README, schema, and documentation files.
+Sonar currently indexes TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C#, Markdown/MDX, plus selected JSON and Prisma schema files as text evidence. The repository survey also scans common source extensions for high-level signals such as entry points, file IO, network boundaries, config, logging, and state. Repositories that mainly use unsupported source languages can still be imported, but briefings may be less complete because full parser coverage is not available for those files.
 
 See [Language Support and Limits](docs/language-support.md) for the current parser coverage and known limitations.
 

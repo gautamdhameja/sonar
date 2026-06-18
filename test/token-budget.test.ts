@@ -22,6 +22,15 @@ function unit(id: string, code: string): CodeUnit {
   };
 }
 
+function markdownUnit(id: string, code: string): CodeUnit {
+  return {
+    ...unit(id, code),
+    filePath: `${id}.md`,
+    language: "markdown",
+    kind: "module",
+  };
+}
+
 test("trimToTokenBudget truncates oversized units and preserves order", () => {
   const result = trimToTokenBudget([unit("large", "x".repeat(1200)), unit("small", "return true;")], 100);
 
@@ -64,5 +73,19 @@ test("truncateLargeUnits keeps exact query evidence in long units", () => {
   const result = truncateLargeUnits([unit("large", code)], 40, 0.5, "Where is LLAMA_SERVER_URL configured?");
 
   assert.match(result[0].code, /LLAMA_SERVER_URL/);
+  assert.ok(result[0].startLine > 1);
+});
+
+test("truncateLargeUnits starts large markdown docs near the first real heading", () => {
+  const code = [
+    ...Array.from({ length: 40 }, (_, index) => `<div>Sponsor ${index}</div>`),
+    "# Memos",
+    "Open-source self-hosted note-taking tool built for quick capture.",
+    ...Array.from({ length: 80 }, (_, index) => `tail ${index}`),
+  ].join("\n");
+  const result = truncateLargeUnits([markdownUnit("README", code)], 80, 0.5, "product purpose");
+
+  assert.match(result[0].code, /# Memos/);
+  assert.match(result[0].code, /note-taking tool/);
   assert.ok(result[0].startLine > 1);
 });

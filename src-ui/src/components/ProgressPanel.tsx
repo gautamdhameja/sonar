@@ -9,28 +9,36 @@ interface ProgressPanelProps {
 
 export function ProgressPanel({ activeTask, onStop, stopDisabled }: ProgressPanelProps) {
   const progress = activeTask.progress ?? (activeTask.kind === "brief" ? 82 : activeTask.kind === "followup" ? 55 : 25);
-  const steps = [
-    {
-      label: "Import",
-      active: activeTask.label.includes("Importing"),
-      done: progress > 25 || activeTask.kind === "brief",
-    },
-    {
-      label: "Prepare",
-      active: activeTask.label.includes("Preparing"),
-      done: progress > 45 || activeTask.kind === "brief",
-    },
-    {
-      label: "Index",
-      active: activeTask.label.includes("Indexing"),
-      done: progress > 78 || activeTask.kind === "brief",
-    },
-    {
-      label: activeTask.kind === "followup" ? "Answer" : "Brief",
-      active: activeTask.kind === "brief" || activeTask.kind === "followup",
-      done: false,
-    },
-  ];
+  const steps =
+    activeTask.kind === "brief"
+      ? [
+          { label: "Inventory", active: progress < 64, done: progress >= 64 },
+          { label: "Inspect", active: progress >= 64 && progress < 76, done: progress >= 76 },
+          { label: "Map", active: progress >= 76 && progress < 88, done: progress >= 88 },
+          { label: "Brief", active: progress >= 88, done: false },
+        ]
+      : [
+          {
+            label: "Import",
+            active: activeTask.label.includes("Importing"),
+            done: progress > 25 || activeTask.kind === "followup",
+          },
+          {
+            label: "Prepare",
+            active: activeTask.label.includes("Preparing"),
+            done: progress > 45 || activeTask.kind === "followup",
+          },
+          {
+            label: "Index",
+            active: activeTask.label.includes("Indexing"),
+            done: progress > 78 || activeTask.kind === "followup",
+          },
+          {
+            label: activeTask.kind === "followup" ? "Answer" : "Brief",
+            active: activeTask.kind === "followup",
+            done: false,
+          },
+        ];
 
   return (
     <section className="progress-panel">
@@ -42,7 +50,7 @@ export function ProgressPanel({ activeTask, onStop, stopDisabled }: ProgressPane
       <div className="progress-meter">
         <div className="progress-meter-row">
           <span>{progress}%</span>
-          <span>{activeTask.kind === "brief" ? "Generating" : "Working"}</span>
+          <span>{activeTask.kind === "brief" ? "Surveying" : "Working"}</span>
         </div>
         <div
           aria-label={activeTask.label}
