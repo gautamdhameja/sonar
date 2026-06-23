@@ -25,8 +25,11 @@ export function formatMs(ms: number): string {
 export function friendlyErrorMessage(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
   const lower = raw.toLowerCase();
+  if (lower.includes("node_module_version") || lower.includes("better_sqlite3.node")) {
+    return "Sonar could not start its workspace engine because native dependencies were built for a different Node.js version. Use any supported Node.js version from package.json, run `npm install` again, then restart the desktop app.";
+  }
   if (lower.includes("no bundled api sidecar") || lower.includes("npm is not available")) {
-    return "Sonar could not start its local API. Install dependencies and run the desktop app from the project checkout.";
+    return "Sonar could not start its workspace engine. Install dependencies and run the desktop app from the project checkout.";
   }
   if (lower.includes("not available on path")) {
     return raw;
@@ -38,7 +41,7 @@ export function friendlyErrorMessage(err: unknown): string {
     return "Sonar could not reach the selected local endpoint. Start the local runtime or update the model settings.";
   }
   if (lower.includes("failed to fetch") || lower.includes("networkerror")) {
-    return "Sonar could not reach its local API. Start the local runtime, then try again.";
+    return "Sonar could not reach its workspace engine. Start the local runtime, then try again.";
   }
   return raw;
 }

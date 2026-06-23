@@ -20,7 +20,6 @@ export interface QueryPlan {
   };
   useLocalExact: boolean;
   useLexical: boolean;
-  useVector: boolean;
   useGraph: boolean;
   includeSummary: boolean;
   maxContextRatio: number;
@@ -56,11 +55,10 @@ export function planQuery(query: string): QueryPlan {
       sourceBudget: { code: 9, docs: 0, tests: 1 },
       useLocalExact: true,
       useLexical: true,
-      useVector: false,
       useGraph: false,
       includeSummary: false,
       maxContextRatio: 0.8,
-      reason: "file or symbol query should prefer exact local matches before semantic search",
+      reason: "file or symbol query should prefer exact local matches before broader local search",
     };
   }
 
@@ -74,7 +72,6 @@ export function planQuery(query: string): QueryPlan {
       sourceBudget: { code: 6, docs: 0, tests: 2 },
       useLocalExact: false,
       useLexical: true,
-      useVector: false,
       useGraph: false,
       includeSummary: false,
       maxContextRatio: 0.7,
@@ -92,7 +89,6 @@ export function planQuery(query: string): QueryPlan {
       sourceBudget: { code: 6, docs: 3, tests: 0 },
       useLocalExact: false,
       useLexical: true,
-      useVector: false,
       useGraph: true,
       includeSummary: true,
       maxContextRatio: 0.65,
@@ -107,13 +103,12 @@ export function planQuery(query: string): QueryPlan {
       requiredEvidence:
         intent === "workflow_trace"
           ? ["workflow_entry", "stage_functions", "persistence_or_output"]
-          : ["semantic_seed", "graph_neighbors"],
+          : ["lexical_seed", "graph_neighbors"],
       preferredSources: ["code", "graph"],
       graphDirection: "bidirectional",
       sourceBudget: { code: 8, docs: 1, tests: 1 },
       useLocalExact: false,
       useLexical: true,
-      useVector: false,
       useGraph: true,
       includeSummary: shouldIncludeSummaryForIntent(intent),
       maxContextRatio: 0.8,
@@ -130,7 +125,6 @@ export function planQuery(query: string): QueryPlan {
     sourceBudget: baseBudget(),
     useLocalExact: false,
     useLexical: true,
-    useVector: false,
     useGraph: false,
     includeSummary: false,
     maxContextRatio: 1,

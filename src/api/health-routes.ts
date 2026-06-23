@@ -6,12 +6,17 @@ export function registerHealthRoutes(app: Express, state: ApiState): void {
   const { repo } = state;
 
   app.get("/health", (_req: Request, res: Response) => {
+    res.json({
+      status: "ok",
+    });
+  });
+
+  app.get("/health/project", (_req: Request, res: Response) => {
     const currentProjectId = state.getCurrentProjectId();
     const project = currentProjectId ? repo.getProject(currentProjectId) : null;
     res.json({
-      status: "ok",
       indexed: currentProjectId !== null,
-      currentProjectId: currentProjectId,
+      currentProjectId,
       projectName: project?.name ?? null,
       unitCount: currentProjectId && state.stores.has(currentProjectId) ? state.stores.get(currentProjectId)!.size : 0,
     });

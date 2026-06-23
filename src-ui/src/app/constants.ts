@@ -138,7 +138,6 @@ export const localLlamaConfig: DesktopModelConfig = {
   chatBaseUrl: "http://127.0.0.1:8080/v1",
   chatModel: "local-model",
   chatApiKey: "not-needed",
-  apiToken: "",
 };
 
 export const openAiCompatibleConfig: DesktopModelConfig = {
@@ -147,7 +146,6 @@ export const openAiCompatibleConfig: DesktopModelConfig = {
   chatBaseUrl: "https://api.openai.com/v1",
   chatModel: "gpt-4.1-mini",
   chatApiKey: "",
-  apiToken: "",
 };
 
 export const suggestedQuestions = [

@@ -6,7 +6,6 @@ test("planQuery routes file and symbol queries to exact mode", () => {
   const filePlan = planQuery("Explain src/api/server.ts");
   assert.equal(filePlan.mode, "exact");
   assert.equal(filePlan.useLocalExact, true);
-  assert.equal(filePlan.useVector, false);
   assert.deepEqual(filePlan.requiredEvidence, ["exact_file_or_symbol"]);
 
   const symbolPlan = planQuery("Explain the ProjectRepo class");
@@ -19,7 +18,6 @@ test("planQuery routes literal/debug queries through lexical-first retrieval", (
 
   assert.equal(plan.mode, "literal");
   assert.equal(plan.useLexical, true);
-  assert.equal(plan.useVector, false);
   assert.equal(plan.useGraph, false);
   assert.deepEqual(plan.preferredSources, ["config", "schema", "tests", "code"]);
 });
@@ -30,7 +28,6 @@ test("planQuery routes overview questions to summary graph mode", () => {
   assert.equal(plan.mode, "summary_graph");
   assert.equal(plan.includeSummary, true);
   assert.equal(plan.useGraph, true);
-  assert.equal(plan.useVector, false);
   assert.equal(plan.sourceBudget.docs, 3);
 });
 
@@ -39,6 +36,5 @@ test("planQuery routes workflow questions to graph hybrid mode", () => {
 
   assert.equal(plan.mode, "graph_hybrid");
   assert.equal(plan.useGraph, true);
-  assert.equal(plan.useVector, false);
   assert.ok(plan.requiredEvidence.includes("stage_functions"));
 });

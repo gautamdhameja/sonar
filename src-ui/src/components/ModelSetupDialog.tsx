@@ -15,13 +15,11 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
   const useLocalModel = () =>
     onModelConfigChange({
       ...localLlamaConfig,
-      apiToken: modelConfig.apiToken,
       modelSetupComplete: modelConfig.modelSetupComplete,
     });
   const useApiEndpoint = () =>
     onModelConfigChange({
       ...openAiCompatibleConfig,
-      apiToken: modelConfig.apiToken,
       modelSetupComplete: modelConfig.modelSetupComplete,
     });
   const isSaving = activeTask?.kind === "settings";

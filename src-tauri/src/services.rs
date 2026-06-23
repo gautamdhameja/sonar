@@ -1,6 +1,7 @@
 use std::{
     fs,
     io::Write,
+    path::PathBuf,
     process::Command,
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
@@ -43,7 +44,17 @@ pub async fn service_snapshot() -> ServiceSnapshot {
     let model_config = desktop_model_config();
     let model_setup_complete = desktop_model_setup_complete();
     let chat = chat_base_url();
-    let mut services = vec![service("sonar", "Sonar API", API_HEALTH_URL, true, None, None).await];
+    let mut services = vec![
+        service(
+            "sonar",
+            "Workspace engine",
+            API_HEALTH_URL,
+            true,
+            None,
+            None,
+        )
+        .await,
+    ];
 
     if model_setup_complete {
         let model_label = if uses_local_model(&model_config) {
@@ -74,7 +85,9 @@ pub async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
     if sonar_needs_reconcile {
         start_api_service(false)?;
         let api_token = runtime_api_token()?;
-        wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45)).await?;
+        wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45))
+            .await
+            .map_err(with_api_startup_context)?;
     }
     let model_config = desktop_model_config();
     if desktop_model_setup_complete()
@@ -99,7 +112,9 @@ pub async fn save_model_config(config: DesktopModelConfig) -> Result<ServiceSnap
     save_desktop_model_config(&config)?;
     start_api_service(true)?;
     let api_token = runtime_api_token()?;
-    wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45)).await?;
+    wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45))
+        .await
+        .map_err(with_api_startup_context)?;
     let model_config = desktop_model_config();
     if uses_local_model(&model_config) && uses_default_local_endpoint(&model_config) {
         ensure_local_model_runtime(&model_config).await?;
@@ -120,7 +135,7 @@ fn start_api_service(force_restart: bool) -> Result<(), String> {
     let data_dir = sonar_home()?;
     fs::create_dir_all(&data_dir)
         .map_err(|err| format!("Unable to create Sonar data directory: {err}"))?;
-    let log_path = data_dir.join("api.log");
+    let log_path = api_log_path()?;
     let stdout = fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -151,6 +166,26 @@ fn api_command() -> Result<Command, String> {
         let mut command = Command::new(path);
         command.args(["--port", "3001"]);
         return Ok(command);
+    }
+
+    if let (Ok(node), Ok(npm_cli)) = (
+        std::env::var("npm_node_execpath"),
+        std::env::var("npm_execpath"),
+    ) {
+        let node = node.trim();
+        let npm_cli = npm_cli.trim();
+        if !node.is_empty()
+            && !npm_cli.is_empty()
+            && std::path::Path::new(node).is_file()
+            && std::path::Path::new(npm_cli).is_file()
+        {
+            let root = repo_root()?;
+            let mut command = Command::new(node);
+            command
+                .current_dir(root)
+                .args([npm_cli, "run", "dev", "--", "--port", "3001"]);
+            return Ok(command);
+        }
     }
 
     if !command_exists("npm") {
@@ -185,6 +220,30 @@ fn configured_api_server_path() -> Result<Option<std::path::PathBuf>, String> {
 
     let path = sonar_home()?.join("bin").join("sonar-api");
     Ok(path.is_file().then_some(path))
+}
+
+fn api_log_path() -> Result<PathBuf, String> {
+    Ok(sonar_home()?.join("api.log"))
+}
+
+fn with_api_startup_context(err: String) -> String {
+    let Some(log) = recent_api_log() else {
+        return err;
+    };
+    format!("{err}\n\nRecent workspace engine log:\n{log}")
+}
+
+fn recent_api_log() -> Option<String> {
+    let path = api_log_path().ok()?;
+    let contents = fs::read_to_string(path).ok()?;
+    let mut lines: Vec<&str> = contents.lines().rev().take(18).collect();
+    lines.reverse();
+    let log = lines.join("\n").trim().to_string();
+    if log.is_empty() {
+        None
+    } else {
+        Some(log)
+    }
 }
 
 fn uses_local_model(model_config: &DesktopModelConfig) -> bool {

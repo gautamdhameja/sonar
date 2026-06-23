@@ -1,5 +1,5 @@
 import { CodeUnit } from "../parser/types";
-import { RetrievedUnit } from "../retriever/hybrid-retriever";
+import { RetrievedUnit } from "../retriever/retrieved-unit";
 import { estimateTokens, truncateLargeUnits } from "./token-budget";
 import { QueryPlan } from "../retriever/query-router";
 import { extractNeedlesForCitationOrPacking, extractPaths, extractTerms } from "../retriever/query-features";

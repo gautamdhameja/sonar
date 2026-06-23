@@ -7,7 +7,7 @@ import { CodeUnit } from "../src/parser/types";
 import { CodeUnitStore } from "../src/retriever/unit-store";
 import { rerankRetrievedResults } from "../src/retriever/reranker";
 import { evaluateRetrievalCases } from "../src/eval/retrieval-eval";
-import { RetrievedUnit } from "../src/retriever/hybrid-retriever";
+import { RetrievedUnit } from "../src/retriever/retrieved-unit";
 
 function unit(id: string, filePath: string, code: string, name = id): CodeUnit {
   return {

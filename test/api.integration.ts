@@ -24,9 +24,21 @@ test("API starts with isolated storage and enforces token-protected reads", asyn
       headers: { "X-Sonar-Token": "integration-token" },
     });
     assert.equal(health.status, 200);
+    assert.deepEqual(await health.json(), { status: "ok" });
     assert.equal(health.headers.get("x-content-type-options"), "nosniff");
     assert.equal(health.headers.get("cache-control"), "no-store");
     assert.equal(health.headers.get("x-powered-by"), null);
+
+    const unauthenticatedProjectHealth = await fetch(`${baseUrl}/health/project`);
+    assert.equal(unauthenticatedProjectHealth.status, 401);
+
+    const blockedOrigin = await fetch(`${baseUrl}/projects`, {
+      headers: {
+        Origin: "http://evil.localhost",
+        "X-Sonar-Token": "integration-token",
+      },
+    });
+    assert.equal(blockedOrigin.status, 403);
 
     const unauthenticatedProjects = await fetch(`${baseUrl}/projects`);
     assert.equal(unauthenticatedProjects.status, 401);

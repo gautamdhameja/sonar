@@ -1,6 +1,6 @@
 import { CodeUnit } from "../parser/types";
 import { CodeUnitStore } from "./unit-store";
-import { RetrievedUnit } from "./hybrid-retriever";
+import { RetrievedUnit } from "./retrieved-unit";
 import { isBriefingNoiseFile, isDocumentationFile, isTestFile } from "./source-classifier";
 import {
   isPackageBoundary,

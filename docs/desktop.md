@@ -29,6 +29,15 @@ When running from source, the desktop shell starts the API through `npm run dev`
 
 To use local generation, choose **Local llama.cpp** and configure the local OpenAI-compatible endpoint. The default is `http://127.0.0.1:8080/v1`; if you use a different port or local runtime, update the endpoint during setup. To use cloud generation or another hosted model, choose **API endpoint**.
 
+Development builds can also use a llama.cpp sidecar when these paths are set:
+
+```text
+SONAR_LLAMA_SERVER_PATH=/path/to/llama-server
+SONAR_LLAMA_MODEL_PATH=/path/to/model.gguf
+```
+
+The model runtime must expose an OpenAI-compatible `/models` endpoint.
+
 ## Desktop Configuration
 
 The desktop config is stored at:
@@ -46,6 +55,8 @@ The local runtime token is stored at:
 ```
 
 This file is generated locally and ignored by git.
+
+The desktop-managed API is intended for localhost use by the Tauri app. It is protected by `X-Sonar-Token` and CORS allowlisting. In source builds, the renderer reads the token so it can call the local API directly; treat the desktop config and runtime files as local secrets.
 
 ## Repository Options
 

@@ -2,7 +2,7 @@
 
 ## Development Setup
 
-Use Node.js 22 and the Rust toolchain pinned by `rust-toolchain.toml`.
+Use Node.js 22 and a Rust toolchain compatible with the minimum version declared in `src-tauri/Cargo.toml`.
 
 ```bash
 npm install

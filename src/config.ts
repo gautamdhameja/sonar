@@ -22,15 +22,7 @@ export interface SonarConfig {
     maxDepth: number;
   };
   retriever: {
-    keywordTopK: number;
-    semanticTopK: number;
     fusedTopK: number;
-    rrf_k: number;
-    vendoredPenalty: number;
-    localReranker: {
-      enabled: boolean;
-      topK: number;
-    };
   };
   generator: {
     maxContextTokens: number;
@@ -172,15 +164,7 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       maxDepth: getInteger(env, "SONAR_MAX_INDEX_DEPTH", 25),
     },
     retriever: {
-      keywordTopK: 30,
-      semanticTopK: 30,
       fusedTopK: 10,
-      rrf_k: 60,
-      vendoredPenalty: 0.2,
-      localReranker: {
-        enabled: getBoolean(env, "SONAR_LOCAL_RERANKER_ENABLED", false),
-        topK: getInteger(env, "SONAR_LOCAL_RERANKER_TOP_K", 30),
-      },
     },
     generator: {
       maxContextTokens: getInteger(env, "SONAR_MAX_CONTEXT_TOKENS", 1800),

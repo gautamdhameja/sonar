@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { CodeUnit } from "../src/parser/types";
 import { CodeUnitStore } from "../src/retriever/unit-store";
 import { classifyOnboardingFollowup, retrieveOnboardingFollowup } from "../src/retriever/onboarding-followup-retriever";
+import { followupContextUnits } from "../src/generator/onboarding-followup";
+import type { OnboardingSession } from "../src/db/project-repo";
+import { DEFAULT_PERSONA } from "../src/persona/types";
 
 function unit(id: string, overrides: Partial<CodeUnit> = {}): CodeUnit {
   return {
@@ -66,10 +69,62 @@ test("retrieveOnboardingFollowup boosts files cited by the onboarding brief", as
     projectId: "project-1",
     store,
     sourceFiles: ["src/collab/Portal.tsx"],
-    useVector: false,
   });
 
   assert.equal(result.intent, "workflow");
   assert.equal(result.contextUnits[0].filePath, "src/collab/Portal.tsx");
   assert.equal(result.diagnostics[0].filePath, "src/collab/Portal.tsx");
+});
+
+test("followupContextUnits keeps saved briefing sources valid for follow-up citations", async () => {
+  const readme = unit("readme", {
+    id: "readme",
+    filePath: "README.md",
+    name: "Readme",
+    code: [
+      "Click is a Python package for creating command line interfaces.",
+      "This line is inside the cited range.",
+      "This line is outside the cited range.",
+    ].join("\n"),
+    startLine: 1,
+    endLine: 3,
+  });
+  const core = unit("core", {
+    id: "core",
+    filePath: "src/click/core.py",
+    name: "core",
+    code: "def command(): pass",
+    startLine: 1,
+    endLine: 23,
+  });
+  const store = await storeWithUnits([readme, core]);
+  const session = {
+    id: "session-1",
+    projectId: "project-1",
+    repoName: "click",
+    audience: null,
+    focus: [],
+    persona: DEFAULT_PERSONA,
+    brief: "Click creates command line interfaces [README.md:1-11].",
+    sourceFiles: ["README.md"],
+    sources: [{ filePath: "README.md", name: "Readme", kind: "module", lines: "1-2" }],
+    citationVerification: null,
+    retrievalTime: 0,
+    generationTime: 0,
+    generationTruncated: false,
+    rollingSummary: null,
+    createdAt: "2026-06-22T00:00:00.000Z",
+    updatedAt: "2026-06-22T00:00:00.000Z",
+  } as OnboardingSession;
+
+  const context = followupContextUnits(session, [core], store);
+
+  assert.deepEqual(
+    context.map((item) => item.filePath),
+    ["README.md", "src/click/core.py"],
+  );
+  assert.equal(
+    context[0]?.code,
+    "Click is a Python package for creating command line interfaces.\nThis line is inside the cited range.",
+  );
 });

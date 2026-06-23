@@ -3,6 +3,7 @@ import path from "path";
 import { CONFIG } from "../config";
 import { detectVendoredPaths } from "./vendored-detector";
 import { EXCLUDED_REPOSITORY_DIRS, SUPPORTED_INDEX_EXTENSIONS } from "./language-support";
+import { isSensitiveRepositoryPath } from "../security/source-safety";
 
 export interface WalkedFile {
   relativePath: string;
@@ -32,11 +33,12 @@ export async function walkRepository(repoRoot: string): Promise<WalkedFile[]> {
           await walk(path.join(dir, entry.name), depth + 1);
         }
       } else if (entry.isFile()) {
+        const relativePath = path.relative(repoRoot, path.join(dir, entry.name));
         if (
           !isSkippedIndexedFile(entry.name) &&
+          !isSensitiveRepositoryPath(relativePath) &&
           SUPPORTED_INDEX_EXTENSIONS.has(path.extname(entry.name).toLowerCase())
         ) {
-          const relativePath = path.relative(repoRoot, path.join(dir, entry.name));
           const isVendored = isUnderVendoredPath(relativePath, vendoredPaths);
           results.push({ relativePath, isVendored });
         }

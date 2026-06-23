@@ -10,6 +10,7 @@ import {
 import { detectVendoredPaths } from "../parser/vendored-detector";
 import { throwIfAborted } from "../utils/abort";
 import { extractSourceSignals, SourceSignal, SourceSignalKind } from "./source-signals";
+import { isSensitiveRepositoryPath, redactSensitiveText } from "../security/source-safety";
 
 export interface InventoryFile {
   filePath: string;
@@ -103,7 +104,6 @@ const SURVEY_EXTENSION_ALLOWLIST = new Set([
   ".ini",
   ".conf",
   ".cfg",
-  ".env",
 ]);
 
 const ENTRY_FILE_NAMES = new Set(["main", "index", "app", "server", "cli", "cmd", "program", "run", "start"]);
@@ -279,9 +279,11 @@ async function walkSurveyFiles(
         continue;
       }
       if (!entry.isFile() || isSkippedFile(entry.name)) continue;
+      const filePath = path.relative(repoRoot, fullPath).replace(/\\/g, "/");
+      if (isSensitiveRepositoryPath(filePath)) continue;
       const extension = path.extname(entry.name).toLowerCase();
       if (!SURVEY_EXTENSION_ALLOWLIST.has(extension)) continue;
-      files.push({ fullPath, filePath: path.relative(repoRoot, fullPath).replace(/\\/g, "/") });
+      files.push({ fullPath, filePath });
     }
   }
 
@@ -303,7 +305,7 @@ export async function buildRepositoryInventory(repoRoot: string, signal?: AbortS
     const documentation = SUPPORTED_DOC_EXTENSIONS.has(extension);
     const textEvidence = SUPPORTED_TEXT_EXTENSIONS.has(extension);
     const vendored = isUnderVendoredPath(walked.filePath, vendoredPaths);
-    const text = await readFilePreview(walked.fullPath, stat.size);
+    const text = redactSensitiveText(walked.filePath, await readFilePreview(walked.fullPath, stat.size));
     if (!text && stat.size > CONFIG.parser.maxFileBytes) skippedFiles++;
     const signals = extractSourceSignals(walked.filePath, text);
     const scored = entryScoreForFile(walked.filePath, signals, stat.size);

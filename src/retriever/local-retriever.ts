@@ -1,5 +1,5 @@
 import { CodeUnitStore } from "./unit-store";
-import { RetrievedUnit } from "./hybrid-retriever";
+import { RetrievedUnit } from "./retrieved-unit";
 import { CodeUnit } from "../parser/types";
 import {
   extractExactNeedles,

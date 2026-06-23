@@ -21,6 +21,7 @@
   --shadow: 0 1px 2px rgba(40, 38, 32, 0.05), 0 14px 34px -22px rgba(40, 38, 32, 0.22);
   --shadow-strong: 0 1px 2px rgba(40, 38, 32, 0.06), 0 18px 40px -22px rgba(40, 38, 32, 0.3);
   --radius: 13px;
+  --control-height: 44px;
   --sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --display: "Newsreader", Georgia, serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -55,7 +56,7 @@ button {
   max-width: 100%;
   border: 0;
   cursor: pointer;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
 }
 
 button svg {
@@ -102,10 +103,19 @@ button:disabled {
   min-width: 0;
 }
 
+.brand-mark-frame {
+  display: inline-flex;
+  flex: 0 0 58px;
+  width: 58px;
+  height: 58px;
+  align-items: center;
+  justify-content: center;
+}
+
 .brand-mark {
   display: block;
-  width: 44px;
-  height: 44px;
+  width: 50px;
+  height: 50px;
   object-fit: contain;
 }
 
@@ -172,16 +182,28 @@ button:disabled {
 .ghost-button,
 .primary,
 .secondary,
-.quiet-danger,
+.quiet-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--control-height);
+  padding: 0 14px;
+  border-radius: 8px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .compact-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 34px;
+  padding: 0 10px;
   border-radius: 8px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .status-pill {
@@ -233,11 +255,6 @@ button:disabled {
   color: #9f1239;
   background: #fff1f2;
   border: 1px solid rgba(244, 63, 94, 0.18);
-}
-
-.compact-button {
-  min-height: 34px;
-  padding: 0 10px;
 }
 
 .start-shell,
@@ -327,7 +344,7 @@ button:disabled {
 }
 
 .readiness-actions {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
 }
 
 .setup-required {
@@ -445,12 +462,18 @@ textarea {
   background: #f8fbff;
   border: 1px solid rgba(37, 99, 235, 0.16);
   border-radius: 8px;
-  padding: 12px 13px;
+  padding: 0 13px;
   outline: none;
+}
+
+input {
+  height: var(--control-height);
 }
 
 textarea {
   min-height: 82px;
+  padding-top: 12px;
+  padding-bottom: 12px;
   resize: vertical;
 }
 
@@ -556,6 +579,11 @@ textarea:focus {
 
 .repo-picker input {
   min-width: 0;
+}
+
+.repo-picker .secondary {
+  flex: 0 0 118px;
+  min-width: 118px;
 }
 
 .hero-action {
@@ -938,6 +966,7 @@ textarea:focus {
   border: 1px solid rgba(37, 99, 235, 0.12);
   border-radius: 999px;
   font-weight: 750;
+  white-space: normal;
 }
 
 .question-row {
@@ -1389,12 +1418,18 @@ select:focus-visible {
 
 .brand-block {
   flex-basis: 440px;
-  gap: 11px;
+  gap: 10px;
+}
+
+.brand-mark-frame {
+  flex-basis: 58px;
+  width: 58px;
+  height: 58px;
 }
 
 .brand-mark {
-  width: 31px;
-  height: 31px;
+  width: 50px;
+  height: 50px;
 }
 
 .brand-block h1 {
@@ -1426,9 +1461,14 @@ select:focus-visible {
 .ghost-button,
 .primary,
 .secondary,
-.quiet-danger,
+.quiet-danger {
+  min-height: var(--control-height);
+  border-radius: 9px;
+  font-weight: 600;
+}
+
 .compact-button {
-  min-height: 38px;
+  min-height: 34px;
   border-radius: 9px;
   font-weight: 600;
 }
@@ -1869,9 +1909,15 @@ textarea:focus {
     padding: 14px;
   }
 
+  .brand-mark-frame {
+    flex-basis: 52px;
+    width: 52px;
+    height: 52px;
+  }
+
   .brand-mark {
-    width: 38px;
-    height: 38px;
+    width: 44px;
+    height: 44px;
   }
 
   .brand-block p {
@@ -1889,9 +1935,13 @@ textarea:focus {
   .ghost-button,
   .primary,
   .secondary,
-  .quiet-danger,
+  .quiet-danger {
+    min-height: var(--control-height);
+    padding: 0 11px;
+  }
+
   .compact-button {
-    min-height: 38px;
+    min-height: 34px;
     padding: 0 11px;
   }
 

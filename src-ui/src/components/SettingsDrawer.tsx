@@ -32,8 +32,8 @@ export function SettingsDrawer({
   onSelectProject,
 }: SettingsDrawerProps) {
   const updateModelConfig = (patch: Partial<DesktopModelConfig>) => onModelConfigChange({ ...modelConfig, ...patch });
-  const useLocalModel = () => onModelConfigChange({ ...localLlamaConfig, apiToken: modelConfig.apiToken });
-  const useApiEndpoint = () => onModelConfigChange({ ...openAiCompatibleConfig, apiToken: modelConfig.apiToken });
+  const useLocalModel = () => onModelConfigChange(localLlamaConfig);
+  const useApiEndpoint = () => onModelConfigChange(openAiCompatibleConfig);
   const runtimeBusy = activeTask?.kind === "bootstrap" || activeTask?.kind === "settings";
 
   return (

@@ -1,7 +1,7 @@
 import { CodeUnitStore } from "./unit-store";
 import { ProjectRepo } from "../db/project-repo";
 import { traverseBidirectional, traverseDownstream, traverseUpstream } from "./graph-traverser";
-import { RetrievedUnit } from "./hybrid-retriever";
+import { RetrievedUnit } from "./retrieved-unit";
 import { CodeUnit } from "../parser/types";
 import { QueryIntent } from "./query-intent";
 

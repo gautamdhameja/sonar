@@ -50,7 +50,7 @@ export function ReadinessCard({
         ? "Select a local llama.cpp server or an OpenAI-compatible API endpoint."
         : runtime === "ready"
           ? "Workspace services and model endpoints are available."
-          : "Start Sonar's local API, then validate the selected model endpoint.";
+          : "Start Sonar's workspace engine, then validate the selected model endpoint.";
 
   return (
     <section className={`readiness-card ${runtime}`}>
@@ -73,12 +73,12 @@ export function ReadinessCard({
         <span className={api?.state === "ready" ? "ready" : ""}>
           <Server size={15} />
           {isPreparingModel
-            ? "API starting"
+            ? "Workspace starting"
             : !modelConfigured
-              ? "API not started yet"
+              ? "Workspace not started yet"
               : api?.state === "ready"
-                ? "API reachable"
-                : "API pending"}
+                ? "Workspace ready"
+                : "Workspace pending"}
         </span>
         <span className={!modelConfigured ? "" : model?.state === "ready" ? "ready" : ""}>
           {!modelConfigured || isPreparingModel ? <CircleDashed size={15} /> : <Sparkles size={15} />}
@@ -94,7 +94,7 @@ export function ReadinessCard({
                   : "Model API ready"
                 : modelConfig.modelMode === "local"
                   ? "Local models preparing"
-                  : "Model API pending"}
+                  : "Model endpoint pending"}
         </span>
       </div>
       <div className="readiness-actions">

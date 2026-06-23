@@ -15,6 +15,7 @@ import {
   classifyBriefingEvidence,
   isBriefingNoiseFile,
   isDocumentationFile,
+  isProductOverviewDoc,
 } from "../retriever/source-classifier";
 import { CodeUnitStore } from "../retriever/unit-store";
 import {
@@ -69,7 +70,6 @@ const ONBOARDING_QUERY_PLAN: QueryPlan = {
   sourceBudget: { code: 12, docs: 5, tests: 0 },
   useLocalExact: false,
   useLexical: true,
-  useVector: false,
   useGraph: true,
   includeSummary: true,
   maxContextRatio: 0.85,
@@ -217,9 +217,15 @@ function uniqueDiagnostics(diagnostics: OnboardingRetrievalDiagnostic[]): Onboar
   return output;
 }
 
-function selectOnboardingContext(units: CodeUnit[], maxTokens: number, query: string, maxUnitRatio = 0.18): CodeUnit[] {
+export function selectOnboardingContext(
+  units: CodeUnit[],
+  maxTokens: number,
+  query: string,
+  maxUnitRatio = 0.18,
+): CodeUnit[] {
   const truncated = truncateLargeUnits(units, maxTokens, maxUnitRatio, query);
   const prioritized = uniqueUnits([
+    ...truncated.filter((unit) => isProductOverviewDoc(unit.filePath)).slice(0, 2),
     ...truncated.filter((unit) => classifyBriefingEvidence(unit.filePath).includes("overview_docs")).slice(0, 2),
     ...truncated,
   ]);
@@ -440,6 +446,55 @@ function joinCitations(...units: Array<CodeUnit | undefined>): string {
     .join(" ");
 }
 
+function cleanOverviewText(value: string): string {
+  return value
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/!\[[^\]]*]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+    .replace(/[`*_>#-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function firstOverviewStatement(unit: CodeUnit): string | null {
+  const paragraphs = unit.code
+    .split(/\n{2,}/)
+    .map(cleanOverviewText)
+    .filter((paragraph) => paragraph.length >= 40 && !/^donate\b/i.test(paragraph));
+  const paragraph = paragraphs[0];
+  if (!paragraph) return null;
+  const firstSentence = paragraph.match(/^(.+?[.!?])(?:\s|$)/)?.[1];
+  if (firstSentence && firstSentence.length >= 40) return firstSentence;
+  if (paragraph.length <= 260) return paragraph;
+
+  const completeSentence = paragraph
+    .slice(0, 260)
+    .replace(/\s+\S*$/, "")
+    .replace(/[,:;]\s*$/, "");
+  return `${completeSentence}.`;
+}
+
+function citationReadyStatement(statement: string): string {
+  return statement.replace(/[.!?]\s*$/, "");
+}
+
+function productOverviewFallback(units: CodeUnit[]): { unit: CodeUnit; statement: string } | null {
+  const overviewUnit = [...units]
+    .filter((unit) => isProductOverviewDoc(unit.filePath))
+    .sort((a, b) => {
+      const readmeDelta = Number(/^readme\.mdx?$/i.test(b.filePath)) - Number(/^readme\.mdx?$/i.test(a.filePath));
+      return readmeDelta || a.filePath.localeCompare(b.filePath) || a.startLine - b.startLine;
+    })
+    .find((unit) => firstOverviewStatement(unit));
+  if (!overviewUnit) return null;
+
+  return {
+    unit: overviewUnit,
+    statement: firstOverviewStatement(overviewUnit) ?? "",
+  };
+}
+
 function citationForGraphSource(source: MemoryGraphSourceRef, units: CodeUnit[]): string | null {
   const unit = units.find(
     (candidate) =>
@@ -546,11 +601,18 @@ function buildSectionFallback(section: string, units: CodeUnit[], memoryGraph?: 
   const coreCitation = joinCitations(evidence.entry, evidence.ui, evidence.api, units[0]);
   const workflowCitation = joinCitations(evidence.ui, evidence.api, evidence.data, units[0]);
   const riskCitation = joinCitations(evidence.auth, evidence.data, evidence.ops, evidence.api, units[0]);
+  const overviewFallback = productOverviewFallback(units);
 
   switch (section) {
     case "Product In One Paragraph":
+      if (overviewFallback) {
+        return `The project overview states that ${citationReadyStatement(overviewFallback.statement)} ${cite(overviewFallback.unit)}.`;
+      }
       return `The selected source evidence shows a repository with identifiable entry, workflow, or configuration code; treat this as a cautious source-backed orientation until broader context is inspected ${coreCitation}.`;
     case "Who Uses It And Why":
+      if (overviewFallback) {
+        return `The clearest user signal in the selected evidence is the project overview: ${citationReadyStatement(overviewFallback.statement)} ${cite(overviewFallback.unit)}.`;
+      }
       return `The provided context does not prove exact user personas, but it does show source-backed workflows or operations that people use, run, configure, or maintain ${workflowCitation}.`;
     case "Codebase Product Map":
       return [

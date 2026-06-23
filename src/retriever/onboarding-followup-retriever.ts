@@ -5,7 +5,7 @@ import { CONFIG } from "../config";
 import { ProjectRepo } from "../db/project-repo";
 import { CodeUnitStore } from "./unit-store";
 import { graphEnhancedRetrieval } from "./graph-retriever";
-import { RetrievedUnit } from "./hybrid-retriever";
+import { RetrievedUnit } from "./retrieved-unit";
 import { localExactSearch, localGrepSearch, localLexicalSearch, localOnboardingSearch } from "./local-retriever";
 import { rerankRetrievedResults, RetrievalDiagnostic } from "./reranker";
 import { planQuery, QueryPlan } from "./query-router";
@@ -26,7 +26,6 @@ export interface OnboardingFollowupRetrievalInput {
   sourceFiles: string[];
   repo?: ProjectRepo;
   maxContextRatio?: number;
-  useVector?: boolean;
 }
 
 export interface OnboardingFollowupRetrievalResult {
@@ -233,10 +232,6 @@ export async function retrieveOnboardingFollowup(
     queryPlan.intent === "architecture_overview" ||
     queryPlan.intent === "business_overview"
   ) {
-    retrievedSets.push(localOnboardingSearch(retrievalQuery, input.store, topK));
-  }
-
-  if (queryPlan.useVector && input.useVector !== false) {
     retrievedSets.push(localOnboardingSearch(retrievalQuery, input.store, topK));
   }
 

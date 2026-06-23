@@ -7,16 +7,16 @@ Initial public alpha for Sonar as a local-first codebase onboarding and explanat
 ### Included
 
 - Tauri desktop app for selecting a local repository or cloning a GitHub repository.
-- Docker-first runtime with Sonar API, Meilisearch, Qdrant, and Docker Model Runner models.
-- First-week onboarding brief generation for non-technical and mixed-technical audiences.
+- Local-first runtime with a desktop-managed Sonar API, embedded SQLite store, and configurable OpenAI-compatible model endpoint.
+- Role-aware codebase briefing generation for non-technical and mixed-technical audiences.
 - Session-aware follow-up questions after the initial onboarding brief.
-- Hybrid retrieval using exact lookup, grep-like lexical search, BM25, vector search, graph expansion, and onboarding-specific ranking.
-- SQLite persistence for projects, code units, summaries, onboarding sessions, and messages.
+- Repository survey, source-backed memory graph generation, exact lookup, grep-like lexical search, graph expansion, and briefing-specific ranking.
+- SQLite persistence for projects, code units, memory graphs, onboarding sessions, and generated briefings.
 - Source citation verification and citation repair for generated answers.
 
 ### Known Limitations
 
-- The first Docker Model Runner start can take a long time while models are downloaded.
-- Medium local models can still produce uncited summary language; cited line-range claims should be treated as the reliable output.
+- Local model startup and generation speed depend on the model runtime you configure.
+- Medium local models can still produce incomplete or cautious language; cited line-range claims should be treated as the reliable output.
 - Desktop packaging has been designed for macOS first and needs release-candidate testing on clean machines.
-- Docker Model Runner availability and model support depend on the user's Docker Desktop version.
+- Packaged local model sidecars are still an installation-path concern for distribution builds.

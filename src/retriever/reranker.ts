@@ -1,5 +1,5 @@
 import { QueryIntent } from "./query-intent";
-import { RetrievedUnit } from "./hybrid-retriever";
+import { RetrievedUnit } from "./retrieved-unit";
 import { CodeUnitStore } from "./unit-store";
 import { extractNeedlesForCitationOrPacking, extractPaths, extractTerms } from "./query-features";
 import {

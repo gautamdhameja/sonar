@@ -1,5 +1,5 @@
 import { CodeUnitStore } from "../retriever/unit-store";
-import { RetrievedUnit } from "../retriever/hybrid-retriever";
+import { RetrievedUnit } from "../retriever/retrieved-unit";
 import { QueryIntent } from "../retriever/query-intent";
 import { rerankRetrievedResults } from "../retriever/reranker";
 import {

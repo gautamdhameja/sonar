@@ -1,3 +1,4 @@
+mod api_proxy;
 mod config;
 mod export;
 mod llama_sidecar;
@@ -7,6 +8,7 @@ mod process;
 mod repositories;
 mod services;
 
+use api_proxy::sonar_api_request;
 use export::export_markdown;
 use repositories::{clone_github_repository, prepare_repository_for_indexing};
 use services::{bootstrap_services, get_model_config, save_model_config, service_snapshot};
@@ -22,6 +24,7 @@ fn main() {
             get_model_config,
             save_model_config,
             export_markdown,
+            sonar_api_request,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Sonar desktop app");

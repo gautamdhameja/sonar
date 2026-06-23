@@ -1,4 +1,5 @@
 import { startServer } from "./api/server";
+import { CONFIG } from "./config";
 import { logger } from "./utils/logger";
 
 async function main() {
@@ -39,7 +40,10 @@ async function main() {
     logger.info(`Auto-indexing repository: ${repoRoot}`);
     const response = await fetch(`http://localhost:${port}/projects/index`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(CONFIG.security.apiToken ? { "X-Sonar-Token": CONFIG.security.apiToken } : {}),
+      },
       body: JSON.stringify({ repoRoot }),
     });
     const result = (await response.json()) as {

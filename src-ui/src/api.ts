@@ -5,54 +5,72 @@ import type { BriefingRole } from "./app/types";
 
 export const apiBaseUrl = "http://127.0.0.1:3001";
 
-let apiToken = "";
-
-interface DesktopTokenConfig {
-  apiToken?: string | null;
-}
-
-export function setApiToken(token: string | null | undefined): void {
-  apiToken = token?.trim() ?? "";
-}
-
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && window.__TAURI_INTERNALS__ !== undefined;
 }
 
-async function hydrateApiToken(): Promise<void> {
-  if (apiToken || !isTauriRuntime()) return;
-  const config = await invoke<DesktopTokenConfig>("get_model_config");
-  setApiToken(config.apiToken);
-}
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  await hydrateApiToken();
-  return requestWithToken<T>(path, init, true);
+  if (isTauriRuntime()) {
+    return requestThroughTauri<T>(path, init);
+  }
+  return requestDirect<T>(path, init);
 }
 
-async function requestWithToken<T>(
-  path: string,
-  init: RequestInit | undefined,
-  allowTokenRefresh: boolean,
-): Promise<T> {
+async function requestDirect<T>(path: string, init: RequestInit | undefined): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(apiToken ? { "X-Sonar-Token": apiToken } : {}),
       ...init?.headers,
     },
   });
 
+  return readResponse<T>(response);
+}
+
+async function requestThroughTauri<T>(path: string, init: RequestInit | undefined): Promise<T> {
+  const body = parseJsonRequestBody(init?.body);
+  const requestPromise = invoke<T>("sonar_api_request", {
+    method: init?.method ?? "GET",
+    path,
+    body,
+  });
+  return await abortable(requestPromise, init?.signal);
+}
+
+function parseJsonRequestBody(body: BodyInit | null | undefined): unknown {
+  if (body === undefined || body === null) return null;
+  if (typeof body !== "string") {
+    throw new Error("Sonar desktop requests only support JSON request bodies.");
+  }
+  if (!body.trim()) return null;
+  return JSON.parse(body) as unknown;
+}
+
+function abortable<T>(promise: Promise<T>, signal: AbortSignal | null | undefined): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new DOMException("Analysis stopped", "AbortError"));
+
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(new DOMException("Analysis stopped", "AbortError"));
+    signal.addEventListener("abort", abort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (err: unknown) => {
+        signal.removeEventListener("abort", abort);
+        reject(err);
+      },
+    );
+  });
+}
+
+async function readResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
   const contentType = response.headers.get("content-type") ?? "";
   const body = text && contentType.includes("application/json") ? (JSON.parse(text) as unknown) : {};
-
-  if (response.status === 401 && allowTokenRefresh && isTauriRuntime()) {
-    apiToken = "";
-    await hydrateApiToken();
-    if (apiToken) return requestWithToken<T>(path, init, false);
-  }
 
   if (!response.ok) {
     const message =

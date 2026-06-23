@@ -1,2 +1,2 @@
-export { hybridSearch, RetrievedUnit } from "./hybrid-retriever";
+export { RetrievedUnit } from "./retrieved-unit";
 export { CodeUnitStore } from "./unit-store";

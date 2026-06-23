@@ -26,8 +26,6 @@ test("loadConfig reads environment overrides", () => {
     SONAR_API_TOKEN: "dev-token",
     SONAR_ALLOWED_REPO_ROOTS: "/tmp/repos,/Users/example/repos",
     SONAR_ALLOW_ANY_REPO_ROOT: "true",
-    SONAR_LOCAL_RERANKER_ENABLED: "true",
-    SONAR_LOCAL_RERANKER_TOP_K: "12",
   });
 
   assert.equal(config.chat.baseUrl, "http://127.0.0.1:9000/v1");
@@ -39,8 +37,6 @@ test("loadConfig reads environment overrides", () => {
   assert.deepEqual(config.security.allowedRepoRoots, ["/tmp/repos", "/Users/example/repos"]);
   assert.equal(config.security.allowAnyRepoRoot, true);
   assert.equal(config.security.apiToken, "dev-token");
-  assert.equal(config.retriever.localReranker.enabled, true);
-  assert.equal(config.retriever.localReranker.topK, 12);
 });
 
 test("loadConfig rejects invalid numeric values", () => {
@@ -52,11 +48,4 @@ test("loadConfig rejects invalid numeric values", () => {
 
 test("loadConfig rejects invalid URLs", () => {
   assert.throws(() => loadConfig({ SONAR_CHAT_BASE_URL: "localhost:8000" }), /SONAR_CHAT_BASE_URL must be a valid URL/);
-});
-
-test("loadConfig rejects invalid booleans", () => {
-  assert.throws(
-    () => loadConfig({ SONAR_LOCAL_RERANKER_ENABLED: "maybe" }),
-    /SONAR_LOCAL_RERANKER_ENABLED must be a boolean/,
-  );
 });

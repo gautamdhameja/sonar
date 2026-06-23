@@ -1,4 +1,4 @@
-import { RetrievedUnit } from "../retriever/hybrid-retriever";
+import { RetrievedUnit } from "../retriever/retrieved-unit";
 import { CodeUnitStore } from "../retriever/unit-store";
 import { expandContext } from "../context/expander";
 import { graphEnhancedRetrieval } from "../retriever/graph-retriever";
@@ -18,7 +18,6 @@ import {
 import { planQuery, QueryPlan } from "../retriever/query-router";
 import { packContext } from "../context/packer";
 import { rerankRetrievedResults, RetrievalDiagnostic } from "../retriever/reranker";
-import { applyOptionalLocalReranker } from "../retriever/local-reranker-hook";
 import { removeUncitedClaims, verifyCitations, CitationVerification } from "./citation-verifier";
 import { buildSourceEvidenceFallback } from "./source-fallback";
 
@@ -34,10 +33,6 @@ export interface QueryResult {
   intent: QueryIntent;
   queryPlan: QueryPlan;
   retrievalDiagnostics: RetrievalDiagnostic[];
-  localReranker: {
-    enabled: boolean;
-    reason: string;
-  };
   citationVerification: CitationVerification;
 }
 
@@ -98,10 +93,6 @@ export async function answerQuery(
     retrievedSets.push(localLexicalSearch(query, store, CONFIG.retriever.fusedTopK));
   }
 
-  if (queryPlan.useVector) {
-    retrievedSets.push(localOnboardingSearch(query, store, CONFIG.retriever.fusedTopK));
-  }
-
   let retrieved = mergeRetrievedResults(retrievedSets.flat(), CONFIG.retriever.fusedTopK * 2);
 
   if (retrieved.length === 0) {
@@ -117,8 +108,7 @@ export async function answerQuery(
   }
 
   const reranked = rerankRetrievedResults(query, queryPlan.intent, retrieved, store, CONFIG.retriever.fusedTopK);
-  const localReranked = await applyOptionalLocalReranker(reranked.results, reranked.diagnostics);
-  retrieved = localReranked.results;
+  retrieved = reranked.results;
 
   const retrievalTime = Date.now() - retrievalStart;
 
@@ -191,11 +181,7 @@ export async function answerQuery(
     persona,
     intent: queryPlan.intent,
     queryPlan,
-    retrievalDiagnostics: localReranked.diagnostics,
-    localReranker: {
-      enabled: localReranked.enabled,
-      reason: localReranked.reason,
-    },
+    retrievalDiagnostics: reranked.diagnostics,
     citationVerification,
   };
 }

@@ -34,7 +34,6 @@ export interface DesktopModelConfig {
   chatBaseUrl: string;
   chatModel: string;
   chatApiKey: string;
-  apiToken: string;
 }
 
 export interface Project {

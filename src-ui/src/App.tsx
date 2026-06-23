@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import {
-  askFollowup,
-  createOnboardingSession,
-  getLatestOnboardingSession,
-  indexProject,
-  listProjects,
-  setApiToken,
-} from "./api";
+import { askFollowup, createOnboardingSession, getLatestOnboardingSession, indexProject, listProjects } from "./api";
 import { buildBriefingMarkdown } from "./app/briefingMarkdown";
 import { defaultBriefingRole, defaultQuestion, localLlamaConfig } from "./app/constants";
 import { saveMarkdownFile } from "./app/exportMarkdown";
@@ -116,7 +109,6 @@ export function App() {
 
   async function refreshModelConfig(): Promise<DesktopModelConfig> {
     const next = await loadModelConfig();
-    setApiToken(next.apiToken);
     setModelConfig(next);
     return next;
   }
@@ -162,7 +154,7 @@ export function App() {
         modelConfig.modelMode === "local" ? "Preparing Sonar with local models" : "Preparing Sonar with API models",
       detail:
         modelConfig.modelMode === "local"
-          ? "Pulling runtime images and local models, then starting the workspace."
+          ? "Checking the local model endpoint and starting the Sonar workspace."
           : "Starting the workspace and validating your model endpoints.",
       progress: 20,
     });
@@ -171,7 +163,7 @@ export function App() {
       setSnapshot(result);
       const nextConfig = await refreshModelConfig();
       setModelSetupOpen(!nextConfig.modelSetupComplete);
-      setNotice("Model settings saved. Sonar restarted the local API with the new configuration.");
+      setNotice("Model settings saved. Sonar restarted the workspace engine with the new configuration.");
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {

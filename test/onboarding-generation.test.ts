@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   backfillEmptyBriefingSections,
   sanitizeTruncatedBriefingPart,
+  selectOnboardingContext,
   sourceListWithCitations,
 } from "../src/generator/onboarding";
 import { normalizeInvalidCitations, verifyCitations } from "../src/generator/citation-verifier";
@@ -12,14 +13,14 @@ import { CodeUnitStore } from "../src/retriever/unit-store";
 
 const fixtureRoot = (...parts: string[]) => path.join(process.cwd(), "test", "fixtures", ...parts);
 
-function unit(filePath: string, startLine = 1, endLine = 10) {
+function unit(filePath: string, startLine = 1, endLine = 10, code = `source for ${filePath}`) {
   return {
     id: `${filePath}:${startLine}-${endLine}`,
     filePath,
     language: filePath.endsWith(".tsx") ? "typescript" : "go",
     kind: "module" as const,
     name: filePath.split("/").at(-1) ?? filePath,
-    code: `source for ${filePath}`,
+    code,
     startLine,
     endLine,
     parentName: null,
@@ -80,6 +81,72 @@ test("backfillEmptyBriefingSections fills empty required sections with cited con
   assert.match(backfilled, /### Top User Workflows\n+\s*1\. \*\*Primary repository workflow\*\*/);
   assert.match(backfilled, /Existing supported line/);
   assert.equal(verification.valid, true);
+});
+
+test("backfillEmptyBriefingSections uses overview docs for product fallback when available", () => {
+  const brief = [
+    "## click Codebase Briefing",
+    "",
+    "### Product In One Paragraph",
+    "",
+    "### Who Uses It And Why",
+    "Not found in provided context.",
+  ].join("\n");
+  const readme = unit(
+    "README.md",
+    1,
+    8,
+    [
+      "# Click",
+      "",
+      "Click is a Python package for creating beautiful command line interfaces in a composable way with as little code as necessary.",
+      "",
+      "It aims to make writing command line tools quick and fun.",
+    ].join("\n"),
+  );
+
+  const backfilled = backfillEmptyBriefingSections(
+    brief,
+    ["Product In One Paragraph", "Who Uses It And Why"],
+    [readme, unit("src/click/core.py", 1, 20)],
+  );
+  const verification = verifyCitations(backfilled, [readme]);
+
+  assert.match(backfilled, /Click is a Python package/);
+  assert.doesNotMatch(backfilled, /The selected source evidence shows/);
+  assert.match(backfilled, /\[README\.md:1-8\]/);
+  assert.equal(verification.valid, true);
+});
+
+test("selectOnboardingContext keeps true overview docs before narrow docs", () => {
+  const readme = unit(
+    "README.md",
+    1,
+    20,
+    [
+      "# Click",
+      "",
+      "Click is a Python package for creating beautiful command line interfaces in a composable way with as little code as necessary.",
+      "",
+      "It aims to make writing command line tools quick and fun.",
+    ].join("\n"),
+  );
+  const narrowDoc = unit(
+    "docs/commands.md",
+    1,
+    20,
+    "Command reference documentation explains advanced command and context behavior.",
+  );
+  const core = unit("src/click/core.py", 1, 200, "def command():\n  pass\n".repeat(80));
+
+  const selected = selectOnboardingContext(
+    [narrowDoc, core, readme],
+    140,
+    "README docs overview purpose product users feature value proposition",
+    0.5,
+  );
+
+  assert.equal(selected[0]?.filePath, "README.md");
 });
 
 test("backfillEmptyBriefingSections prefers memory graph evidence over web-app assumptions", () => {

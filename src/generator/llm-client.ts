@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { CONFIG } from "../config";
+import { isOperationAborted } from "../utils/abort";
 import { logger } from "../utils/logger";
 
 const client = new OpenAI({
@@ -158,6 +159,7 @@ export async function generateCompletion(
       truncated: finishReason === "length",
     };
   } catch (err) {
+    if (isOperationAborted(err)) throw err;
     const message = err instanceof Error ? err.message : String(err);
     logger.error(`LLM failed: ${label}; durationMs=${Date.now() - started}; error=${message}`);
     throw new Error("LLM generation failed");

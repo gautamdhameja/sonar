@@ -13,8 +13,8 @@ Sonar is optimized for high-level orientation. For fine-grained debugging, refac
 - Builds a deterministic repository inventory, asks the model to inspect selected source files, and stores a source-backed memory graph before writing the initial briefing.
 - Uses exact lookup, grep-like lexical search, graph expansion, workflow planning, and briefing-specific ranking for follow-up questions and source lookup.
 - Returns source lists and citation verification diagnostics with generated answers.
-- Persists projects, sessions, source files, generated memory graphs, and rolling conversation summaries in SQLite.
-- Runs as a Tauri desktop app backed by a local HTTP API and embedded SQLite project store.
+- Persists projects, source files, generated memory graphs, briefing sessions, and generated briefings in SQLite.
+- Runs as a Tauri desktop app backed by a local workspace engine and embedded SQLite project store.
 - Supports local llama.cpp/OpenAI-compatible generation or custom OpenAI-compatible cloud/local model endpoints.
 - Lets users copy or export generated briefings as Markdown.
 
@@ -41,7 +41,7 @@ npm install
 npm run desktop:dev
 ```
 
-On first launch, Sonar starts its local API and asks whether you want to use a local model endpoint or an OpenAI-compatible API endpoint. The default local endpoint is `http://127.0.0.1:8080/v1`, but you can change it in the setup screen. Then paste a GitHub repository URL or select a local repository folder and create a briefing.
+On first launch, Sonar starts its local workspace engine and asks whether you want to use a local model endpoint or an OpenAI-compatible API endpoint. The default local endpoint is `http://127.0.0.1:8080/v1`, but you can change it in the setup screen. Then paste a GitHub repository URL or select a local repository folder and create a briefing.
 
 ## Local Privacy Boundary
 

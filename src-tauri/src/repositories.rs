@@ -3,7 +3,7 @@ use std::fs;
 use crate::{
     models::{ClonedRepository, PreparedRepository},
     paths::repository_cache_dir,
-    process::{command_exists, run_git},
+    process::{command_exists, git_output, run_git},
 };
 
 #[tauri::command]
@@ -17,8 +17,9 @@ pub fn clone_github_repository(repository: String) -> Result<ClonedRepository, S
     fs::create_dir_all(&cache_dir)
         .map_err(|err| format!("Unable to create repository cache directory: {err}"))?;
 
-    let local_path = cache_dir.join(format!("{owner}-{repo}"));
+    let local_path = cache_dir.join(&owner).join(&repo);
     let updated_existing = if local_path.join(".git").is_dir() {
+        assert_cached_remote_matches(&local_path, &clone_url)?;
         run_git(&["pull", "--ff-only"], Some(&local_path))?;
         true
     } else {
@@ -50,6 +51,29 @@ pub fn clone_github_repository(repository: String) -> Result<ClonedRepository, S
         local_path: local_path.display().to_string(),
         updated_existing,
     })
+}
+
+fn assert_cached_remote_matches(
+    local_path: &std::path::Path,
+    expected_url: &str,
+) -> Result<(), String> {
+    let actual = git_output(&["remote", "get-url", "origin"], Some(local_path))?;
+    if normalize_git_remote(&actual) == normalize_git_remote(expected_url) {
+        return Ok(());
+    }
+    Err(format!(
+        "{} is already cached for a different Git remote. Remove it from the Sonar repository cache before cloning this repository.",
+        local_path.display()
+    ))
+}
+
+fn normalize_git_remote(value: &str) -> String {
+    value
+        .trim()
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .trim_end_matches('/')
+        .to_lowercase()
 }
 
 #[tauri::command]
@@ -94,7 +118,7 @@ fn parse_github_repository(input: &str) -> Result<(String, String, String), Stri
         .to_string();
 
     let parts: Vec<&str> = value.split('/').filter(|part| !part.is_empty()).collect();
-    if parts.len() < 2 {
+    if parts.len() != 2 {
         return Err("Use a GitHub repository such as https://github.com/owner/repo.".to_string());
     }
 
@@ -113,7 +137,57 @@ fn parse_github_repository(input: &str) -> Result<(String, String, String), Stri
 
 fn is_safe_repo_part(value: &str) -> bool {
     !value.is_empty()
+        && value != "."
+        && value != ".."
         && value
             .chars()
             .all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_git_remote, parse_github_repository};
+
+    #[test]
+    fn parses_supported_github_repository_inputs() {
+        let cases = [
+            "gautamdhameja/sonar",
+            "https://github.com/gautamdhameja/sonar",
+            "https://github.com/gautamdhameja/sonar.git",
+            "git@github.com:gautamdhameja/sonar.git",
+            "github.com/gautamdhameja/sonar?tab=readme",
+        ];
+
+        for input in cases {
+            let (owner, repo, clone_url) = parse_github_repository(input).expect(input);
+            assert_eq!(owner, "gautamdhameja");
+            assert_eq!(repo, "sonar");
+            assert_eq!(clone_url, "https://github.com/gautamdhameja/sonar.git");
+        }
+    }
+
+    #[test]
+    fn rejects_unsafe_github_repository_inputs() {
+        for input in [
+            "",
+            "owner",
+            "../owner/repo",
+            "owner/../../repo",
+            "owner/repo with spaces",
+            "owner/repo;rm",
+        ] {
+            assert!(
+                parse_github_repository(input).is_err(),
+                "{input} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn normalizes_remote_urls_for_cache_validation() {
+        assert_eq!(
+            normalize_git_remote("https://github.com/gautamdhameja/sonar.git/"),
+            "https://github.com/gautamdhameja/sonar"
+        );
+    }
 }

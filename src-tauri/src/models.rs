@@ -27,6 +27,7 @@ pub struct DesktopModelConfig {
     pub chat_base_url: String,
     pub chat_model: String,
     pub chat_api_key: String,
+    #[serde(default, skip_serializing)]
     pub api_token: String,
 }
 
@@ -45,4 +46,41 @@ pub struct ClonedRepository {
 pub struct PreparedRepository {
     pub local_path: String,
     pub indexed_path: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DesktopModelConfig;
+
+    #[test]
+    fn desktop_model_config_serialization_hides_runtime_api_token() {
+        let config = DesktopModelConfig {
+            model_setup_complete: true,
+            model_mode: "local".to_string(),
+            chat_base_url: "http://127.0.0.1:8080/v1".to_string(),
+            chat_model: "local-model".to_string(),
+            chat_api_key: "not-needed".to_string(),
+            api_token: "secret-runtime-token".to_string(),
+        };
+
+        let value = serde_json::to_value(config).expect("config serializes");
+
+        assert!(value.get("apiToken").is_none());
+    }
+
+    #[test]
+    fn desktop_model_config_deserialization_allows_missing_runtime_api_token() {
+        let config: DesktopModelConfig = serde_json::from_str(
+            r#"{
+                "modelSetupComplete": true,
+                "modelMode": "local",
+                "chatBaseUrl": "http://127.0.0.1:8080/v1",
+                "chatModel": "local-model",
+                "chatApiKey": "not-needed"
+            }"#,
+        )
+        .expect("config deserializes without renderer token");
+
+        assert_eq!(config.api_token, "");
+    }
 }

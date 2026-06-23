@@ -17,9 +17,8 @@ docs/book/
 !.env.example
 
 # Sonar local runtime data
-data.ms/
-.code-explorer/
 .sonar/
+data.ms/
 reports/
 projects.db
 projects.db-*
@@ -28,8 +27,6 @@ code-units.json
 *.db-*
 *.sqlite
 *.sqlite3
-qdrant_storage/
-meili_data/
 
 # Logs and process output
 *.log

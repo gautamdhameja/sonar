@@ -1,6 +1,7 @@
 import { CodeUnit } from "../parser/types";
 import { DEFAULT_PERSONA, Persona } from "../persona/types";
 import { buildPersonaGuidance } from "./persona-guidance";
+import { formatCodeUnitForPrompt } from "./source-context";
 
 export interface OnboardingBriefOptions {
   repoName: string;
@@ -130,10 +131,7 @@ export function buildOnboardingBriefPartPrompt(
   parts.push("## Source Context");
 
   for (const unit of units) {
-    parts.push(`### ${sourceKey(unit)} - ${unit.kind} ${unit.name}`);
-    parts.push(`\`\`\`${unit.language}`);
-    parts.push(unit.code);
-    parts.push("```");
+    parts.push(formatCodeUnitForPrompt(unit));
     parts.push("");
   }
 

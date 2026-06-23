@@ -11,6 +11,7 @@ import { CodeUnit } from "./types";
 import { logger } from "../utils/logger";
 import { throwIfAborted } from "../utils/abort";
 import { CONFIG } from "../config";
+import { redactSensitiveText } from "../security/source-safety";
 
 export { CodeUnit, CodeUnitKind } from "./types";
 
@@ -50,7 +51,7 @@ export async function parseRepository(repoRoot: string, signal?: AbortSignal): P
         continue;
       }
       totalBytes += stat.size;
-      const source = await fs.readFile(fullPath, "utf-8");
+      const source = redactSensitiveText(filePath, await fs.readFile(fullPath, "utf-8"));
       sourceByFile.set(filePath, source);
       throwIfAborted(signal);
       const ext = path.extname(filePath);

@@ -34,6 +34,15 @@ If you choose **Local llama.cpp**, Sonar expects:
 - an OpenAI-compatible local model server at the endpoint configured in the app, or
 - for the default endpoint, a future packaged sidecar binary at `~/.sonar/bin/llama-server` and a model at `~/.sonar/models/default.gguf`
 
+For development builds, you can also point Sonar at a local sidecar binary and model with:
+
+```bash
+SONAR_LLAMA_SERVER_PATH=/path/to/llama-server
+SONAR_LLAMA_MODEL_PATH=/path/to/model.gguf
+```
+
+The configured model endpoint must respond to the OpenAI-compatible `/models` check.
+
 If you choose **API endpoint**, configure:
 
 - Generation API endpoint, model, and API key
@@ -49,3 +58,5 @@ If a repository contains other source languages, Sonar shows a warning after ind
 ## Privacy Boundary
 
 Sonar indexes only the GitHub clone or local folder you explicitly choose in the desktop UI. It does not mount your home directory into a container because there is no container runtime in the default flow.
+
+The desktop app starts a localhost API protected by a per-install token stored under `~/.sonar/runtime.env`. The desktop-managed API accepts selected local paths so the folder picker can analyze repositories outside the app cache. If you choose API endpoint mode, source excerpts required for generation are sent to that configured provider.

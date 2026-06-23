@@ -1,6 +1,7 @@
 import { CodeUnit } from "../parser/types";
 import { DEFAULT_PERSONA, Persona } from "../persona/types";
 import { buildPersonaGuidance } from "./persona-guidance";
+import { formatCodeUnitForPrompt } from "./source-context";
 
 function buildSystemPrompt(repoName: string, persona: Persona): string {
   return [
@@ -56,10 +57,8 @@ export function buildPrompt(
 
   parts.push("## Code Context\n");
   for (const unit of contextUnits) {
-    parts.push(`### ${unit.filePath}:${unit.startLine}-${unit.endLine} - ${unit.kind} ${unit.name}`);
-    parts.push(`\`\`\`${unit.language}`);
-    parts.push(unit.code);
-    parts.push("```\n");
+    parts.push(formatCodeUnitForPrompt(unit));
+    parts.push("");
   }
   parts.push("## Question");
   parts.push(query);

@@ -173,7 +173,6 @@ test("packContext applies query plan evidence preferences", () => {
         sourceBudget: { code: 6, docs: 3, tests: 0 },
         useLocalExact: false,
         useLexical: true,
-        useVector: true,
         useGraph: true,
         includeSummary: true,
         maxContextRatio: 0.65,
