@@ -49,7 +49,7 @@ function unsupportedLanguageNotice(languages: UnsupportedLanguageSummary[] | und
     .map((item) => `${item.label} (${item.fileCount})`)
     .join(", ");
   const suffix = meaningfulLanguages.length > 4 ? ` and ${meaningfulLanguages.length - 4} more` : "";
-  return `Limited language coverage: ${topLanguages}${suffix}. Sonar indexes TypeScript, JavaScript, Python, Rust, Go, Java, C#, Markdown, JSON config, and Prisma schema files today; unsupported source files are skipped, so this briefing may be incomplete.`;
+  return `Limited language coverage: ${topLanguages}${suffix}. Sonar indexes TypeScript, JavaScript, Python, Rust, Go, Java, C#, Ruby, C++, PHP, Kotlin, Swift, Markdown, JSON config, and Prisma schema files today; unsupported source files are skipped, so this briefing may be incomplete.`;
 }
 
 export function App() {

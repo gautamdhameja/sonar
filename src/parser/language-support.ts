@@ -2,7 +2,27 @@ import fs from "fs/promises";
 import path from "path";
 import { CONFIG } from "../config";
 
-export const SUPPORTED_CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".cs"]);
+export const SUPPORTED_CODE_EXTENSIONS = new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".py",
+  ".rs",
+  ".go",
+  ".java",
+  ".cs",
+  ".rb",
+  ".cpp",
+  ".cc",
+  ".cxx",
+  ".hpp",
+  ".h",
+  ".php",
+  ".kt",
+  ".kts",
+  ".swift",
+]);
 export const SUPPORTED_DOC_EXTENSIONS = new Set([".md", ".mdx"]);
 export const SUPPORTED_TEXT_EXTENSIONS = new Set([".json", ".prisma"]);
 export const SUPPORTED_INDEX_EXTENSIONS = new Set([
@@ -84,7 +104,7 @@ function isIgnoredUnsupportedSourcePath(relativePath: string): boolean {
 }
 
 export function supportedLanguageDescription(): string {
-  return "TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C#, Markdown/MDX, and selected JSON/Prisma schema text";
+  return "TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C#, Ruby, C++, PHP, Kotlin, Swift, Markdown/MDX, and selected JSON/Prisma schema text";
 }
 
 export async function detectUnsupportedSourceLanguages(repoRoot: string): Promise<UnsupportedLanguageSummary[]> {

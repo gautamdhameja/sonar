@@ -151,6 +151,79 @@ test("parseGenericSource extracts Go, Java, and C# code units", async () => {
   assert.ok(csharpUnits.some((unit) => unit.language === "csharp" && unit.name === "Render"));
 });
 
+test("parseGenericSource extracts Ruby, C++, PHP, Kotlin, and Swift code units", async () => {
+  const [rubyUnits, cppUnits, phpUnits, kotlinUnits, swiftUnits] = await Promise.all([
+    parseGenericSource(
+      [
+        "require 'json'",
+        "module Billing",
+        "  class Invoice",
+        "    def total(amount)",
+        "      JSON.parse(amount)",
+        "    end",
+        "  end",
+        "end",
+      ].join("\n"),
+      "app/invoice.rb",
+    ),
+    parseGenericSource(
+      [
+        "#include <vector>",
+        "namespace app {",
+        "class Store { public: void save(); };",
+        "void run() { Store store; store.save(); }",
+        "}",
+      ].join("\n"),
+      "src/store.cpp",
+    ),
+    parseGenericSource(
+      [
+        "<?php",
+        "namespace App;",
+        "use RuntimeException;",
+        "class Store { public function save($value) { return helper($value); } }",
+        "function helper($value) { return $value; }",
+      ].join("\n"),
+      "src/Store.php",
+    ),
+    parseGenericSource(
+      [
+        "package app",
+        "import java.io.File",
+        'class Store { fun save(path: String) { File(path).writeText("x") } }',
+        'fun run() { Store().save("a") }',
+      ].join("\n"),
+      "src/Store.kt",
+    ),
+    parseGenericSource(
+      [
+        "import Foundation",
+        "class Store { func save(path: String) { print(path) } }",
+        'func run() { Store().save(path: "a") }',
+      ].join("\n"),
+      "Sources/Store.swift",
+    ),
+  ]);
+
+  assert.ok(rubyUnits.some((unit) => unit.language === "ruby" && unit.name === "Invoice"));
+  assert.ok(rubyUnits.some((unit) => unit.language === "ruby" && unit.name === "total"));
+  assert.ok(rubyUnits.some((unit) => unit.imports.some((line) => line.includes("require 'json'"))));
+  assert.ok(cppUnits.some((unit) => unit.language === "cpp" && unit.name === "Store"));
+  assert.ok(cppUnits.some((unit) => unit.language === "cpp" && unit.name === "run"));
+  assert.ok(cppUnits.some((unit) => unit.imports.some((line) => line.includes("#include <vector>"))));
+  assert.ok(phpUnits.some((unit) => unit.language === "php" && unit.name === "Store"));
+  assert.ok(phpUnits.some((unit) => unit.language === "php" && unit.name === "save"));
+  assert.ok(
+    phpUnits.some((unit) => unit.language === "php" && unit.imports.some((line) => line.includes("RuntimeException"))),
+  );
+  assert.ok(kotlinUnits.some((unit) => unit.language === "kotlin" && unit.name === "Store"));
+  assert.ok(kotlinUnits.some((unit) => unit.language === "kotlin" && unit.name === "run"));
+  assert.ok(kotlinUnits.some((unit) => unit.imports.some((line) => line.includes("java.io.File"))));
+  assert.ok(swiftUnits.some((unit) => unit.language === "swift" && unit.name === "Store"));
+  assert.ok(swiftUnits.some((unit) => unit.language === "swift" && unit.name === "run"));
+  assert.ok(swiftUnits.some((unit) => unit.imports.some((line) => line.includes("Foundation"))));
+});
+
 test("parseRepository indexes common non-JS source files", async () => {
   const repoRoot = await mkdtemp(path.join(os.tmpdir(), "sonar-parser-"));
   try {
@@ -164,11 +237,34 @@ test("parseRepository indexes common non-JS source files", async () => {
       path.join(repoRoot, "server.go"),
       ["package main", 'import "fmt"', 'func StartServer() { fmt.Println("ready") }'].join("\n"),
     );
+    await writeFile(
+      path.join(repoRoot, "billing.rb"),
+      ["class Invoice", "  def total", "    1", "  end", "end"].join("\n"),
+    );
+    await writeFile(path.join(repoRoot, "native.cpp"), "void RunNative() {}");
+    await writeFile(path.join(repoRoot, "legacy.php"), "<?php function run_legacy() {}");
+    await writeFile(path.join(repoRoot, "Mobile.kt"), "fun runMobile() {}");
+    await writeFile(path.join(repoRoot, "App.swift"), "func runApp() {}");
 
     const units = await parseRepository(repoRoot);
     assert.ok(units.some((unit) => unit.filePath === "main.rs" && unit.language === "rust" && unit.name === "run"));
     assert.ok(
       units.some((unit) => unit.filePath === "server.go" && unit.language === "go" && unit.name === "StartServer"),
+    );
+    assert.ok(
+      units.some((unit) => unit.filePath === "billing.rb" && unit.language === "ruby" && unit.name === "Invoice"),
+    );
+    assert.ok(
+      units.some((unit) => unit.filePath === "native.cpp" && unit.language === "cpp" && unit.name === "RunNative"),
+    );
+    assert.ok(
+      units.some((unit) => unit.filePath === "legacy.php" && unit.language === "php" && unit.name === "run_legacy"),
+    );
+    assert.ok(
+      units.some((unit) => unit.filePath === "Mobile.kt" && unit.language === "kotlin" && unit.name === "runMobile"),
+    );
+    assert.ok(
+      units.some((unit) => unit.filePath === "App.swift" && unit.language === "swift" && unit.name === "runApp"),
     );
   } finally {
     await rm(repoRoot, { recursive: true, force: true });
@@ -204,6 +300,11 @@ test("detectUnsupportedSourceLanguages reports unsupported source files without 
     await writeFile(path.join(repoRoot, "README.md"), "# Supported docs");
     await writeFile(path.join(repoRoot, "legacy.php"), "<?php function legacy() {}");
     await writeFile(path.join(repoRoot, "native.cpp"), "int main() { return 0; }");
+    await writeFile(path.join(repoRoot, "billing.rb"), "def total; end");
+    await writeFile(path.join(repoRoot, "screen.kt"), "fun render() {}");
+    await writeFile(path.join(repoRoot, "App.swift"), "func run() {}");
+    await writeFile(path.join(repoRoot, "job.scala"), "object Job {}");
+    await writeFile(path.join(repoRoot, "plugin.lua"), "function run() end");
     await mkdir(path.join(repoRoot, "prisma", "migrations", "20260101000000_init"), { recursive: true });
     await writeFile(
       path.join(repoRoot, "prisma", "migrations", "20260101000000_init", "migration.sql"),
@@ -216,15 +317,15 @@ test("detectUnsupportedSourceLanguages reports unsupported source files without 
 
     assert.deepEqual(
       unsupported.map((item) => item.extension),
-      [".cpp", ".php"],
+      [".lua", ".scala"],
     );
-    assert.equal(unsupported.find((item) => item.extension === ".php")?.fileCount, 1);
+    assert.equal(unsupported.find((item) => item.extension === ".lua")?.fileCount, 1);
     assert.equal(
       unsupported.some((item) => item.extension === ".ts" || item.extension === ".rs"),
       false,
     );
     assert.equal(
-      unsupported.some((item) => item.extension === ".rb"),
+      unsupported.some((item) => [".rb", ".cpp", ".php", ".kt", ".swift"].includes(item.extension)),
       false,
     );
   } finally {

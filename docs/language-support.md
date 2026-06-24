@@ -13,6 +13,11 @@ Code parsers:
 - Go
 - Java
 - C#
+- Ruby
+- C++
+- PHP
+- Kotlin
+- Swift
 
 Documentation:
 
@@ -44,7 +49,7 @@ Unsupported source files are skipped from full code indexing, but Sonar still sc
 The desktop app warning lists unsupported languages and file counts, for example:
 
 ```text
-Limited language coverage: C++ (28), PHP (12). Unsupported source files are skipped, so this briefing may be incomplete.
+Limited language coverage: Scala (28), Lua (12). Unsupported source files are skipped, so this briefing may be incomplete.
 ```
 
 That warning does not mean the import failed. It means Sonar will analyze the supported code and documentation it can parse, survey unsupported files only at a lighter signal level, and stay explicit about the parts it cannot fully cover yet.

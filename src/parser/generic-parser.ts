@@ -10,7 +10,33 @@ interface TreeSitterLanguageConfig {
   declarations: Record<string, CodeUnitKind>;
   importNodeTypes: Set<string>;
   callNodeTypes: Set<string>;
+  importTextPattern?: RegExp;
 }
+
+const CPP_CONFIG: TreeSitterLanguageConfig = {
+  language: "cpp",
+  langKey: "cpp",
+  declarations: {
+    class_specifier: "class",
+    struct_specifier: "class",
+    function_definition: "function",
+    namespace_definition: "module",
+  },
+  importNodeTypes: new Set(["preproc_include", "using_declaration", "using_declaration_list"]),
+  callNodeTypes: new Set(["call_expression"]),
+};
+
+const KOTLIN_CONFIG: TreeSitterLanguageConfig = {
+  language: "kotlin",
+  langKey: "kotlin",
+  declarations: {
+    class_declaration: "class",
+    object_declaration: "class",
+    function_declaration: "function",
+  },
+  importNodeTypes: new Set(["import_header"]),
+  callNodeTypes: new Set(["call_expression"]),
+};
 
 const LANGUAGE_BY_EXTENSION: Record<string, TreeSitterLanguageConfig> = {
   ".rs": {
@@ -67,6 +93,55 @@ const LANGUAGE_BY_EXTENSION: Record<string, TreeSitterLanguageConfig> = {
     importNodeTypes: new Set(["using_directive"]),
     callNodeTypes: new Set(["invocation_expression", "object_creation_expression"]),
   },
+  ".rb": {
+    language: "ruby",
+    langKey: "ruby",
+    declarations: {
+      class: "class",
+      module: "module",
+      method: "method",
+      singleton_method: "method",
+    },
+    importNodeTypes: new Set(["call"]),
+    importTextPattern: /^require(?:_relative)?\b/,
+    callNodeTypes: new Set(["call", "method_call"]),
+  },
+  ".cpp": CPP_CONFIG,
+  ".cc": CPP_CONFIG,
+  ".cxx": CPP_CONFIG,
+  ".hpp": CPP_CONFIG,
+  ".h": CPP_CONFIG,
+  ".php": {
+    language: "php",
+    langKey: "php",
+    declarations: {
+      class_declaration: "class",
+      interface_declaration: "class",
+      trait_declaration: "class",
+      enum_declaration: "class",
+      function_definition: "function",
+      method_declaration: "method",
+      namespace_definition: "module",
+    },
+    importNodeTypes: new Set(["namespace_use_declaration", "require_expression", "include_expression"]),
+    callNodeTypes: new Set(["function_call_expression", "member_call_expression", "object_creation_expression"]),
+  },
+  ".kt": KOTLIN_CONFIG,
+  ".kts": KOTLIN_CONFIG,
+  ".swift": {
+    language: "swift",
+    langKey: "swift",
+    declarations: {
+      class_declaration: "class",
+      struct_declaration: "class",
+      enum_declaration: "class",
+      protocol_declaration: "class",
+      extension_declaration: "class",
+      function_declaration: "function",
+    },
+    importNodeTypes: new Set(["import_declaration"]),
+    callNodeTypes: new Set(["call_expression"]),
+  },
 };
 
 export const GENERIC_SOURCE_EXTENSIONS = new Set(Object.keys(LANGUAGE_BY_EXTENSION));
@@ -85,8 +160,16 @@ function nodeName(node: TSNode): string | null {
   const named = node.childForFieldName("name");
   if (named?.text) return named.text;
 
+  const declarator = node.childForFieldName("declarator");
+  if (declarator) {
+    const declaratorName = nodeName(declarator);
+    if (declaratorName) return declaratorName;
+  }
+
   const identifier = node.namedChildren.find((child) =>
-    /^(identifier|type_identifier|field_identifier|property_identifier)$/.test(child.type),
+    /^(identifier|type_identifier|field_identifier|property_identifier|simple_identifier|constant|name|namespace_identifier)$/.test(
+      child.type,
+    ),
   );
   if (identifier?.text) return identifier.text;
 
@@ -97,7 +180,12 @@ function nodeName(node: TSNode): string | null {
 function collectImports(rootNode: TSNode, config: TreeSitterLanguageConfig): string[] {
   const imports = new Set<string>();
   function walk(node: TSNode): void {
-    if (config.importNodeTypes.has(node.type)) imports.add(node.text);
+    if (
+      config.importNodeTypes.has(node.type) &&
+      (!config.importTextPattern || config.importTextPattern.test(node.text))
+    ) {
+      imports.add(node.text);
+    }
     for (const child of node.children) walk(child);
   }
   walk(rootNode);
@@ -140,7 +228,8 @@ function shouldSkipNestedDeclaration(node: TSNode, config: TreeSitterLanguageCon
   if (kind === "method") return false;
   let current = node.parent;
   while (current) {
-    if (config.declarations[current.type]) return true;
+    const parentKind = config.declarations[current.type];
+    if (parentKind && parentKind !== "module") return true;
     current = current.parent;
   }
   return false;
