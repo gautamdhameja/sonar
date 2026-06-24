@@ -20,3 +20,7 @@ npm run desktop:dev
 - Keep changes focused and covered by tests when behavior changes.
 - Run `npm run check` before opening a PR.
 - Do not commit local data, model files, `.env` files, API keys, or generated docs output.
+
+## Continuous Integration
+
+CI runs `npm run check` on pull requests and pushes to `main` with supported Node.js versions. The macOS job is the release-target gate; Linux runs as an exploratory compatibility check.
