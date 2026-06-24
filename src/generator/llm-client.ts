@@ -7,8 +7,8 @@ import { LlmGenerationError } from "./errors";
 const client = new OpenAI({
   baseURL: CONFIG.chat.baseUrl,
   apiKey: CONFIG.chat.apiKey,
-  timeout: chatTimeoutMs(),
-  maxRetries: chatMaxRetries(),
+  timeout: CONFIG.chat.timeoutMs,
+  maxRetries: 0,
 });
 
 export interface LlmCompletion {
@@ -23,22 +23,35 @@ export interface LlmCompletionOptions {
 }
 
 type TokenLimitParam = "max_tokens" | "max_completion_tokens";
+type ChatCompletionResult = {
+  choices: Array<{
+    finish_reason?: string | null;
+    message: {
+      content?: string | null;
+      reasoning_content?: unknown;
+    };
+  }>;
+};
+type ChatCompletionCreate = (
+  body: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
+) => Promise<ChatCompletionResult>;
 
 let preferredTokenLimitParam: TokenLimitParam = defaultTokenLimitParam();
 
-function chatTimeoutMs(): number {
-  const raw = process.env.SONAR_CHAT_TIMEOUT_MS;
-  if (!raw || raw.trim() === "") return 60_000;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+let createChatCompletion: ChatCompletionCreate = async (body, options) =>
+  (await client.chat.completions.create(body as never, options)) as ChatCompletionResult;
+
+export function __setChatCompletionCreateForTest(create: ChatCompletionCreate): () => void {
+  const previous = createChatCompletion;
+  createChatCompletion = create;
+  return () => {
+    createChatCompletion = previous;
+  };
 }
 
-function chatMaxRetries(): number {
-  const raw = process.env.SONAR_CHAT_MAX_RETRIES;
-  if (!raw || raw.trim() === "") return 2;
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return 2;
-  return Math.min(parsed, 4);
+export function __resetPreferredTokenLimitParamForTest(): void {
+  preferredTokenLimitParam = defaultTokenLimitParam();
 }
 
 function defaultTokenLimitParam(): TokenLimitParam {
@@ -88,7 +101,7 @@ function defaultLabel(system: string): string {
 }
 
 function shouldDisableLocalReasoning(): boolean {
-  if (process.env.SONAR_DISABLE_MODEL_REASONING?.toLowerCase() === "false") return false;
+  if (CONFIG.chat.disableModelReasoning !== null) return CONFIG.chat.disableModelReasoning;
   try {
     const hostname = new URL(CONFIG.chat.baseUrl).hostname;
     return ["localhost", "127.0.0.1", "::1", "0.0.0.0"].includes(hostname);
@@ -102,10 +115,10 @@ function errorStatus(err: unknown): number | null {
   return typeof status === "number" ? status : null;
 }
 
-function classifyLlmError(err: unknown): LlmGenerationError {
+export function classifyLlmError(err: unknown): LlmGenerationError {
   const message = err instanceof Error ? err.message : String(err);
   const status = errorStatus(err);
-  if (/timeout|timed out/i.test(message)) {
+  if (status === 408 || status === 504 || /timeout|timed out/i.test(message)) {
     return new LlmGenerationError(
       "timeout",
       "Model request timed out. Check that the model server is running and responsive, or choose a smaller or faster model.",
@@ -140,6 +153,56 @@ function classifyLlmError(err: unknown): LlmGenerationError {
   );
 }
 
+async function createChatCompletionWithTokenParamFallback(
+  request: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<ChatCompletionResult> {
+  try {
+    return await createChatCompletion(
+      {
+        ...request,
+        [preferredTokenLimitParam]: CONFIG.generator.maxResponseTokens,
+      },
+      { signal },
+    );
+  } catch (err) {
+    const rejectedParam = unsupportedParameter(err);
+    if (rejectedParam !== preferredTokenLimitParam) throw err;
+
+    preferredTokenLimitParam = preferredTokenLimitParam === "max_tokens" ? "max_completion_tokens" : "max_tokens";
+    logger.info(`Retrying LLM generation with ${preferredTokenLimitParam}`);
+    return createChatCompletion(
+      {
+        ...request,
+        [preferredTokenLimitParam]: CONFIG.generator.maxResponseTokens,
+      },
+      { signal },
+    );
+  }
+}
+
+function shouldRetryLlmRequest(err: unknown, attempt: number): boolean {
+  if (attempt >= CONFIG.chat.maxRetries) return false;
+  return classifyLlmError(err).code === "unreachable";
+}
+
+async function createChatCompletionWithRetries(
+  request: Record<string, unknown>,
+  label: string,
+  signal?: AbortSignal,
+): Promise<ChatCompletionResult> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await createChatCompletionWithTokenParamFallback(request, signal);
+    } catch (err) {
+      if (isOperationAborted(err) || !shouldRetryLlmRequest(err, attempt)) throw err;
+      attempt += 1;
+      logger.info(`Retrying LLM generation after transient model connection failure: ${label}; attempt=${attempt}`);
+    }
+  }
+}
+
 export async function generateCompletion(
   system: string,
   user: string,
@@ -171,28 +234,7 @@ export async function generateCompletion(
       temperature: CONFIG.generator.temperature,
       ...localReasoningOptions,
     };
-    const completion = await client.chat.completions
-      .create(
-        {
-          ...request,
-          [preferredTokenLimitParam]: CONFIG.generator.maxResponseTokens,
-        },
-        { signal: options.signal },
-      )
-      .catch((err) => {
-        const rejectedParam = unsupportedParameter(err);
-        if (rejectedParam !== preferredTokenLimitParam) throw err;
-
-        preferredTokenLimitParam = preferredTokenLimitParam === "max_tokens" ? "max_completion_tokens" : "max_tokens";
-        logger.info(`Retrying LLM generation with ${preferredTokenLimitParam}`);
-        return client.chat.completions.create(
-          {
-            ...request,
-            [preferredTokenLimitParam]: CONFIG.generator.maxResponseTokens,
-          },
-          { signal: options.signal },
-        );
-      });
+    const completion = await createChatCompletionWithRetries(request, label, options.signal);
 
     const choice = completion.choices[0];
     const finishReason = choice.finish_reason ?? null;

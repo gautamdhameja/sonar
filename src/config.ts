@@ -2,6 +2,8 @@ import path from "path";
 
 export const DEFAULT_CHAT_BASE_URL = "http://127.0.0.1:8080/v1";
 export const DEFAULT_CHAT_MODEL = "local-model";
+export const DEFAULT_CHAT_TIMEOUT_MS = 180_000;
+export const DEFAULT_CHAT_MAX_RETRIES = 1;
 
 export interface SonarConfig {
   api: {
@@ -12,6 +14,9 @@ export interface SonarConfig {
     baseUrl: string;
     model: string;
     apiKey: string;
+    timeoutMs: number;
+    maxRetries: number;
+    disableModelReasoning: boolean | null;
   };
   parser: {
     supportedLanguages: readonly string[];
@@ -75,6 +80,16 @@ function getInteger(env: Env, name: string, fallback: number): number {
   return parsed;
 }
 
+function getNonNegativeInteger(env: Env, name: string, fallback: number, max?: number): number {
+  const raw = env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || String(parsed) !== raw.trim() || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer; received "${raw}"`);
+  }
+  return max === undefined ? parsed : Math.min(parsed, max);
+}
+
 function getNumber(env: Env, name: string, fallback: number): number {
   const raw = env[name];
   if (raw === undefined || raw.trim() === "") return fallback;
@@ -92,6 +107,12 @@ function getBoolean(env: Env, name: string, fallback: boolean): boolean {
   if (["1", "true", "yes", "on"].includes(normalized)) return true;
   if (["0", "false", "no", "off"].includes(normalized)) return false;
   throw new Error(`${name} must be a boolean; received "${raw}"`);
+}
+
+function getOptionalBoolean(env: Env, name: string): boolean | null {
+  const raw = env[name];
+  if (raw === undefined || raw.trim() === "") return null;
+  return getBoolean(env, name, false);
 }
 
 function optionalToken(value: string | undefined): string | null {
@@ -143,6 +164,9 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       baseUrl: chatBaseUrl,
       model: chatModel,
       apiKey: getString(env, "SONAR_CHAT_API_KEY", "not-needed"),
+      timeoutMs: getInteger(env, "SONAR_CHAT_TIMEOUT_MS", DEFAULT_CHAT_TIMEOUT_MS),
+      maxRetries: getNonNegativeInteger(env, "SONAR_CHAT_MAX_RETRIES", DEFAULT_CHAT_MAX_RETRIES, 4),
+      disableModelReasoning: getOptionalBoolean(env, "SONAR_DISABLE_MODEL_REASONING"),
     },
     parser: {
       supportedLanguages: [

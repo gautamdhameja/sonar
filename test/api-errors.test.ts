@@ -36,4 +36,18 @@ test("toErrorResponse preserves actionable typed model failures", () => {
         "Model endpoint is unreachable. Start the local model server or update the OpenAI-compatible endpoint in settings.",
     },
   );
+  assert.deepEqual(
+    toErrorResponse(
+      new LlmGenerationError(
+        "timeout",
+        "Model request timed out. Check that the model server is running and responsive, or choose a smaller or faster model.",
+        "Request timed out after 180000ms",
+      ),
+    ),
+    {
+      status: 502,
+      message:
+        "Model request timed out. Check that the model server is running and responsive, or choose a smaller or faster model.",
+    },
+  );
 });
