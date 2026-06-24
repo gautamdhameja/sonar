@@ -119,7 +119,9 @@ export function App() {
     try {
       const next = await listProjects();
       setProjects(next);
-      if (!selectedProjectId && next[0]) setSelectedProjectId(next[0].id);
+      if (selectedProjectId && !next.some((project) => project.id === selectedProjectId)) {
+        setSelectedProjectId("");
+      }
     } catch (err) {
       setError(friendlyErrorMessage(err));
     }
@@ -229,6 +231,7 @@ export function App() {
     try {
       const selected = await open({ directory: true, multiple: false });
       if (typeof selected === "string") {
+        setSelectedProjectId("");
         setRepoPath(selected);
         setProjectName(selected.split(/[\\/]/).filter(Boolean).at(-1) ?? "Local Project");
       }
@@ -438,6 +441,7 @@ export function App() {
   }
 
   function handleGithubRepositoryChange(value: string) {
+    setSelectedProjectId("");
     setGithubRepository(value);
     if (!projectName.trim()) {
       const parts = value
@@ -448,6 +452,16 @@ export function App() {
       const owner = parts.at(-2);
       if (owner && repo) setProjectName(`${owner}/${repo}`);
     }
+  }
+
+  function handleRepoPathChange(value: string) {
+    setSelectedProjectId("");
+    setRepoPath(value);
+  }
+
+  function handleRepositorySourceChange(value: RepositorySource) {
+    setSelectedProjectId("");
+    setRepositorySource(value);
   }
 
   function handleSelectProject(project: Project) {
@@ -556,8 +570,8 @@ export function App() {
             onOpenSettings={() => setAdvancedOpen(true)}
             onProjectNameChange={setProjectName}
             onReindexSelectedProject={() => void handleReindexCurrentProject()}
-            onRepositorySourceChange={setRepositorySource}
-            onRepoPathChange={setRepoPath}
+            onRepositorySourceChange={handleRepositorySourceChange}
+            onRepoPathChange={handleRepoPathChange}
             onSelectProject={handleSelectProject}
             onStartRuntime={() => void bootstrap()}
             projectName={projectName}
