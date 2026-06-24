@@ -53,6 +53,16 @@ function unsupportedLanguageNotice(languages: UnsupportedLanguageSummary[] | und
   return `Limited language coverage: ${topLanguages}${suffix}. Sonar indexes TypeScript, JavaScript, Python, Rust, Go, Java, C#, Ruby, C++, PHP, Kotlin, Swift, Markdown, JSON config, and Prisma schema files today; unsupported source files are skipped, so this briefing may be incomplete.`;
 }
 
+function indexingNotice(indexed: {
+  unsupportedLanguages?: UnsupportedLanguageSummary[];
+  indexWarnings?: string[];
+}): string | null {
+  const messages = [unsupportedLanguageNotice(indexed.unsupportedLanguages), ...(indexed.indexWarnings ?? [])].filter(
+    (message): message is string => Boolean(message),
+  );
+  return messages.length ? messages.join(" ") : null;
+}
+
 export function App() {
   const [snapshot, setSnapshot] = useState<ServiceSnapshot | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -275,8 +285,8 @@ export function App() {
     stopIfRequested();
     await refreshProjects();
     setSelectedProjectId(indexed.projectId);
-    const languageNotice = unsupportedLanguageNotice(indexed.unsupportedLanguages);
-    if (languageNotice) setNotice(languageNotice);
+    const notice = indexingNotice(indexed);
+    if (notice) setNotice(notice);
     return indexed.projectId;
   }
 
@@ -376,8 +386,8 @@ export function App() {
       const indexed = await indexProject(selectedProject.repoPath, selectedProject.name, controller.signal);
       await refreshProjects();
       setSelectedProjectId(indexed.projectId);
-      const languageNotice = unsupportedLanguageNotice(indexed.unsupportedLanguages);
-      if (languageNotice) setNotice(languageNotice);
+      const notice = indexingNotice(indexed);
+      if (notice) setNotice(notice);
 
       setActiveTask({
         kind: "brief",

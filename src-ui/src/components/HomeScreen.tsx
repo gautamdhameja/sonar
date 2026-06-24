@@ -157,7 +157,7 @@ export function HomeScreen({
           <Lock size={15} />
           <span>
             {runtimeReady
-              ? "Use a local model for a free local-first briefing, or configure your own API endpoint."
+              ? "Sonar reads only the repository you choose. Local models keep generation on this machine; API endpoints use the provider you configure."
               : "Start the local runtime first. Sonar imports only the repository you choose."}
           </span>
         </div>
@@ -165,8 +165,9 @@ export function HomeScreen({
         <div className="language-note">
           <AlertTriangle size={15} />
           <span>
-            Best coverage today: TypeScript, JavaScript, Python, Rust, Go, Java, C#, Markdown, JSON config, and Prisma
-            schema files. Other source languages may be skipped, so the briefing can be incomplete.
+            Best coverage today: TypeScript, JavaScript, Python, Rust, Go, Java, C#, Ruby, C++, PHP, Kotlin, Swift,
+            Markdown, JSON config, and Prisma schema files. Very small or slow local models may produce weaker
+            briefings.
           </span>
         </div>
 

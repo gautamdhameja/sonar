@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { parseRepository } from "../src/parser";
+import { parseRepository, parseRepositoryWithStats } from "../src/parser";
 import { parseTypeScript } from "../src/parser/ts-parser";
 import { parsePython } from "../src/parser/py-parser";
 import { parseGenericSource } from "../src/parser/generic-parser";
@@ -287,6 +287,23 @@ test("parseRepository indexes manifest and schema text modules for briefing evid
       units.some((unit) => unit.filePath === "package-lock.json"),
       false,
     );
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test("parseRepositoryWithStats reports files skipped by indexing limits", async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), "sonar-parser-limits-"));
+  try {
+    await writeFile(path.join(repoRoot, "large.ts"), `export const large = "${"x".repeat(1_000_001)}";`);
+
+    const result = await parseRepositoryWithStats(repoRoot);
+
+    assert.equal(
+      result.units.some((unit) => unit.filePath === "large.ts"),
+      false,
+    );
+    assert.ok(result.warnings.some((warning) => warning.includes("per-file indexing limit")));
   } finally {
     await rm(repoRoot, { recursive: true, force: true });
   }

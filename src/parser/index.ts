@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { walkRepository } from "./file-walker";
+import { walkRepositoryWithStats } from "./file-walker";
 import { parseTypeScript } from "./ts-parser";
 import { parsePython } from "./py-parser";
 import { parseMarkdown } from "./markdown-parser";
@@ -21,13 +21,24 @@ const DOC_EXTENSIONS = new Set([".md", ".mdx"]);
 const TEXT_MODULE_EXTENSIONS = new Set([".json", ".prisma"]);
 
 export async function parseRepository(repoRoot: string, signal?: AbortSignal): Promise<CodeUnit[]> {
+  return (await parseRepositoryWithStats(repoRoot, signal)).units;
+}
+
+export interface ParseRepositoryResult {
+  units: CodeUnit[];
+  warnings: string[];
+}
+
+export async function parseRepositoryWithStats(repoRoot: string, signal?: AbortSignal): Promise<ParseRepositoryResult> {
   throwIfAborted(signal);
-  const walkedFiles = await walkRepository(repoRoot);
+  const walked = await walkRepositoryWithStats(repoRoot);
+  const walkedFiles = walked.files;
   const allUnits: CodeUnit[] = [];
   const sourceByFile = new Map<string, string>();
 
   let vendoredFileCount = 0;
   let skippedOversizedFiles = 0;
+  let skippedByteBudgetFiles = 0;
   let totalBytes = 0;
 
   for (let i = 0; i < walkedFiles.length; i++) {
@@ -46,7 +57,7 @@ export async function parseRepository(repoRoot: string, signal?: AbortSignal): P
         continue;
       }
       if (totalBytes + stat.size > CONFIG.parser.maxTotalBytes) {
-        skippedOversizedFiles++;
+        skippedByteBudgetFiles++;
         logger.warn(`Skipping ${filePath}: index byte budget exceeded`);
         continue;
       }
@@ -97,8 +108,50 @@ export async function parseRepository(repoRoot: string, signal?: AbortSignal): P
   logger.info(
     `Parsed ${walkedFiles.length} files (${vendoredFileCount} vendored), extracted ${allUnits.length} code units ` +
       `(${counts.function} functions, ${counts.class} classes, ${counts.method} methods, ${counts.module} modules, ` +
-      `${vendoredUnitCount} vendored, ${addedFileUnits} file anchors added, ${skippedOversizedFiles} skipped)`,
+      `${vendoredUnitCount} vendored, ${addedFileUnits} file anchors added, ${
+        skippedOversizedFiles + skippedByteBudgetFiles
+      } skipped)`,
   );
 
-  return enrichedUnits;
+  return {
+    units: enrichedUnits,
+    warnings: indexWarnings({
+      hitMaxFiles: walked.hitMaxFiles,
+      hitMaxDepth: walked.hitMaxDepth,
+      skippedOversizedFiles,
+      skippedByteBudgetFiles,
+    }),
+  };
+}
+
+function indexWarnings(stats: {
+  hitMaxFiles: boolean;
+  hitMaxDepth: boolean;
+  skippedOversizedFiles: number;
+  skippedByteBudgetFiles: number;
+}): string[] {
+  const warnings: string[] = [];
+  if (stats.hitMaxFiles) {
+    warnings.push(
+      `Indexing reached the configured file limit (${CONFIG.parser.maxFiles} supported files). Some files were not indexed.`,
+    );
+  }
+  if (stats.hitMaxDepth) {
+    warnings.push(
+      `Indexing reached the configured directory depth limit (${CONFIG.parser.maxDepth}). Deeply nested files may be omitted.`,
+    );
+  }
+  if (stats.skippedOversizedFiles > 0) {
+    warnings.push(
+      `${stats.skippedOversizedFiles} file${stats.skippedOversizedFiles === 1 ? " was" : "s were"} skipped because ${
+        stats.skippedOversizedFiles === 1 ? "it exceeds" : "they exceed"
+      } the per-file indexing limit (${CONFIG.parser.maxFileBytes} bytes).`,
+    );
+  }
+  if (stats.skippedByteBudgetFiles > 0) {
+    warnings.push(
+      `${stats.skippedByteBudgetFiles} file${stats.skippedByteBudgetFiles === 1 ? " was" : "s were"} skipped after the repository indexing byte budget (${CONFIG.parser.maxTotalBytes} bytes) was reached.`,
+    );
+  }
+  return warnings;
 }

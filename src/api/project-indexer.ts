@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { CONFIG } from "../config";
 import { ProjectRepo } from "../db/project-repo";
 import { deleteProjectIndexes, indexRepository } from "../indexer";
-import { parseRepository } from "../parser";
+import { parseRepositoryWithStats } from "../parser";
 import { extractDependencyEdges } from "../parser/dependency-resolver";
 import { UnsupportedLanguageSummary, detectUnsupportedSourceLanguages } from "../parser/language-support";
 import { CodeUnitStore } from "../retriever/unit-store";
@@ -25,6 +25,7 @@ export interface ProjectIndexResult {
   unitCount: number;
   timeSeconds: number;
   unsupportedLanguages: UnsupportedLanguageSummary[];
+  indexWarnings: string[];
 }
 
 const activeIndexingRoots = new Set<string>();
@@ -101,7 +102,8 @@ export async function indexProject(
       throwIfAborted(signal);
       const unsupportedLanguages = await detectUnsupportedSourceLanguages(realRoot);
       throwIfAborted(signal);
-      const units = await parseRepository(realRoot, signal);
+      const parsed = await parseRepositoryWithStats(realRoot, signal);
+      const units = parsed.units;
       throwIfAborted(signal);
       await indexRepository(units, projectId, signal);
       throwIfAborted(signal);
@@ -135,7 +137,13 @@ export async function indexProject(
       }
 
       const timeSeconds = (Date.now() - start) / 1000;
-      return { projectId: project.id, unitCount: store.size, timeSeconds, unsupportedLanguages };
+      return {
+        projectId: project.id,
+        unitCount: store.size,
+        timeSeconds,
+        unsupportedLanguages,
+        indexWarnings: parsed.warnings,
+      };
     } catch (err) {
       await deleteProjectIndexes(projectId);
       context.repo.deleteProject(projectId);

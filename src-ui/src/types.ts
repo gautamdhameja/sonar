@@ -75,6 +75,7 @@ export interface IndexProjectResponse {
   unitCount: number;
   timeSeconds: number;
   unsupportedLanguages?: UnsupportedLanguageSummary[];
+  indexWarnings?: string[];
 }
 
 export interface CitationVerification {

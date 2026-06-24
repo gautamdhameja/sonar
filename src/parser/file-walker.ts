@@ -10,6 +10,12 @@ export interface WalkedFile {
   isVendored: boolean;
 }
 
+export interface WalkRepositoryResult {
+  files: WalkedFile[];
+  hitMaxFiles: boolean;
+  hitMaxDepth: boolean;
+}
+
 function isSkippedIndexedFile(fileName: string): boolean {
   return (
     /(^|\.)(lock|snap)\b/i.test(fileName) ||
@@ -17,16 +23,28 @@ function isSkippedIndexedFile(fileName: string): boolean {
   );
 }
 
-export async function walkRepository(repoRoot: string): Promise<WalkedFile[]> {
+export async function walkRepositoryWithStats(repoRoot: string): Promise<WalkRepositoryResult> {
   const vendoredPaths = detectVendoredPaths(repoRoot);
   const results: WalkedFile[] = [];
+  let hitMaxFiles = false;
+  let hitMaxDepth = false;
 
   async function walk(dir: string, depth: number): Promise<void> {
-    if (depth > CONFIG.parser.maxDepth || results.length >= CONFIG.parser.maxFiles) return;
+    if (depth > CONFIG.parser.maxDepth) {
+      hitMaxDepth = true;
+      return;
+    }
+    if (results.length >= CONFIG.parser.maxFiles) {
+      hitMaxFiles = true;
+      return;
+    }
 
     const entries = await fs.promises.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (results.length >= CONFIG.parser.maxFiles) return;
+      if (results.length >= CONFIG.parser.maxFiles) {
+        hitMaxFiles = true;
+        return;
+      }
 
       if (entry.isDirectory()) {
         if (!EXCLUDED_REPOSITORY_DIRS.has(entry.name)) {
@@ -48,7 +66,11 @@ export async function walkRepository(repoRoot: string): Promise<WalkedFile[]> {
 
   await walk(repoRoot, 0);
   results.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
-  return results;
+  return { files: results, hitMaxFiles, hitMaxDepth };
+}
+
+export async function walkRepository(repoRoot: string): Promise<WalkedFile[]> {
+  return (await walkRepositoryWithStats(repoRoot)).files;
 }
 
 /**
