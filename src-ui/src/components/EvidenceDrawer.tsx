@@ -1,4 +1,5 @@
 import { CheckCircle2, Info, X } from "lucide-react";
+import { useDialog } from "../app/useDialog";
 import type { CitationVerification, SourceRef } from "../types";
 import { SourceList } from "./SourceList";
 
@@ -9,13 +10,23 @@ interface EvidenceDrawerProps {
 }
 
 export function EvidenceDrawer({ citation, sources, onClose }: EvidenceDrawerProps) {
+  const panelRef = useDialog<HTMLElement>(onClose);
+
   return (
     <div className="drawer-backdrop" role="presentation">
-      <aside className="drawer">
+      <button aria-label="Close evidence panel" className="drawer-scrim" onClick={onClose} type="button" />
+      <aside
+        aria-labelledby="evidence-title"
+        aria-modal="true"
+        className="drawer"
+        ref={panelRef}
+        role="dialog"
+        tabIndex={-1}
+      >
         <div className="drawer-head">
           <div>
             <p className="eyebrow">Evidence</p>
-            <h2>Sources Sonar used</h2>
+            <h2 id="evidence-title">Sources Sonar used</h2>
           </div>
           <button className="icon-button" onClick={onClose} type="button">
             <X size={17} />

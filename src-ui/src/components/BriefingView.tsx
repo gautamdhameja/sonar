@@ -174,12 +174,11 @@ export function BriefingView({
 
       <aside className="brief-aside">
         <section>
-          <p className="eyebrow">Confidence</p>
-          <h3>{citation?.valid ? "Evidence looks grounded" : "Review suggested"}</h3>
+          <p className="eyebrow">Before you share</p>
           <p>
             {citation?.valid
-              ? "The briefing cites concrete files from the repository."
-              : "Some summary language may need a human check before sharing."}
+              ? "This briefing cites concrete files from the repository. Treat it as a source-grounded draft, not reviewed documentation."
+              : "Some summary language is uncited and may need a human check before sharing."}
           </p>
         </section>
         <section>

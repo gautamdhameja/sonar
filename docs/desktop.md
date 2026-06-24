@@ -8,6 +8,7 @@ Sonar is built for high-level codebase briefings. It helps non-technical and sem
 
 - Git installed locally if you want Sonar to clone GitHub repositories for you
 - Node.js 22.x, 23.x, 24.x, or 25.x when running from source
+- Rust toolchain and platform dependencies for Tauri
 - A local OpenAI-compatible model server or an OpenAI-compatible API endpoint
 
 ## First-Run Flow
@@ -24,10 +25,15 @@ Sonar is built for high-level codebase briefings. It helps non-technical and sem
 
 - Sonar API on `http://127.0.0.1:3001`.
 - SQLite project data under `~/.sonar`.
+- No Meilisearch or external database/search service.
 
-When running from source, the desktop shell starts the API through `npm run dev`. A packaged build can provide a native API sidecar at `~/.sonar/bin/sonar-api` or through `SONAR_API_SERVER_PATH`.
+When running from source, `npm run desktop:dev` starts the Tauri shell. Tauri starts the Vite UI through
+`npm run dev:ui`, and the desktop service manager starts the Sonar API through `npm run dev`. A packaged build can
+provide a native API sidecar at `~/.sonar/bin/sonar-api` or through `SONAR_API_SERVER_PATH`.
 
-To use local generation, choose **Local llama.cpp** and configure the local OpenAI-compatible endpoint. The default is `http://127.0.0.1:8080/v1`; if you use a different port or local runtime, update the endpoint during setup. To use cloud generation or another hosted model, choose **API endpoint**.
+To use local generation, start an OpenAI-compatible model server separately, choose **Local llama.cpp**, and configure the
+local endpoint. The default is `http://127.0.0.1:8080/v1`; if you use a different port or local runtime, update the
+endpoint during setup. To use cloud generation or another hosted model, choose **API endpoint**.
 
 Development builds can also use a llama.cpp sidecar when these paths are set:
 
@@ -83,7 +89,8 @@ redacted runtime config, service status, and local Sonar/llama.cpp logs when pre
 
 When Sonar indexes a repository, it scans for common source file extensions outside the supported parser set. If it finds unsupported languages, the desktop app shows a warning with file counts. You can still create the briefing, and the survey may use lightweight signals from those files, but unsupported source files are not fully parsed into the code index.
 
-Supported code parsers today cover TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, and C#. Markdown and MDX are indexed as documentation.
+Supported code parsers today cover TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C#, Ruby, C++, PHP, Kotlin,
+and Swift. Markdown and MDX are indexed as documentation.
 
 ## Release Build
 

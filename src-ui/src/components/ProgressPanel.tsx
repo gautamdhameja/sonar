@@ -54,10 +54,11 @@ export function ProgressPanel({ activeTask, onStop, stopDisabled }: ProgressPane
           <span>{activeTask.kind === "brief" ? "Surveying" : "Working"}</span>
         </div>
         <div
+          aria-busy={activeTask.kind === "brief" || undefined}
           aria-label={activeTask.label}
-          aria-valuemax={100}
-          aria-valuemin={0}
-          aria-valuenow={progress}
+          aria-valuemax={activeTask.kind === "brief" ? undefined : 100}
+          aria-valuemin={activeTask.kind === "brief" ? undefined : 0}
+          aria-valuenow={activeTask.kind === "brief" ? undefined : progress}
           className="progress-track"
           role="progressbar"
         >

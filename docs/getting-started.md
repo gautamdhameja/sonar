@@ -1,6 +1,7 @@
 # Getting Started
 
-Sonar runs as a desktop app backed by a local API and embedded SQLite project store. The app starts the local API for you.
+Sonar runs as a desktop app backed by a local API and embedded SQLite project store. The app starts the local API for you;
+you provide the model endpoint separately.
 
 The product goal is simple: create a useful, cited briefing from a repository using a local or modest model. Sonar first builds a repository inventory, surveys selected source files into a small memory graph, and then writes the briefing from that map plus source excerpts. It is best for high-level project understanding: what the project does, who it serves, the main workflows, important systems, risks, and questions to ask the team. It is not meant to replace deep code review, debugging, refactoring, or implementation work.
 
@@ -8,12 +9,23 @@ Prerequisites:
 
 - Git, if you want Sonar to clone GitHub repositories for you
 - Node.js 22.x, 23.x, 24.x, or 25.x when running from source
+- Rust toolchain and platform dependencies for Tauri
 - A local OpenAI-compatible model server, or an OpenAI-compatible API endpoint
 
-Start the desktop app:
+Clone the repository and install dependencies:
 
 ```bash
+git clone https://github.com/gautamdhameja/sonar.git
+cd sonar
 npm install
+```
+
+Start your model server separately. For the default local setup, Sonar expects an OpenAI-compatible endpoint at
+`http://127.0.0.1:8080/v1` that responds to `/models`.
+
+Then start the desktop app:
+
+```bash
 npm run desktop:dev
 ```
 
@@ -29,6 +41,8 @@ The local runtime is:
 - Sonar API on `http://127.0.0.1:3001`
 - SQLite project store under `~/.sonar`
 
+Sonar does not require Meilisearch or another external database/search service.
+
 If you choose **Local llama.cpp**, Sonar expects:
 
 - an OpenAI-compatible local model server at the endpoint configured in the app, or
@@ -42,6 +56,8 @@ SONAR_LLAMA_MODEL_PATH=/path/to/model.gguf
 ```
 
 The configured model endpoint must respond to the OpenAI-compatible `/models` check.
+
+See [Setup from Source](setup.md) for a complete step-by-step guide and troubleshooting.
 
 If you choose **API endpoint**, configure:
 

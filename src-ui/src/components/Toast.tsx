@@ -8,7 +8,11 @@ interface ToastProps {
 
 export function Toast({ children, tone = "error" }: ToastProps) {
   return (
-    <div className={tone === "notice" ? "toast-alert notice" : "toast-alert"}>
+    <div
+      aria-live={tone === "notice" ? "polite" : "assertive"}
+      className={tone === "notice" ? "toast-alert notice" : "toast-alert"}
+      role={tone === "notice" ? "status" : "alert"}
+    >
       {tone === "notice" ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
       <span>{children}</span>
     </div>

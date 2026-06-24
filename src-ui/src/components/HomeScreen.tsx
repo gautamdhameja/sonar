@@ -1,14 +1,4 @@
-import {
-  AlertTriangle,
-  BookOpen,
-  FolderOpen,
-  GitBranch,
-  HardDrive,
-  Loader2,
-  Lock,
-  RotateCcw,
-  Sparkles,
-} from "lucide-react";
+import { BookOpen, FolderOpen, GitBranch, HardDrive, Info, Loader2, Lock, RotateCcw, Sparkles } from "lucide-react";
 import { briefingRoleProfiles } from "../app/constants";
 import type { ActiveTask, BriefingRole, RepositorySource } from "../app/types";
 import type { DesktopModelConfig, Project, ServiceSnapshot, ServiceState } from "../types";
@@ -94,8 +84,9 @@ export function HomeScreen({
           </div>
         </div>
 
-        <div className="segmented" role="tablist" aria-label="Repository source">
+        <div className="segmented">
           <button
+            aria-pressed={repositorySource === "github"}
             className={repositorySource === "github" ? "segment active" : "segment"}
             onClick={() => onRepositorySourceChange("github")}
             type="button"
@@ -104,6 +95,7 @@ export function HomeScreen({
             GitHub
           </button>
           <button
+            aria-pressed={repositorySource === "local"}
             className={repositorySource === "local" ? "segment active" : "segment"}
             onClick={() => onRepositorySourceChange("local")}
             type="button"
@@ -162,8 +154,8 @@ export function HomeScreen({
           </span>
         </div>
 
-        <div className="language-note">
-          <AlertTriangle size={15} />
+        <div className="privacy-note coverage-note">
+          <Info size={15} />
           <span>
             Best coverage today: TypeScript, JavaScript, Python, Rust, Go, Java, C#, Ruby, C++, PHP, Kotlin, Swift,
             Markdown, JSON config, and Prisma schema files. Very small or slow local models may produce weaker

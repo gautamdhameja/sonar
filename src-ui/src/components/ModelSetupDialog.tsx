@@ -1,6 +1,7 @@
 import { Cloud, Loader2, Save, Server } from "lucide-react";
 import { localLlamaConfig, openAiCompatibleConfig } from "../app/constants";
 import type { ActiveTask } from "../app/types";
+import { useDialog } from "../app/useDialog";
 import type { DesktopModelConfig } from "../types";
 
 interface ModelSetupDialogProps {
@@ -23,13 +24,21 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
       modelSetupComplete: modelConfig.modelSetupComplete,
     });
   const isSaving = activeTask?.kind === "settings";
+  const panelRef = useDialog<HTMLElement>();
 
   return (
     <div className="drawer-backdrop setup-backdrop" role="presentation">
-      <section className="setup-dialog">
+      <section
+        aria-labelledby="setup-title"
+        aria-modal="true"
+        className="setup-dialog"
+        ref={panelRef}
+        role="dialog"
+        tabIndex={-1}
+      >
         <div>
           <p className="eyebrow">First run</p>
-          <h2>Choose your model source</h2>
+          <h2 id="setup-title">Choose your model source</h2>
           <p>
             Sonar uses its embedded project store and an OpenAI-compatible generation endpoint. Choose local mode for a
             llama.cpp server on this machine, or API mode for a cloud or self-hosted endpoint.

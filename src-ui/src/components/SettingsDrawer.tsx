@@ -2,6 +2,7 @@ import { Bug, Cloud, RefreshCw, Save, Server, X } from "lucide-react";
 import { localLlamaConfig, openAiCompatibleConfig } from "../app/constants";
 import { stateLabel } from "../app/format";
 import type { ActiveTask } from "../app/types";
+import { useDialog } from "../app/useDialog";
 import type { DesktopModelConfig, Project, ServiceSnapshot } from "../types";
 
 interface SettingsDrawerProps {
@@ -37,14 +38,23 @@ export function SettingsDrawer({
   const useLocalModel = () => onModelConfigChange(localLlamaConfig);
   const useApiEndpoint = () => onModelConfigChange(openAiCompatibleConfig);
   const runtimeBusy = activeTask?.kind === "bootstrap" || activeTask?.kind === "settings";
+  const panelRef = useDialog<HTMLElement>(onClose);
 
   return (
     <div className="drawer-backdrop" role="presentation">
-      <aside className="drawer wide-drawer">
+      <button aria-label="Close settings panel" className="drawer-scrim" onClick={onClose} type="button" />
+      <aside
+        aria-labelledby="settings-title"
+        aria-modal="true"
+        className="drawer wide-drawer"
+        ref={panelRef}
+        role="dialog"
+        tabIndex={-1}
+      >
         <div className="drawer-head">
           <div>
             <p className="eyebrow">Advanced</p>
-            <h2>Runtime and model settings</h2>
+            <h2 id="settings-title">Runtime and model settings</h2>
           </div>
           <button className="icon-button" onClick={onClose} type="button">
             <X size={17} />

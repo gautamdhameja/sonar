@@ -22,26 +22,45 @@ Sonar is intended to produce strong source-grounded briefing drafts, especially 
 
 ## Language Support
 
-Sonar currently indexes TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C#, Markdown/MDX, plus selected JSON and Prisma schema files as text evidence. The repository survey also scans common source extensions for high-level signals such as entry points, file IO, network boundaries, config, logging, and state. Repositories that mainly use unsupported source languages can still be imported, but briefings may be less complete because full parser coverage is not available for those files.
+Sonar currently indexes TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C#, Ruby, C++, PHP, Kotlin, Swift,
+Markdown/MDX, plus selected JSON and Prisma schema files as text evidence. The repository survey also scans common
+source extensions for high-level signals such as entry points, file IO, network boundaries, config, logging, and state.
+Repositories that mainly use unsupported source languages can still be imported, but briefings may be less complete
+because full parser coverage is not available for those files.
 
 See [Language Support and Limits](docs/language-support.md) for the current parser coverage and known limitations.
 
 ## Quick Start
 
-Prerequisites for running from source:
+Sonar is currently distributed as a source-run desktop app. The expected local setup is:
 
 - Node.js 22.x, 23.x, 24.x, or 25.x
+- Rust toolchain and platform dependencies for Tauri
 - Git, if you want Sonar to clone GitHub repositories
-- A local OpenAI-compatible model server, or an OpenAI-compatible API endpoint
+- A local OpenAI-compatible model server, or an OpenAI-compatible API endpoint you explicitly configure
 
-Install dependencies and run the desktop app:
+Clone the repository and install dependencies:
 
 ```bash
+git clone https://github.com/gautamdhameja/sonar.git
+cd sonar
 npm install
+```
+
+Start a model server separately. For local mode, Sonar expects an OpenAI-compatible endpoint such as llama.cpp
+`llama-server` on `http://127.0.0.1:8080/v1`, and the endpoint must respond to `/models`.
+
+Then run the desktop app:
+
+```bash
 npm run desktop:dev
 ```
 
-On first launch, Sonar starts its local workspace engine and asks whether you want to use a local model endpoint or an OpenAI-compatible API endpoint. The default local endpoint is `http://127.0.0.1:8080/v1`, but you can change it in the setup screen. Then paste a GitHub repository URL or select a local repository folder and create a briefing.
+On first launch, Sonar starts its local workspace engine, asks whether you want a local model endpoint or an
+OpenAI-compatible API endpoint, and stores project data in embedded SQLite under `~/.sonar`. It does not require
+Meilisearch or any other external database/search service.
+
+For detailed setup steps, see [Setup from Source](docs/setup.md).
 
 ## Local Privacy Boundary
 
@@ -62,6 +81,7 @@ If you use API endpoint mode, source excerpts needed for generation are sent to 
 Detailed documentation lives in [docs/](docs/README.md).
 
 - [Getting Started](docs/getting-started.md)
+- [Setup from Source](docs/setup.md)
 - [Desktop App](docs/desktop.md)
 - [Language Support and Limits](docs/language-support.md)
 
