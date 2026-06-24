@@ -6,6 +6,7 @@ export function registerHealthRoutes(app: Express, state: ApiState): void {
   const { repo } = state;
 
   app.get("/health", (_req: Request, res: Response) => {
+    res.setHeader("X-Sonar-Service", "workspace-engine");
     res.json({
       status: "ok",
     });

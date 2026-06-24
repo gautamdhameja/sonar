@@ -58,6 +58,11 @@ This file is generated locally and ignored by git.
 
 The desktop-managed API is intended for localhost use by the Tauri app. It is protected by `X-Sonar-Token` and CORS allowlisting. In source builds, the renderer reads the token so it can call the local API directly; treat the desktop config and runtime files as local secrets.
 
+When Sonar runs as the desktop app, local repository selection is intentionally trusted: the API is started with
+`SONAR_ALLOW_ANY_REPO_ROOT=true` so a folder chosen in the native picker can be indexed without pre-registering allowed
+roots. This override is only for the desktop-managed localhost engine; the process still binds to `127.0.0.1`, uses the
+runtime token for protected API calls, and enforces the configured CORS allowlist.
+
 ## Local Diagnostics
 
 The settings drawer can create an opt-in diagnostics bundle under `~/.sonar/diagnostics`. The bundle stays on the local

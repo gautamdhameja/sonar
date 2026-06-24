@@ -25,6 +25,7 @@ test("API starts with isolated storage and enforces token-protected reads", asyn
     });
     assert.equal(health.status, 200);
     assert.deepEqual(await health.json(), { status: "ok" });
+    assert.equal(health.headers.get("x-sonar-service"), "workspace-engine");
     assert.equal(health.headers.get("x-content-type-options"), "nosniff");
     assert.equal(health.headers.get("cache-control"), "no-store");
     assert.equal(health.headers.get("x-powered-by"), null);

@@ -1,6 +1,7 @@
 use std::{
     fs,
-    io::Write,
+    io::{Read, Write},
+    net::TcpStream,
     path::PathBuf,
     process::Command,
     sync::atomic::{AtomicBool, Ordering},
@@ -149,6 +150,8 @@ fn start_api_service(force_restart: bool) -> Result<(), String> {
     let mut command = api_command()?;
     let child = command
         .env("SONAR_API_TOKEN", &api_token)
+        // Desktop users choose folders through the native picker, so the local engine accepts any
+        // selected repo root. The remaining boundary is localhost bind + runtime token + CORS.
         .env("SONAR_ALLOW_ANY_REPO_ROOT", "true")
         .env("SONAR_DATA_DIR", data_dir.to_string_lossy().as_ref())
         .env("SONAR_CHAT_MODEL", &model_config.chat_model)
@@ -255,7 +258,19 @@ fn uses_default_local_endpoint(model_config: &DesktopModelConfig) -> bool {
 }
 
 fn is_api_ready() -> bool {
-    std::net::TcpStream::connect(("127.0.0.1", 3001)).is_ok()
+    let Ok(mut stream) = TcpStream::connect(("127.0.0.1", 3001)) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+    let request = "GET /health HTTP/1.1\r\nHost: 127.0.0.1:3001\r\nConnection: close\r\n\r\n";
+    if stream.write_all(request.as_bytes()).is_err() {
+        return false;
+    }
+    let mut response = String::new();
+    if stream.read_to_string(&mut response).is_err() {
+        return false;
+    }
+    health_response_is_sonar(&response)
 }
 
 fn managed_api_pid_path() -> Result<std::path::PathBuf, String> {
@@ -284,15 +299,43 @@ fn stop_managed_api_service() -> Result<(), String> {
         let _ = fs::remove_file(path);
         return Ok(());
     }
+    if !managed_api_process_matches(pid) {
+        let _ = fs::remove_file(path);
+        return Ok(());
+    }
     let status = Command::new("kill")
         .arg(pid)
         .status()
         .map_err(|err| format!("Unable to stop previous Sonar API process: {err}"))?;
-    if !status.success() && is_api_ready() {
+    if !status.success() && managed_api_process_matches(pid) {
         return Err(format!("Unable to stop previous Sonar API process {pid}."));
     }
     let _ = fs::remove_file(path);
     Ok(())
+}
+
+fn managed_api_process_matches(pid: &str) -> bool {
+    let output = Command::new("ps")
+        .args(["-p", pid, "-o", "command="])
+        .output();
+    let Ok(output) = output else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let command_line = String::from_utf8_lossy(&output.stdout);
+    command_line_looks_like_managed_api(&command_line)
+}
+
+fn command_line_looks_like_managed_api(command_line: &str) -> bool {
+    let lower = command_line.to_ascii_lowercase();
+    lower.contains("sonar-api")
+        || (lower.contains("npm")
+            && lower.contains("run")
+            && lower.contains("dev")
+            && lower.contains("--port")
+            && lower.contains("3001"))
 }
 
 async fn service(
@@ -428,9 +471,83 @@ async fn check_url(
         request = request.bearer_auth(token);
     }
     let response = request.send().await.map_err(|err| err.to_string())?;
-    if response.status().is_success() {
-        Ok(())
-    } else {
-        Err(format!("HTTP {}", response.status()))
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!("HTTP {status}"));
+    }
+    if url == API_HEALTH_URL {
+        let signature = response
+            .headers()
+            .get("x-sonar-service")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("");
+        if signature != "workspace-engine" {
+            return Err("Health endpoint did not identify Sonar.".to_string());
+        }
+        let body = response.text().await.map_err(|err| err.to_string())?;
+        if !health_body_is_ok(&body) {
+            return Err("Health endpoint returned an unexpected body.".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn health_response_is_sonar(response: &str) -> bool {
+    let Some((headers, body)) = response.split_once("\r\n\r\n") else {
+        return false;
+    };
+    let mut lines = headers.lines();
+    let Some(status_line) = lines.next() else {
+        return false;
+    };
+    if !status_line.contains(" 200 ") {
+        return false;
+    }
+    let has_signature =
+        lines.any(|line| line.eq_ignore_ascii_case("x-sonar-service: workspace-engine"));
+    has_signature && health_body_is_ok(body)
+}
+
+fn health_body_is_ok(body: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("status")
+                .and_then(|status| status.as_str())
+                .map(str::to_string)
+        })
+        .as_deref()
+        == Some("ok")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{command_line_looks_like_managed_api, health_response_is_sonar};
+
+    #[test]
+    fn health_response_requires_sonar_signature_and_ok_body() {
+        assert!(health_response_is_sonar(
+            "HTTP/1.1 200 OK\r\nX-Sonar-Service: workspace-engine\r\n\r\n{\"status\":\"ok\"}",
+        ));
+        assert!(!health_response_is_sonar(
+            "HTTP/1.1 200 OK\r\n\r\n{\"status\":\"ok\"}",
+        ));
+        assert!(!health_response_is_sonar(
+            "HTTP/1.1 200 OK\r\nX-Sonar-Service: workspace-engine\r\n\r\n{\"status\":\"ready\"}",
+        ));
+    }
+
+    #[test]
+    fn managed_api_process_matcher_rejects_unrelated_commands() {
+        assert!(command_line_looks_like_managed_api(
+            "npm run dev -- --port 3001",
+        ));
+        assert!(command_line_looks_like_managed_api(
+            "/Users/example/.sonar/bin/sonar-api --port 3001",
+        ));
+        assert!(!command_line_looks_like_managed_api(
+            "python -m http.server 3001",
+        ));
     }
 }
