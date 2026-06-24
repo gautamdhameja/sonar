@@ -63,6 +63,9 @@ function indexingNotice(indexed: {
   return messages.length ? messages.join(" ") : null;
 }
 
+const ERROR_TOAST_TIMEOUT_MS = 12000;
+const NOTICE_TOAST_TIMEOUT_MS = 5000;
+
 export function App() {
   const [snapshot, setSnapshot] = useState<ServiceSnapshot | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -101,6 +104,18 @@ export function App() {
   const runtimeBusy = activeTask?.kind === "bootstrap" || activeTask?.kind === "settings";
   const hasBrief = session !== null;
   const briefingMarkdown = session ? buildBriefingMarkdown(session, followups, selectedProject) : "";
+
+  useEffect(() => {
+    if (!error) return undefined;
+    const timeout = window.setTimeout(() => setError(null), ERROR_TOAST_TIMEOUT_MS);
+    return () => window.clearTimeout(timeout);
+  }, [error]);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timeout = window.setTimeout(() => setNotice(null), NOTICE_TOAST_TIMEOUT_MS);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
 
   async function refreshServices() {
     setError(null);
@@ -529,8 +544,16 @@ export function App() {
         runtime={runtime}
       />
 
-      {error && <Toast>{error}</Toast>}
-      {notice && <Toast tone="notice">{notice}</Toast>}
+      {(error || notice) && (
+        <div className="toast-stack">
+          {error && <Toast onDismiss={() => setError(null)}>{error}</Toast>}
+          {notice && (
+            <Toast onDismiss={() => setNotice(null)} tone="notice">
+              {notice}
+            </Toast>
+          )}
+        </div>
+      )}
 
       {activeTask && activeTask.kind !== "bootstrap" && activeTask.kind !== "settings" && (
         <ProgressPanel activeTask={activeTask} onStop={handleStopAnalysis} stopDisabled={analysisStopRequested} />

@@ -1063,19 +1063,50 @@ textarea:focus {
   width: 100%;
 }
 
-.toast-alert {
+.toast-stack {
   position: fixed;
   z-index: 50;
   top: 88px;
   left: 50%;
+  display: grid;
+  gap: 8px;
+  width: min(720px, calc(100vw - 32px));
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.toast-alert {
   display: flex;
   gap: 10px;
   align-items: center;
-  max-width: 720px;
+  width: 100%;
   padding: 12px 14px;
   color: #9f1239;
   background: var(--danger-tint);
-  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.toast-alert span {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-dismiss {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.toast-dismiss:hover:not(:disabled),
+.toast-dismiss:focus-visible {
+  background: rgba(40, 38, 32, 0.08);
 }
 
 .toast-alert.notice {
@@ -2009,7 +2040,7 @@ textarea:focus {
     overflow: auto;
   }
 
-  .toast-alert {
+  .toast-stack {
     top: 78px;
     width: calc(100vw - 28px);
   }
@@ -2175,12 +2206,12 @@ textarea:focus {
 
 @keyframes sonarToastIn {
   from {
-    transform: translateX(-50%) translateY(-8px);
+    transform: translateY(-8px);
     opacity: 0;
   }
 
   to {
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
     opacity: 1;
   }
 }
