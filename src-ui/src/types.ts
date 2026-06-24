@@ -39,6 +39,11 @@ export interface PreparedRepository {
   indexedPath: string;
 }
 
+export interface DiagnosticsBundle {
+  directoryPath: string;
+  manifestPath: string;
+}
+
 export interface DesktopModelConfig {
   modelSetupComplete: boolean;
   modelMode: "local" | "api";

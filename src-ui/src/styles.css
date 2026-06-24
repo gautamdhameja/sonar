@@ -1180,6 +1180,13 @@ textarea:focus {
   justify-content: space-between;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .icon-button {
   display: grid;
   place-items: center;

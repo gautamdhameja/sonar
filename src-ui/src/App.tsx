@@ -14,6 +14,7 @@ import { saveMarkdownFile } from "./app/exportMarkdown";
 import { friendlyErrorMessage, runtimeState, safeFileName } from "./app/format";
 import {
   cloneGithubRepository,
+  createDiagnosticsBundle,
   isTauriRuntime,
   loadModelConfig,
   prepareRepositoryForIndexing,
@@ -191,6 +192,20 @@ export function App() {
       const nextConfig = await refreshModelConfig();
       setModelSetupOpen(!nextConfig.modelSetupComplete);
       setNotice("Model settings saved. Sonar restarted the workspace engine with the new configuration.");
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    } finally {
+      setActiveTask(null);
+    }
+  }
+
+  async function handleCreateDiagnosticsBundle() {
+    setError(null);
+    setNotice(null);
+    setActiveTask({ kind: "settings", label: "Creating diagnostics bundle" });
+    try {
+      const bundle = await createDiagnosticsBundle();
+      setNotice(`Diagnostics bundle created locally: ${bundle.directoryPath}`);
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {
@@ -559,6 +574,7 @@ export function App() {
           modelConfig={modelConfig}
           onBootstrap={() => void bootstrap()}
           onClose={() => setAdvancedOpen(false)}
+          onCreateDiagnostics={handleCreateDiagnosticsBundle}
           onModelConfigChange={setModelConfig}
           onRefreshProjects={() => void refreshProjects()}
           onSaveModelConfig={() => void handleSaveModelConfig()}

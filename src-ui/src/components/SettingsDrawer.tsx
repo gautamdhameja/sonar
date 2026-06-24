@@ -1,4 +1,4 @@
-import { Cloud, RefreshCw, Save, Server, X } from "lucide-react";
+import { Bug, Cloud, RefreshCw, Save, Server, X } from "lucide-react";
 import { localLlamaConfig, openAiCompatibleConfig } from "../app/constants";
 import { stateLabel } from "../app/format";
 import type { ActiveTask } from "../app/types";
@@ -12,6 +12,7 @@ interface SettingsDrawerProps {
   snapshot: ServiceSnapshot | null;
   onBootstrap: () => void;
   onClose: () => void;
+  onCreateDiagnostics: () => void;
   onModelConfigChange: (config: DesktopModelConfig) => void;
   onRefreshProjects: () => void;
   onSaveModelConfig: () => void;
@@ -26,6 +27,7 @@ export function SettingsDrawer({
   snapshot,
   onBootstrap,
   onClose,
+  onCreateDiagnostics,
   onModelConfigChange,
   onRefreshProjects,
   onSaveModelConfig,
@@ -52,10 +54,21 @@ export function SettingsDrawer({
         <section className="drawer-section">
           <div className="section-title-row">
             <h3>Local services</h3>
-            <button className="secondary compact-button" disabled={runtimeBusy} onClick={onBootstrap} type="button">
-              <RefreshCw size={15} />
-              Check
-            </button>
+            <div className="button-row">
+              <button
+                className="secondary compact-button"
+                disabled={runtimeBusy}
+                onClick={onCreateDiagnostics}
+                type="button"
+              >
+                <Bug size={15} />
+                Diagnostics
+              </button>
+              <button className="secondary compact-button" disabled={runtimeBusy} onClick={onBootstrap} type="button">
+                <RefreshCw size={15} />
+                Check
+              </button>
+            </div>
           </div>
           <div className="service-list">
             {(snapshot?.services ?? []).map((service) => (

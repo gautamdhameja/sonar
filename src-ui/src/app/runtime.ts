@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { apiBaseUrl } from "../api";
-import type { ClonedRepository, DesktopModelConfig, PreparedRepository, ServiceSnapshot } from "../types";
+import type {
+  ClonedRepository,
+  DesktopModelConfig,
+  DiagnosticsBundle,
+  PreparedRepository,
+  ServiceSnapshot,
+} from "../types";
 import { localLlamaConfig } from "./constants";
 
 export function isTauriRuntime(): boolean {
@@ -91,4 +97,11 @@ export async function saveModelConfig(config: DesktopModelConfig): Promise<Servi
     return browserServiceSnapshot();
   }
   return invoke<ServiceSnapshot>("save_model_config", { config: savedConfig });
+}
+
+export async function createDiagnosticsBundle(): Promise<DiagnosticsBundle> {
+  if (!isTauriRuntime()) {
+    throw new Error("Open Sonar as a desktop app to create a local diagnostics bundle.");
+  }
+  return invoke<DiagnosticsBundle>("create_diagnostics_bundle");
 }

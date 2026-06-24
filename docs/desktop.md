@@ -58,6 +58,12 @@ This file is generated locally and ignored by git.
 
 The desktop-managed API is intended for localhost use by the Tauri app. It is protected by `X-Sonar-Token` and CORS allowlisting. In source builds, the renderer reads the token so it can call the local API directly; treat the desktop config and runtime files as local secrets.
 
+## Local Diagnostics
+
+The settings drawer can create an opt-in diagnostics bundle under `~/.sonar/diagnostics`. The bundle stays on the local
+machine; Sonar does not upload diagnostics, logs, repository contents, crash reports, or telemetry. The bundle includes
+redacted runtime config, service status, and local Sonar/llama.cpp logs when present.
+
 ## Repository Options
 
 - Paste a GitHub repository URL. Sonar clones it into `~/.sonar/repositories` and indexes that clone.
