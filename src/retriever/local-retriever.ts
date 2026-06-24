@@ -230,9 +230,10 @@ export function localOnboardingSearch(query: string, store: CodeUnitStore, topK 
       let score = 0;
 
       if (isDocumentationFile(unit.filePath)) score += 30;
-      if (/src\/(main|runpipeline)\.(ts|tsx|js|jsx|py)$/.test(filePath)) score += 24;
-      if (/src\/framework\/pipeline\/(runner|defaultcomponents)\.(ts|tsx|js|jsx|py)$/.test(filePath)) score += 22;
-      if (/src\/daily\/pipeline\.(ts|tsx|js|jsx|py)$/.test(filePath)) score += 20;
+      if (/(^|\/)(main|index|app|server|client|run|runner)\.(ts|tsx|js|jsx|py|rs|go|java|cs)$/.test(filePath))
+        score += 14;
+      if (/(^|\/)(pipeline|workflow|flow|orchestrator|processor)\.(ts|tsx|js|jsx|py|rs|go|java|cs)$/.test(filePath))
+        score += 12;
       if (/src\/(config|db|llama|agent|tools)\//.test(filePath)) score += 8;
       if (
         /\b(purpose|overview|architecture|workflow|onboarding|customer|business|risk)\b/.test(
@@ -241,7 +242,7 @@ export function localOnboardingSearch(query: string, store: CodeUnitStore, topK 
       ) {
         score += 6;
       }
-      if (normalized.includes("sales") && /\b(customer|value|use case|digest|enterprise)\b/.test(code)) score += 8;
+      if (normalized.includes("sales") && /\b(customer|value|use case|enterprise)\b/.test(code)) score += 8;
       if (unit.isVendored) score *= 0.2;
 
       return { unit, score };

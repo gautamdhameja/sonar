@@ -84,9 +84,9 @@ test("localGrepSearch prioritizes exact constants and validation-adjacent files"
     }),
     unit({
       id: "pipeline",
-      filePath: "src/daily/pipeline.ts",
-      name: "runDailyPipeline",
-      code: "export async function runDailyPipeline() { return []; }",
+      filePath: "src/workflows/pipeline.ts",
+      name: "runWorkflow",
+      code: "export async function runWorkflow() { return []; }",
     }),
   ]);
 
@@ -108,9 +108,9 @@ test("localGrepSearch handles quoted error strings", async () => {
     }),
     unit({
       id: "other",
-      filePath: "src/daily/scoring.ts",
-      name: "scoreCandidate",
-      code: "export function scoreCandidate() { return 1; }",
+      filePath: "src/workflows/scoring.ts",
+      name: "scoreItem",
+      code: "export function scoreItem() { return 1; }",
     }),
   ]);
 
@@ -130,8 +130,8 @@ test("localOnboardingSearch prefers docs and production entry points", async () 
     unit({
       id: "readme",
       filePath: "README.md",
-      name: "Birbal",
-      code: "Enterprise AI daily digest and use case scout.",
+      name: "Product",
+      code: "Enterprise workflow product with customer value and use case context.",
       language: "markdown",
       kind: "module",
     }),

@@ -101,15 +101,15 @@ test("packContext demotes tests for broad onboarding queries", () => {
     [
       unit("test", { filePath: "tests/tools.test.ts", code: "test('tooling', () => true);" }),
       unit("pipeline", {
-        filePath: "src/framework/pipeline/runner.ts",
-        code: "export async function runPipeline() {}",
+        filePath: "src/workflows/runner.ts",
+        code: "export async function runWorkflow() {}",
       }),
-      unit("daily", { filePath: "src/daily/pipeline.ts", code: "export const pipeline = {};" }),
+      unit("workflow", { filePath: "src/workflows/pipeline.ts", code: "export const pipeline = {};" }),
     ],
     [
       { unitId: "test", rrfScore: 10, keywordRank: 1, semanticRank: null, isVendored: false },
       { unitId: "pipeline", rrfScore: 1, keywordRank: 2, semanticRank: null, isVendored: false },
-      { unitId: "daily", rrfScore: 1, keywordRank: 3, semanticRank: null, isVendored: false },
+      { unitId: "workflow", rrfScore: 1, keywordRank: 3, semanticRank: null, isVendored: false },
     ],
     { query: "Create a role-aware onboarding overview of this codebase", maxTokens: 500 },
   );
@@ -121,15 +121,15 @@ test("packContext boosts workflow stage files for pipeline questions", () => {
   const packed = packContext(
     [
       unit("registry", {
-        filePath: "src/framework/pipeline/registry.ts",
+        filePath: "src/workflows/registry.ts",
         code: "export function getCollector() { return collector; }",
       }),
-      unit("daily", {
-        filePath: "src/daily/pipeline.ts",
+      unit("workflow", {
+        filePath: "src/workflows/pipeline.ts",
         code: "export const pipeline = { collect: true, classify: true, score: true, save: true };",
       }),
       unit("scoring", {
-        filePath: "src/daily/scoring.ts",
+        filePath: "src/workflows/scoring.ts",
         code: "export function scoreCandidate() { return 1; }",
       }),
       unit("storage", {
@@ -139,16 +139,49 @@ test("packContext boosts workflow stage files for pipeline questions", () => {
     ],
     [
       { unitId: "registry", rrfScore: 5, keywordRank: 1, semanticRank: null, isVendored: false },
-      { unitId: "daily", rrfScore: 1, keywordRank: 2, semanticRank: null, isVendored: false },
+      { unitId: "workflow", rrfScore: 1, keywordRank: 2, semanticRank: null, isVendored: false },
       { unitId: "scoring", rrfScore: 1, keywordRank: 3, semanticRank: null, isVendored: false },
       { unitId: "storage", rrfScore: 1, keywordRank: 4, semanticRank: null, isVendored: false },
     ],
-    { query: "How does the daily pipeline collect, classify, score, and save candidates?", maxTokens: 700 },
+    { query: "How does the pipeline collect, classify, score, and save items?", maxTokens: 700 },
   );
 
-  assert.equal(packed[0].id, "daily");
+  assert.equal(packed[0].id, "workflow");
   assert.ok(packed.findIndex((item) => item.id === "scoring") < packed.findIndex((item) => item.id === "registry"));
   assert.ok(packed.findIndex((item) => item.id === "storage") < packed.findIndex((item) => item.id === "registry"));
+});
+
+test("packContext does not boost removed repo-specific paths", () => {
+  const packed = packContext(
+    [
+      unit("runner", { filePath: "src/runpipeline.ts", code: "export function start() {}" }),
+      unit("entry", { filePath: "src/main.ts", code: "export function start() {}" }),
+    ],
+    [
+      { unitId: "runner", rrfScore: 1, keywordRank: 1, semanticRank: null, isVendored: false },
+      { unitId: "entry", rrfScore: 1, keywordRank: 2, semanticRank: null, isVendored: false },
+    ],
+    {
+      query: "Create a codebase onboarding overview",
+      maxTokens: 500,
+      queryPlan: {
+        intent: "architecture_overview",
+        mode: "summary_graph",
+        requiredEvidence: ["entry_points"],
+        preferredSources: ["code"],
+        graphDirection: "bidirectional",
+        sourceBudget: { code: 6, docs: 0, tests: 0 },
+        useLocalExact: false,
+        useLexical: true,
+        useGraph: true,
+        includeSummary: true,
+        maxContextRatio: 0.65,
+        reason: "test",
+      },
+    },
+  );
+
+  assert.equal(packed[0].id, "entry");
 });
 
 test("packContext applies query plan evidence preferences", () => {

@@ -42,13 +42,21 @@ function queryPlanBonus(unit: CodeUnit, plan?: QueryPlan): number {
   if (plan.preferredSources.includes("config") && /\b(config|env|settings?)\b/.test(filePath)) bonus += 8;
   if (plan.preferredSources.includes("schema") && /\bschema\b/.test(filePath)) bonus += 10;
 
-  if (plan.requiredEvidence.includes("entry_points") && /src\/(main|runpipeline)\./.test(filePath)) bonus += 12;
-  if (plan.requiredEvidence.includes("central_modules") && /src\/framework\/pipeline\//.test(filePath)) bonus += 8;
+  if (
+    plan.requiredEvidence.includes("entry_points") &&
+    /(^|\/)(main|index|app|server|client|run|runner)\.(ts|tsx|js|jsx|py|rs|go|java|cs)$/.test(filePath)
+  )
+    bonus += 10;
+  if (
+    plan.requiredEvidence.includes("central_modules") &&
+    /(^|\/)(pipeline|workflow|flow|orchestrator|processor)(\/|\.|-)/.test(filePath)
+  )
+    bonus += 6;
   if (
     plan.requiredEvidence.includes("persistence_or_output") &&
-    /src\/(db|daily\/digest|pipelines\/.*renderer)/.test(filePath)
+    /(^|\/)(db|database|storage|store|output|exports?)(\/|\.|-)/.test(filePath)
   )
-    bonus += 8;
+    bonus += 6;
 
   return bonus;
 }

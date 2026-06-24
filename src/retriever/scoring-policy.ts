@@ -8,44 +8,29 @@ export interface ScoreReason {
 }
 
 export const ONBOARDING_WORKFLOW_TERMS = [
+  // Curated for cross-repository structure and product behavior, not one app's domain vocabulary.
   "app",
   "command",
-  "document",
-  "editor",
   "file",
   "input",
-  "keyboard",
-  "keypress",
+  "process",
+  "pipeline",
+  "workflow",
   "render",
   "display",
-  "terminal",
   "output",
-  "buffer",
   "state",
   "write",
-  "collab",
-  "collaboration",
-  "share",
-  "sharing",
   "export",
   "import",
   "save",
   "storage",
-  "localstorage",
-  "indexeddb",
-  "encrypt",
-  "decrypt",
-  "room",
-  "socket",
   "sync",
   "backend",
   "auth",
   "login",
   "settings",
   "onboarding",
-  "language",
-  "lsp",
-  "tree-sitter",
   "parser",
 ] as const;
 
@@ -179,30 +164,23 @@ export function workflowEvidenceBonus(unit: CodeUnit, query: string, scale: "pac
   let score = 0;
   const weight =
     scale === "packer"
-      ? { entry: 18, stageFile: 14, db: 18, collect: 10, stage: 18, digest: 8 }
-      : { entry: 8, stageFile: 4, db: 3, collect: 4, stage: 5, digest: 3 };
+      ? { entry: 16, stageFile: 14, persistenceSource: 14, collect: 8, stage: 16, output: 6 }
+      : { entry: 7, stageFile: 4, persistenceSource: 3, collect: 3, stage: 5, output: 2 };
 
   if (/(^|\/)(pipeline|workflow|flow|runner|orchestrator|processor)\.(ts|tsx|js|jsx|py)$/.test(filePath)) {
     score += weight.entry;
     reasons.push("workflow entry file");
   }
-  if (
-    /(^|\/)(classification|classify|scoring|ranking|digest|collector|collection|sync)\.(ts|tsx|js|jsx|py)$/.test(
-      filePath,
-    )
-  ) {
+  if (/(^|\/)(classification|classify|scoring|ranking|collector|collection|sync)\.(ts|tsx|js|jsx|py)$/.test(filePath)) {
     score += weight.stageFile;
     reasons.push("workflow stage file");
   }
-  if (/src\/db\//.test(filePath)) {
-    score += weight.db;
+  if (/(^|\/)(db|database|storage|store)\//.test(filePath)) {
+    score += weight.persistenceSource;
     reasons.push("persistence source");
   }
 
-  if (
-    /\b(collect|collection|candidate|source)\b/.test(normalized) &&
-    /\b(collect\w*|candidate\w*|source\w*|arxiv|hacker|search\w*)\b/.test(text)
-  ) {
+  if (/\b(collect|collection|candidate|source)\b/.test(normalized) && /\b(collect\w*|source\w*)\b/.test(text)) {
     score += weight.collect;
     reasons.push("collection stage match");
   }
@@ -221,8 +199,11 @@ export function workflowEvidenceBonus(unit: CodeUnit, query: string, scale: "pac
     score += weight.stage;
     reasons.push("persistence stage match");
   }
-  if (/\b(digest|render|output)\b/.test(normalized) && /\b(digest|render|output)\b/.test(text)) {
-    score += weight.digest;
+  if (
+    /\b(render|output|response|present)\b/.test(normalized) &&
+    /\b(render\w*|output\w*|response\w*|present\w*)\b/.test(text)
+  ) {
+    score += weight.output;
     reasons.push("output stage match");
   }
 

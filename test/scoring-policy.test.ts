@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { CodeUnit } from "../src/parser/types";
-import { hasExactEvidenceMatch, testFilePenalty, workflowEvidenceBonus } from "../src/retriever/scoring-policy";
+import {
+  ONBOARDING_WORKFLOW_TERMS,
+  hasExactEvidenceMatch,
+  testFilePenalty,
+  workflowEvidenceBonus,
+} from "../src/retriever/scoring-policy";
 
 function unit(id: string, overrides: Partial<CodeUnit> = {}): CodeUnit {
   return {
@@ -44,11 +49,11 @@ test("hasExactEvidenceMatch matches explicit file paths and exact code needles",
 
 test("workflowEvidenceBonus rewards pipeline stage evidence with diagnostics", () => {
   const result = workflowEvidenceBonus(
-    unit("daily", {
-      filePath: "src/daily/pipeline.ts",
-      code: "collectCandidates(); classifyCandidates(); scoreCandidates(); saveCandidates();",
+    unit("workflow", {
+      filePath: "src/workflows/pipeline.ts",
+      code: "collectSources(); classifyItems(); scoreItems(); saveItems();",
     }),
-    "How does the daily pipeline collect, classify, score, and save candidates?",
+    "How does the pipeline collect, classify, score, and save items?",
     "reranker",
   );
 
@@ -56,6 +61,30 @@ test("workflowEvidenceBonus rewards pipeline stage evidence with diagnostics", (
   assert.ok(result.reasons.includes("workflow entry file"));
   assert.ok(result.reasons.includes("classification stage match"));
   assert.ok(result.reasons.includes("persistence stage match"));
+});
+
+test("workflowEvidenceBonus does not reward removed foreign-repo tokens", () => {
+  const socketOnly = workflowEvidenceBonus(
+    unit("socket", {
+      filePath: "src/socket.ts",
+      code: "export function socket() { return 'hacker arxiv digest'; }",
+    }),
+    "Create an onboarding overview",
+    "reranker",
+  );
+  const collectionQuery = workflowEvidenceBonus(
+    unit("foreign", {
+      filePath: "src/foreign.ts",
+      code: "export const arxivHackerNewsSearch = true;",
+    }),
+    "How does collection work?",
+    "reranker",
+  );
+
+  assert.equal(socketOnly.score, 0);
+  assert.equal(collectionQuery.score, 0);
+  assert.equal(ONBOARDING_WORKFLOW_TERMS.includes("socket" as never), false);
+  assert.equal(ONBOARDING_WORKFLOW_TERMS.includes("tree-sitter" as never), false);
 });
 
 test("testFilePenalty only demotes tests when tests are not requested", () => {

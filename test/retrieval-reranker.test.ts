@@ -45,7 +45,7 @@ test("rerankRetrievedResults explains exact config source selection", async () =
   const store = await storeWithUnits([
     unit("config", "src/llama/config.ts", "process.env.LLAMA_SERVER_URL", "getLlamaConfig"),
     unit("schema", "src/llama/schema.ts", "LLAMA_SERVER_URL: z.string().url()", "schema"),
-    unit("runner", "src/framework/pipeline/runner.ts", "validateConfiguredSourceIds", "runner"),
+    unit("runner", "src/workflows/runner.ts", "validateConfiguredSourceIds", "runner"),
   ]);
 
   const { results, diagnostics } = rerankRetrievedResults(
