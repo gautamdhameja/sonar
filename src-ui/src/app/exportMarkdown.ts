@@ -1,9 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import { isTauriRuntime } from "./runtime";
 
 export async function saveMarkdownFile(defaultPath: string, contents: string): Promise<boolean> {
   if (isTauriRuntime()) {
-    return invoke<boolean>("export_markdown", { defaultFileName: defaultPath, contents });
+    const path = await save({
+      defaultPath,
+      filters: [{ name: "Markdown", extensions: ["md"] }],
+    });
+    if (!path) return false;
+    await invoke<void>("export_markdown", { path, contents });
+    return true;
   }
 
   const url = URL.createObjectURL(new Blob([contents], { type: "text/markdown;charset=utf-8" }));
