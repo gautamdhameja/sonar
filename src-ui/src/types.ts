@@ -15,6 +15,17 @@ export interface ServiceSnapshot {
   chatBaseUrl: string;
 }
 
+export interface DependencyHealth {
+  name: string;
+  status: "ok" | "error";
+  message?: string;
+}
+
+export interface DependencyHealthResponse {
+  status: "ok" | "degraded";
+  dependencies: DependencyHealth[];
+}
+
 export interface ClonedRepository {
   owner: string;
   repo: string;

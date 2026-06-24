@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { askFollowup, createOnboardingSession, getLatestOnboardingSession, indexProject, listProjects } from "./api";
+import {
+  askFollowup,
+  checkDependencyHealth,
+  createOnboardingSession,
+  getLatestOnboardingSession,
+  indexProject,
+  listProjects,
+} from "./api";
 import { buildBriefingMarkdown } from "./app/briefingMarkdown";
 import { defaultBriefingRole, defaultQuestion, localLlamaConfig } from "./app/constants";
 import { saveMarkdownFile } from "./app/exportMarkdown";
@@ -111,6 +118,26 @@ export function App() {
     const next = await loadModelConfig();
     setModelConfig(next);
     return next;
+  }
+
+  async function preflightModelEndpoint() {
+    const [dependencies, services] = await Promise.all([checkDependencyHealth(), serviceCommand("service_snapshot")]);
+    setSnapshot(services);
+
+    const workspace = services.services.find((service) => service.id === "sonar");
+    if (workspace?.state !== "ready") {
+      throw new Error(workspace?.detail ?? "Workspace engine is not ready.");
+    }
+
+    const modelService = services.services.find((service) => service.id === "chat" || service.id === "models");
+    const chatDependency = dependencies.dependencies.find((dependency) => dependency.name === "chat");
+    if (dependencies.status === "ok" && (!modelService || modelService.state === "ready")) return;
+
+    const detail =
+      modelService && modelService.state !== "ready"
+        ? modelService.detail
+        : (chatDependency?.message ?? "The configured model endpoint did not pass the preflight check.");
+    throw new Error(`Model endpoint is not ready. ${detail}`);
   }
 
   async function bootstrap() {
@@ -280,6 +307,7 @@ export function App() {
         progress: canAnalyze ? 64 : 35,
         canStop: true,
       });
+      await preflightModelEndpoint();
       const result = await createOnboardingSession(projectId, briefingRole, controller.signal);
       setSession(result);
       setQuestion(defaultQuestion);
@@ -343,6 +371,7 @@ export function App() {
         progress: 64,
         canStop: true,
       });
+      await preflightModelEndpoint();
       const result = await createOnboardingSession(indexed.projectId, briefingRole, controller.signal);
       setSession(result);
       setFollowups([]);
@@ -371,6 +400,7 @@ export function App() {
     setNotice(null);
     setActiveTask({ kind: "followup", label: "Answering follow-up" });
     try {
+      await preflightModelEndpoint();
       const result = await askFollowup(selectedProjectId, session.session.id, question, followups);
       setFollowups((current) => [...current, result]);
       setQuestion("");

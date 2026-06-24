@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { FollowupResponse, IndexProjectResponse, OnboardingSessionResponse, Project } from "./types";
+import type {
+  DependencyHealthResponse,
+  FollowupResponse,
+  IndexProjectResponse,
+  OnboardingSessionResponse,
+  Project,
+} from "./types";
 import { briefingRoleProfiles } from "./app/constants";
 import type { BriefingRole } from "./app/types";
 
@@ -87,6 +93,10 @@ async function readResponse<T>(response: Response): Promise<T> {
 
 export async function listProjects(): Promise<Project[]> {
   return request<Project[]>("/projects");
+}
+
+export async function checkDependencyHealth(): Promise<DependencyHealthResponse> {
+  return request<DependencyHealthResponse>("/health/dependencies");
 }
 
 export async function indexProject(

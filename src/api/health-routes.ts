@@ -25,7 +25,7 @@ export function registerHealthRoutes(app: Express, state: ApiState): void {
   app.get("/health/dependencies", async (_req: Request, res: Response) => {
     const dependencies = await checkDependencies();
     const healthy = dependencies.every((dependency) => dependency.status === "ok");
-    res.status(healthy ? 200 : 503).json({
+    res.json({
       status: healthy ? "ok" : "degraded",
       dependencies,
     });

@@ -32,6 +32,17 @@ test("API starts with isolated storage and enforces token-protected reads", asyn
     const unauthenticatedProjectHealth = await fetch(`${baseUrl}/health/project`);
     assert.equal(unauthenticatedProjectHealth.status, 401);
 
+    const dependencies = await fetch(`${baseUrl}/health/dependencies`, {
+      headers: { "X-Sonar-Token": "integration-token" },
+    });
+    assert.equal(dependencies.status, 200);
+    const dependencyBody = (await dependencies.json()) as {
+      status: "ok" | "degraded";
+      dependencies: Array<{ name: string; status: "ok" | "error"; message?: string }>;
+    };
+    assert.match(dependencyBody.status, /^(ok|degraded)$/);
+    assert.ok(dependencyBody.dependencies.some((dependency) => dependency.name === "chat"));
+
     const blockedOrigin = await fetch(`${baseUrl}/projects`, {
       headers: {
         Origin: "http://evil.localhost",
