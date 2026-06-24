@@ -13,10 +13,13 @@ use api_proxy::sonar_api_request;
 use diagnostics::create_diagnostics_bundle;
 use export::export_markdown;
 use repositories::{clone_github_repository, prepare_repository_for_indexing};
-use services::{bootstrap_services, get_model_config, save_model_config, service_snapshot};
+use services::{
+    bootstrap_services, get_model_config, save_model_config, service_snapshot,
+    shutdown_managed_services,
+};
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             service_snapshot,
@@ -29,6 +32,14 @@ fn main() {
             export_markdown,
             sonar_api_request,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Sonar desktop app");
+        .build(tauri::generate_context!())
+        .expect("error while building Sonar desktop app");
+
+    app.run(|_app_handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            if let Err(err) = shutdown_managed_services() {
+                eprintln!("Unable to stop Sonar managed services during app shutdown: {err}");
+            }
+        }
+    });
 }

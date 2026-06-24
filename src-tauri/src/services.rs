@@ -16,7 +16,7 @@ use crate::{
     llama_sidecar::{missing_llama_sidecar_message, start_llama_sidecar_if_available},
     models::{DesktopModelConfig, ServiceSnapshot, ServiceStatus},
     paths::{repo_root, sonar_home},
-    process::command_exists,
+    process::{command_exists, prepare_managed_child, terminate_managed_process},
 };
 
 const API_BASE_URL: &str = "http://127.0.0.1:3001";
@@ -126,6 +126,10 @@ pub async fn save_model_config(config: DesktopModelConfig) -> Result<ServiceSnap
     Ok(service_snapshot().await)
 }
 
+pub fn shutdown_managed_services() -> Result<(), String> {
+    stop_managed_api_service()
+}
+
 fn start_api_service(force_restart: bool) -> Result<(), String> {
     if force_restart {
         stop_managed_api_service()?;
@@ -148,6 +152,7 @@ fn start_api_service(force_restart: bool) -> Result<(), String> {
     let model_config = desktop_model_config();
     let api_token = runtime_api_token()?;
     let mut command = api_command()?;
+    prepare_managed_child(&mut command);
     let child = command
         .env("SONAR_API_TOKEN", &api_token)
         // Desktop users choose folders through the native picker, so the local engine accepts any
@@ -299,33 +304,9 @@ fn stop_managed_api_service() -> Result<(), String> {
         let _ = fs::remove_file(path);
         return Ok(());
     }
-    if !managed_api_process_matches(pid) {
-        let _ = fs::remove_file(path);
-        return Ok(());
-    }
-    let status = Command::new("kill")
-        .arg(pid)
-        .status()
-        .map_err(|err| format!("Unable to stop previous Sonar API process: {err}"))?;
-    if !status.success() && managed_api_process_matches(pid) {
-        return Err(format!("Unable to stop previous Sonar API process {pid}."));
-    }
+    terminate_managed_process(pid, command_line_looks_like_managed_api, "Sonar API")?;
     let _ = fs::remove_file(path);
     Ok(())
-}
-
-fn managed_api_process_matches(pid: &str) -> bool {
-    let output = Command::new("ps")
-        .args(["-p", pid, "-o", "command="])
-        .output();
-    let Ok(output) = output else {
-        return false;
-    };
-    if !output.status.success() {
-        return false;
-    }
-    let command_line = String::from_utf8_lossy(&output.stdout);
-    command_line_looks_like_managed_api(&command_line)
 }
 
 fn command_line_looks_like_managed_api(command_line: &str) -> bool {
