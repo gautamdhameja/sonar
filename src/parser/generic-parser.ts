@@ -110,6 +110,7 @@ const LANGUAGE_BY_EXTENSION: Record<string, TreeSitterLanguageConfig> = {
   ".cc": CPP_CONFIG,
   ".cxx": CPP_CONFIG,
   ".hpp": CPP_CONFIG,
+  // `.h` is ambiguous across C, C++, and Objective-C; parse as C++ for broad structural extraction.
   ".h": CPP_CONFIG,
   ".php": {
     language: "php",
@@ -226,6 +227,7 @@ function parentDeclarationName(node: TSNode, config: TreeSitterLanguageConfig): 
 function shouldSkipNestedDeclaration(node: TSNode, config: TreeSitterLanguageConfig): boolean {
   const kind = config.declarations[node.type];
   if (kind === "method") return false;
+  if (kind === "function" && parentDeclarationName(node, config)) return false;
   let current = node.parent;
   while (current) {
     const parentKind = config.declarations[current.type];
@@ -268,7 +270,9 @@ export async function parseGenericSource(source: string, filePath: string): Prom
     const kind = config.declarations[node.type];
     if (kind && !shouldSkipNestedDeclaration(node, config)) {
       const name = nodeName(node) ?? path.basename(filePath, path.extname(filePath));
-      units.push(makeUnit(node, kind, name, kind === "method" ? parentDeclarationName(node, config) : null));
+      const parentName = parentDeclarationName(node, config);
+      const unitKind = kind === "function" && parentName ? "method" : kind;
+      units.push(makeUnit(node, unitKind, name, unitKind === "method" ? parentName : null));
     }
     for (const child of node.children) walk(child);
   }

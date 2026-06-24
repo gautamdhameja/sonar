@@ -158,6 +158,9 @@ test("parseGenericSource extracts Ruby, C++, PHP, Kotlin, and Swift code units",
         "require 'json'",
         "module Billing",
         "  class Invoice",
+        "    def self.from_json(raw)",
+        "      JSON.parse(raw)",
+        "    end",
         "    def total(amount)",
         "      JSON.parse(amount)",
         "    end",
@@ -179,9 +182,11 @@ test("parseGenericSource extracts Ruby, C++, PHP, Kotlin, and Swift code units",
     parseGenericSource(
       [
         "<?php",
-        "namespace App;",
+        "namespace App\\Billing;",
         "use RuntimeException;",
-        "class Store { public function save($value) { return helper($value); } }",
+        "trait Auditable { public function audit() { return true; } }",
+        "interface Repository { public function save($value); }",
+        "class Store implements Repository { use Auditable; public function save($value) { return helper($value); } }",
         "function helper($value) { return $value; }",
       ].join("\n"),
       "src/Store.php",
@@ -190,15 +195,20 @@ test("parseGenericSource extracts Ruby, C++, PHP, Kotlin, and Swift code units",
       [
         "package app",
         "import java.io.File",
-        'class Store { fun save(path: String) { File(path).writeText("x") } }',
-        'fun run() { Store().save("a") }',
+        "interface Repository { fun save(path: String) }",
+        "object StoreFactory { fun create(): Store { return Store() } }",
+        'class Store : Repository { override fun save(path: String) { File(path).writeText("x") } }',
+        'fun run() { StoreFactory.create().save("a") }',
       ].join("\n"),
       "src/Store.kt",
     ),
     parseGenericSource(
       [
         "import Foundation",
-        "class Store { func save(path: String) { print(path) } }",
+        "protocol Repository { func save(path: String) }",
+        "struct Store: Repository { func save(path: String) { print(path) } }",
+        "extension Store { func load(path: String) { print(path) } }",
+        "enum Mode { case fast }",
         'func run() { Store().save(path: "a") }',
       ].join("\n"),
       "Sources/Store.swift",
@@ -207,19 +217,30 @@ test("parseGenericSource extracts Ruby, C++, PHP, Kotlin, and Swift code units",
 
   assert.ok(rubyUnits.some((unit) => unit.language === "ruby" && unit.name === "Invoice"));
   assert.ok(rubyUnits.some((unit) => unit.language === "ruby" && unit.name === "total"));
+  assert.ok(rubyUnits.some((unit) => unit.language === "ruby" && unit.name === "from_json"));
   assert.ok(rubyUnits.some((unit) => unit.imports.some((line) => line.includes("require 'json'"))));
   assert.ok(cppUnits.some((unit) => unit.language === "cpp" && unit.name === "Store"));
   assert.ok(cppUnits.some((unit) => unit.language === "cpp" && unit.name === "run"));
   assert.ok(cppUnits.some((unit) => unit.imports.some((line) => line.includes("#include <vector>"))));
   assert.ok(phpUnits.some((unit) => unit.language === "php" && unit.name === "Store"));
+  assert.ok(phpUnits.some((unit) => unit.language === "php" && unit.name === "Repository"));
+  assert.ok(phpUnits.some((unit) => unit.language === "php" && unit.name === "Auditable"));
   assert.ok(phpUnits.some((unit) => unit.language === "php" && unit.name === "save"));
+  assert.ok(phpUnits.some((unit) => unit.language === "php" && unit.name === "audit"));
   assert.ok(
     phpUnits.some((unit) => unit.language === "php" && unit.imports.some((line) => line.includes("RuntimeException"))),
   );
   assert.ok(kotlinUnits.some((unit) => unit.language === "kotlin" && unit.name === "Store"));
+  assert.ok(kotlinUnits.some((unit) => unit.language === "kotlin" && unit.name === "StoreFactory"));
+  assert.ok(kotlinUnits.some((unit) => unit.language === "kotlin" && unit.kind === "method" && unit.name === "create"));
+  assert.ok(kotlinUnits.some((unit) => unit.language === "kotlin" && unit.kind === "method" && unit.name === "save"));
   assert.ok(kotlinUnits.some((unit) => unit.language === "kotlin" && unit.name === "run"));
   assert.ok(kotlinUnits.some((unit) => unit.imports.some((line) => line.includes("java.io.File"))));
   assert.ok(swiftUnits.some((unit) => unit.language === "swift" && unit.name === "Store"));
+  assert.ok(swiftUnits.some((unit) => unit.language === "swift" && unit.name === "Repository"));
+  assert.ok(swiftUnits.some((unit) => unit.language === "swift" && unit.name === "Mode"));
+  assert.ok(swiftUnits.some((unit) => unit.language === "swift" && unit.kind === "method" && unit.name === "save"));
+  assert.ok(swiftUnits.some((unit) => unit.language === "swift" && unit.kind === "method" && unit.name === "load"));
   assert.ok(swiftUnits.some((unit) => unit.language === "swift" && unit.name === "run"));
   assert.ok(swiftUnits.some((unit) => unit.imports.some((line) => line.includes("Foundation"))));
 });
