@@ -67,6 +67,14 @@ export interface CitationVerification {
   invalidCitations: string[];
   uncitedClaims: string[];
   sourceKeys: string[];
+  claims?: CitationClaimVerification[];
+}
+
+export interface CitationClaimVerification {
+  text: string;
+  status: "verified" | "repaired" | "unverifiable";
+  citations: string[];
+  invalidCitations: string[];
 }
 
 export interface SourceRef {

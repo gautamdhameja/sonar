@@ -106,7 +106,11 @@ export function BriefingView({
           )}
         </div>
 
-        <MarkdownContent className="briefing-text" content={session.brief.brief} />
+        <MarkdownContent
+          className="briefing-text"
+          citation={session.brief.citationVerification}
+          content={session.brief.brief}
+        />
 
         <section className="followup-card">
           <div>
@@ -134,7 +138,7 @@ export function BriefingView({
                     This answer reached the model output limit. Regenerate or ask a narrower question.
                   </p>
                 )}
-                <MarkdownContent content={item.answer} />
+                <MarkdownContent citation={item.citationVerification} content={item.answer} />
               </article>
             ))}
           </div>

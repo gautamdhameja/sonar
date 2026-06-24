@@ -889,6 +889,18 @@ textarea:focus {
   padding-left: 3px;
 }
 
+.markdown-content .claim-unverifiable {
+  border-left: 3px solid #f59e0b;
+  margin-left: -10px;
+  padding: 7px 10px;
+  background: #fff7ed;
+  border-radius: 6px;
+}
+
+.markdown-content li.claim-unverifiable {
+  padding-left: 10px;
+}
+
 .markdown-content strong {
   color: #102a4d;
   font-weight: 850;
@@ -1815,6 +1827,11 @@ textarea:focus {
 
 .markdown-content pre code {
   font-family: var(--mono);
+}
+
+.markdown-content .claim-unverifiable {
+  background: color-mix(in srgb, var(--warning-soft) 72%, var(--surface));
+  border-left-color: var(--warning);
 }
 
 .chat-composer {

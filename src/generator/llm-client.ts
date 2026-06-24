@@ -2,12 +2,13 @@ import OpenAI from "openai";
 import { CONFIG } from "../config";
 import { isOperationAborted } from "../utils/abort";
 import { logger } from "../utils/logger";
+import { LlmGenerationError } from "./errors";
 
 const client = new OpenAI({
   baseURL: CONFIG.chat.baseUrl,
   apiKey: CONFIG.chat.apiKey,
   timeout: chatTimeoutMs(),
-  maxRetries: 1,
+  maxRetries: chatMaxRetries(),
 });
 
 export interface LlmCompletion {
@@ -27,9 +28,17 @@ let preferredTokenLimitParam: TokenLimitParam = defaultTokenLimitParam();
 
 function chatTimeoutMs(): number {
   const raw = process.env.SONAR_CHAT_TIMEOUT_MS;
-  if (!raw || raw.trim() === "") return 300_000;
+  if (!raw || raw.trim() === "") return 60_000;
   const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 300_000;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+}
+
+function chatMaxRetries(): number {
+  const raw = process.env.SONAR_CHAT_MAX_RETRIES;
+  if (!raw || raw.trim() === "") return 2;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return 2;
+  return Math.min(parsed, 4);
 }
 
 function defaultTokenLimitParam(): TokenLimitParam {
@@ -86,6 +95,49 @@ function shouldDisableLocalReasoning(): boolean {
   } catch {
     return false;
   }
+}
+
+function errorStatus(err: unknown): number | null {
+  const status = (err as { status?: unknown })?.status;
+  return typeof status === "number" ? status : null;
+}
+
+function classifyLlmError(err: unknown): LlmGenerationError {
+  const message = err instanceof Error ? err.message : String(err);
+  const status = errorStatus(err);
+  if (/timeout|timed out/i.test(message)) {
+    return new LlmGenerationError(
+      "timeout",
+      "Model request timed out. Check that the model server is running and responsive, or choose a smaller or faster model.",
+      message,
+    );
+  }
+  if (/ECONNREFUSED|ECONNRESET|fetch failed|connection refused|connect/i.test(message)) {
+    return new LlmGenerationError(
+      "unreachable",
+      "Model endpoint is unreachable. Start the local model server or update the OpenAI-compatible endpoint in settings.",
+      message,
+    );
+  }
+  if (status === 401 || status === 403) {
+    return new LlmGenerationError(
+      "rejected",
+      "Model endpoint rejected the request. Check the API key and OpenAI-compatible endpoint settings.",
+      message,
+    );
+  }
+  if (status === 429) {
+    return new LlmGenerationError(
+      "rate_limited",
+      "Model provider rate-limited the request. Wait briefly or use a local endpoint with available capacity.",
+      message,
+    );
+  }
+  return new LlmGenerationError(
+    "provider",
+    "Model provider request failed. Check the configured model endpoint and try again.",
+    message,
+  );
 }
 
 export async function generateCompletion(
@@ -160,9 +212,11 @@ export async function generateCompletion(
     };
   } catch (err) {
     if (isOperationAborted(err)) throw err;
-    const message = err instanceof Error ? err.message : String(err);
-    logger.error(`LLM failed: ${label}; durationMs=${Date.now() - started}; error=${message}`);
-    throw new Error("LLM generation failed");
+    const modelError = classifyLlmError(err);
+    logger.error(
+      `LLM failed: ${label}; durationMs=${Date.now() - started}; code=${modelError.code}; error=${modelError.detail}`,
+    );
+    throw modelError;
   }
 }
 

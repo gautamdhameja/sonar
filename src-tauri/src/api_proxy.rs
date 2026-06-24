@@ -31,7 +31,10 @@ pub async fn sonar_api_request(
         }
     }
 
-    let response = request.send().await.map_err(|err| err.to_string())?;
+    let response = request
+        .send()
+        .await
+        .map_err(|err| api_transport_error_message(&err))?;
     let status = response.status();
     let content_type = response
         .headers()
@@ -103,6 +106,14 @@ fn error_message(status: u16, content_type: &str, text: &str) -> String {
             text.chars().take(300).collect::<String>()
         )
     }
+}
+
+fn api_transport_error_message(err: &reqwest::Error) -> String {
+    if err.is_connect() || err.is_timeout() || err.is_request() {
+        return "Workspace engine is unavailable. Restart Sonar or run setup again to reconnect the local engine."
+            .to_string();
+    }
+    err.to_string()
 }
 
 #[cfg(test)]

@@ -7,6 +7,16 @@ export interface CitationVerification {
   invalidCitations: string[];
   uncitedClaims: string[];
   sourceKeys: string[];
+  claims: CitationClaimVerification[];
+}
+
+export type CitationClaimStatus = "verified" | "repaired" | "unverifiable";
+
+export interface CitationClaimVerification {
+  text: string;
+  status: CitationClaimStatus;
+  citations: string[];
+  invalidCitations: string[];
 }
 
 const bracketCitationPattern = /\[((?:[^[\]\n]|\[[^[\]\n]+\]){2,240})\](?!\()/g;
@@ -170,7 +180,18 @@ export function verifyCitations(answer: string, contextUnits: CodeUnit[]): Citat
       return parsed.startLine >= range.startLine && citationEnd <= range.endLine;
     });
   });
-  const uncitedClaims = splitClaims(answer).filter((claim) => !hasCitation(claim) && !isNavigationGuidance(claim));
+  const candidateClaims = splitClaims(answer).filter((claim) => !isNavigationGuidance(claim));
+  const uncitedClaims = candidateClaims.filter((claim) => !hasCitation(claim));
+  const claims = candidateClaims.map((claim) => {
+    const claimCitations = citations.filter((citation) => claim.includes(citation));
+    const claimInvalidCitations = invalidCitations.filter((citation) => claim.includes(citation));
+    return {
+      text: claim,
+      status: claimInvalidCitations.length > 0 || !hasCitation(claim) ? "unverifiable" : "verified",
+      citations: claimCitations,
+      invalidCitations: claimInvalidCitations,
+    } satisfies CitationClaimVerification;
+  });
 
   return {
     valid: invalidCitations.length === 0 && uncitedClaims.length === 0,
@@ -178,6 +199,7 @@ export function verifyCitations(answer: string, contextUnits: CodeUnit[]): Citat
     invalidCitations,
     uncitedClaims,
     sourceKeys: Array.from(sourceKeys).sort(),
+    claims,
   };
 }
 

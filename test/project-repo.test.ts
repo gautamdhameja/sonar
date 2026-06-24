@@ -148,6 +148,7 @@ test("ProjectRepo persists onboarding sessions and supports legacy messages", as
       invalidCitations: [],
       uncitedClaims: [],
       sourceKeys: ["src/share.ts:1-4"],
+      claims: [],
     },
     retrievalTime: 12,
     generationTime: 34,
@@ -165,7 +166,14 @@ test("ProjectRepo persists onboarding sessions and supports legacy messages", as
     content: "Sharing uses a link.",
     intent: "workflow",
     sources: [{ filePath: "src/share.ts", name: "share", kind: "function", lines: "1-4" }],
-    citationVerification: { valid: true, citations: [], invalidCitations: [], uncitedClaims: [], sourceKeys: [] },
+    citationVerification: {
+      valid: true,
+      citations: [],
+      invalidCitations: [],
+      uncitedClaims: [],
+      sourceKeys: [],
+      claims: [],
+    },
   });
   repo.updateOnboardingSessionSummary(session.id, "User asked about sharing.");
 

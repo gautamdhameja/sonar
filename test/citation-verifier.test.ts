@@ -144,6 +144,24 @@ test("verifyCitations flags uncited factual claims", () => {
   assert.equal(result.uncitedClaims.length, 1);
 });
 
+test("verifyCitations marks per-claim statuses for trusted and unverifiable claims", () => {
+  const result = verifyCitations(
+    [
+      "The configuration function validates the local model URL before returning runtime settings [src/llama/config.ts:4-16].",
+      "The same function also uploads repository contents to a hosted analytics service.",
+      "The configuration function writes settings outside the supported source range [src/llama/config.ts:4-999].",
+    ].join("\n"),
+    [unit],
+  );
+
+  assert.deepEqual(
+    result.claims.map((claim) => claim.status),
+    ["verified", "unverifiable", "unverifiable"],
+  );
+  assert.deepEqual(result.claims[0].citations, ["src/llama/config.ts:4-16"]);
+  assert.deepEqual(result.claims[2].invalidCitations, ["src/llama/config.ts:4-999"]);
+});
+
 test("verifyCitations ignores where-to-look-next navigation guidance", () => {
   const result = verifyCitations(
     "For local storage logic: Look at `src/client/api/index.ts`. This file contains the core functions for saving and retrieving data.",
