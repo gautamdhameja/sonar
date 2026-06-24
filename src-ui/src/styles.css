@@ -89,6 +89,8 @@ button:disabled {
 }
 
 .brand-block {
+  --brand-mark-size: 46px;
+
   display: flex;
   flex: 1 1 360px;
   gap: 12px;
@@ -105,17 +107,17 @@ button:disabled {
 
 .brand-mark-frame {
   display: inline-flex;
-  flex: 0 0 58px;
-  width: 58px;
-  height: 58px;
+  flex: 0 0 var(--brand-mark-size);
+  width: var(--brand-mark-size);
+  height: var(--brand-mark-size);
   align-items: center;
   justify-content: center;
 }
 
 .brand-mark {
   display: block;
-  width: 50px;
-  height: 50px;
+  width: var(--brand-mark-size);
+  height: var(--brand-mark-size);
   object-fit: contain;
 }
 
@@ -1440,17 +1442,6 @@ select:focus-visible {
   gap: 10px;
 }
 
-.brand-mark-frame {
-  flex-basis: 58px;
-  width: 58px;
-  height: 58px;
-}
-
-.brand-mark {
-  width: 50px;
-  height: 50px;
-}
-
 .brand-block h1 {
   color: var(--ink);
   font-family: var(--display);
@@ -1934,14 +1925,7 @@ textarea:focus {
   }
 
   .brand-mark-frame {
-    flex-basis: 52px;
-    width: 52px;
-    height: 52px;
-  }
-
-  .brand-mark {
-    width: 44px;
-    height: 44px;
+    --brand-mark-size: 42px;
   }
 
   .brand-block p {

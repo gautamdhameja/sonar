@@ -1,4 +1,5 @@
 import { Settings } from "lucide-react";
+import brandMark from "../assets/brand-mark.png";
 import type { ServiceState } from "../types";
 import { stateLabel } from "../app/format";
 
@@ -13,7 +14,7 @@ export function AppHeader({ runtime, onRefreshServices, onOpenSettings }: AppHea
     <header className="app-header">
       <div className="brand-block">
         <span className="brand-mark-frame" aria-hidden="true">
-          <img className="brand-mark" src="/icon.svg?v=20260623-4" alt="" />
+          <img className="brand-mark" src={brandMark} alt="" />
         </span>
         <div className="brand-copy">
           <h1>Sonar</h1>

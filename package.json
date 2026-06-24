@@ -23,6 +23,7 @@
     "dev:ui": "vite --host 127.0.0.1",
     "format": "biome format --write . && cargo fmt --manifest-path src-tauri/Cargo.toml",
     "format:check": "biome format . && cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+    "icons:generate": "tauri icon src-tauri/icon-source/sonar-icon-1024-padded.png",
     "check:version": "node scripts/check-version-sync.mjs",
     "lint": "biome lint . && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
     "typecheck": "tsc --noEmit",
