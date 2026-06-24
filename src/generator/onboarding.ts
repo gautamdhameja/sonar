@@ -28,7 +28,8 @@ import {
 import { runIterativeRepositorySurvey } from "../survey/iterative-survey";
 import { logger } from "../utils/logger";
 import {
-  normalizeInvalidCitations,
+  CitationVerification,
+  normalizeInvalidCitationsWithMetadata,
   removeInvalidCitationClaims,
   removeUncitedClaims,
   removeWeaklySupportedAiClaims,
@@ -37,7 +38,6 @@ import {
   removeWeaklySupportedSharingClaims,
   removeWeaklySupportedUsageClaims,
   verifyCitations,
-  CitationVerification,
 } from "./citation-verifier";
 import { generateCompletion } from "./llm-client";
 import { buildCitationRepairPrompt, buildOnboardingBriefPartPrompt } from "./onboarding-prompt";
@@ -839,10 +839,12 @@ export async function generateOnboardingBrief(
   let repaired = false;
 
   if (citationVerification.invalidCitations.length > 0) {
-    const normalizedBrief = normalizeInvalidCitations(brief, contextUnits, citationVerification);
-    const normalizedVerification = verifyCitations(normalizedBrief, contextUnits);
+    const normalized = normalizeInvalidCitationsWithMetadata(brief, contextUnits, citationVerification);
+    const normalizedVerification = verifyCitations(normalized.answer, contextUnits, {
+      repairedCitations: normalized.repairedCitations,
+    });
     if (normalizedVerification.invalidCitations.length < citationVerification.invalidCitations.length) {
-      brief = normalizedBrief;
+      brief = normalized.answer;
       citationVerification = normalizedVerification;
       repaired = true;
     }
@@ -872,10 +874,12 @@ export async function generateOnboardingBrief(
   }
 
   if (citationVerification.invalidCitations.length > 0) {
-    const normalizedBrief = normalizeInvalidCitations(brief, contextUnits, citationVerification);
-    const normalizedVerification = verifyCitations(normalizedBrief, contextUnits);
+    const normalized = normalizeInvalidCitationsWithMetadata(brief, contextUnits, citationVerification);
+    const normalizedVerification = verifyCitations(normalized.answer, contextUnits, {
+      repairedCitations: normalized.repairedCitations,
+    });
     if (normalizedVerification.invalidCitations.length < citationVerification.invalidCitations.length) {
-      brief = normalizedBrief;
+      brief = normalized.answer;
       citationVerification = normalizedVerification;
       repaired = true;
     }

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  normalizeClaimText,
+  normalizeInvalidCitationsWithMetadata,
   removeInvalidCitationClaims,
   removeUncitedClaims,
   removeWeaklySupportedAiClaims,
@@ -160,6 +162,48 @@ test("verifyCitations marks per-claim statuses for trusted and unverifiable clai
   );
   assert.deepEqual(result.claims[0].citations, ["src/llama/config.ts:4-16"]);
   assert.deepEqual(result.claims[2].invalidCitations, ["src/llama/config.ts:4-999"]);
+});
+
+test("verifyCitations marks claims repaired when citation normalization fixed them", () => {
+  const answer =
+    "The Todo component owns task display and update rendering for the visible list [src/components/Todo.jsx:1-110].";
+  const units = [
+    {
+      id: "todo-module",
+      filePath: "src/components/Todo.jsx",
+      language: "javascript",
+      kind: "module" as const,
+      name: "Todo",
+      code: "export default function Todo() {}",
+      startLine: 1,
+      endLine: 25,
+      parentName: null,
+      imports: [],
+      docstring: null,
+      exportedNames: [],
+      calledFunctions: [],
+      isVendored: false,
+    },
+  ];
+  const verification = verifyCitations(answer, units);
+  const normalized = normalizeInvalidCitationsWithMetadata(answer, units, verification);
+  const repairedVerification = verifyCitations(normalized.answer, units, {
+    repairedCitations: normalized.repairedCitations,
+  });
+
+  assert.equal(normalized.answer.includes("src/components/Todo.jsx:1-25"), true);
+  assert.deepEqual(normalized.repairedCitations, ["src/components/Todo.jsx:1-25"]);
+  assert.deepEqual(
+    repairedVerification.claims.map((claim) => claim.status),
+    ["repaired"],
+  );
+});
+
+test("normalizeClaimText removes markdown-only differences for UI claim matching", () => {
+  assert.equal(
+    normalizeClaimText("**Server:** The API validates local model settings before returning runtime configuration."),
+    normalizeClaimText("Server: The API validates local model settings before returning runtime configuration."),
+  );
 });
 
 test("verifyCitations ignores where-to-look-next navigation guidance", () => {

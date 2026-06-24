@@ -19,12 +19,22 @@ function textFromNode(node: ReactNode): string {
   return "";
 }
 
+function normalizeRenderedClaimText(value: string): string {
+  return value
+    .replace(/[`*_~]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function claimClassName(children: ReactNode, citation?: CitationVerification | null): string | undefined {
   const claims = citation?.claims ?? [];
   if (claims.length === 0) return undefined;
 
-  const text = textFromNode(children).replace(/\s+/g, " ").trim();
-  const claim = claims.find((item) => item.status === "unverifiable" && text.includes(item.text));
+  const text = normalizeRenderedClaimText(textFromNode(children));
+  const claim = claims.find(
+    (item) => item.status === "unverifiable" && text.includes(normalizeRenderedClaimText(item.text)),
+  );
   return claim ? "claim-unverifiable" : undefined;
 }
 

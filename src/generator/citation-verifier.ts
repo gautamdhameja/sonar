@@ -19,6 +19,15 @@ export interface CitationClaimVerification {
   invalidCitations: string[];
 }
 
+export interface CitationVerificationOptions {
+  repairedCitations?: readonly string[];
+}
+
+export interface CitationRepairNormalization {
+  answer: string;
+  repairedCitations: string[];
+}
+
 const bracketCitationPattern = /\[((?:[^[\]\n]|\[[^[\]\n]+\]){2,240})\](?!\()/g;
 const bareCitationPattern =
   /\b((?:[A-Za-z0-9_.@-]+\/)*[A-Za-z0-9_.@-]+\.(?:c|cc|cpp|cs|css|go|h|hpp|html|java|js|jsx|json|kt|kts|md|mjs|php|py|rb|rs|scss|sql|swift|toml|ts|tsx|yaml|yml):\d+(?:-\d+)?)\b/g;
@@ -53,6 +62,14 @@ function isNavigationGuidance(claim: string): boolean {
 
 function normalizeCitation(value: string): string {
   return value.toLowerCase().replace(/\s+/g, "");
+}
+
+export function normalizeClaimText(value: string): string {
+  return value
+    .replace(/[`*_~]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function parseCitation(value: string): { filePath: string; startLine?: number; endLine?: number } | null {
@@ -117,7 +134,11 @@ function hasCitation(value: string): boolean {
   return bracketCitationPattern.test(value) || bareCitationPattern.test(value);
 }
 
-export function verifyCitations(answer: string, contextUnits: CodeUnit[]): CitationVerification {
+export function verifyCitations(
+  answer: string,
+  contextUnits: CodeUnit[],
+  options: CitationVerificationOptions = {},
+): CitationVerification {
   bracketCitationPattern.lastIndex = 0;
   const bracketCitations = Array.from(answer.matchAll(bracketCitationPattern), (match) => match[1].trim()).flatMap(
     expandCitationGroup,
@@ -182,12 +203,21 @@ export function verifyCitations(answer: string, contextUnits: CodeUnit[]): Citat
   });
   const candidateClaims = splitClaims(answer).filter((claim) => !isNavigationGuidance(claim));
   const uncitedClaims = candidateClaims.filter((claim) => !hasCitation(claim));
+  const repairedCitations = new Set((options.repairedCitations ?? []).map(normalizeCitation));
   const claims = candidateClaims.map((claim) => {
     const claimCitations = citations.filter((citation) => claim.includes(citation));
     const claimInvalidCitations = invalidCitations.filter((citation) => claim.includes(citation));
+    const claimRepairedCitations = claimCitations.filter((citation) =>
+      repairedCitations.has(normalizeCitation(citation)),
+    );
     return {
       text: claim,
-      status: claimInvalidCitations.length > 0 || !hasCitation(claim) ? "unverifiable" : "verified",
+      status:
+        claimInvalidCitations.length > 0 || !hasCitation(claim)
+          ? "unverifiable"
+          : claimRepairedCitations.length > 0
+            ? "repaired"
+            : "verified",
       citations: claimCitations,
       invalidCitations: claimInvalidCitations,
     } satisfies CitationClaimVerification;
@@ -395,9 +425,18 @@ export function normalizeInvalidCitations(
   contextUnits: CodeUnit[],
   verification: CitationVerification,
 ): string {
-  if (verification.invalidCitations.length === 0) return answer;
+  return normalizeInvalidCitationsWithMetadata(answer, contextUnits, verification).answer;
+}
+
+export function normalizeInvalidCitationsWithMetadata(
+  answer: string,
+  contextUnits: CodeUnit[],
+  verification: CitationVerification,
+): CitationRepairNormalization {
+  if (verification.invalidCitations.length === 0) return { answer, repairedCitations: [] };
 
   let next = answer;
+  const repairedCitations = new Set<string>();
   const basenameCounts = new Map<string, number>();
   for (const unit of contextUnits) {
     const basename = normalizeCitation(path.basename(unit.filePath));
@@ -428,8 +467,11 @@ export function normalizeInvalidCitations(
     const replacementUnit = ranked[0]?.unit;
     if (!replacementUnit) continue;
     const replacement = `${replacementUnit.filePath}:${replacementUnit.startLine}-${replacementUnit.endLine}`;
+    if (replacement !== citation) {
+      repairedCitations.add(replacement);
+    }
     next = next.replace(new RegExp(escapeRegExp(citation), "g"), replacement);
   }
 
-  return next;
+  return { answer: next, repairedCitations: Array.from(repairedCitations) };
 }
