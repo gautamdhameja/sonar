@@ -1,9 +1,11 @@
 use std::{
     fs,
     path::Path,
+    sync::OnceLock,
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use regex::Regex;
 use serde::Serialize;
 
 use crate::{config::desktop_model_config, paths::sonar_home, services::service_snapshot};
@@ -136,26 +138,114 @@ fn copy_redacted_if_exists(
     Ok(())
 }
 
+// Keep this diagnostics redactor aligned with src/security/source-safety.ts.
 fn redact_sensitive_text(contents: &str) -> String {
-    contents
+    let redacted_blocks = pem_block_pattern().replace_all(contents, "[redacted secret block]");
+
+    redacted_blocks
         .lines()
-        .map(|line| {
-            let lower = line.to_ascii_lowercase();
-            if lower.contains("api_token")
-                || lower.contains("sonar_api_token")
-                || lower.contains("chat_api_key")
-                || lower.contains("chatapikey")
-                || lower.contains("authorization:")
-                || lower.contains("bearer ")
-                || lower.contains("sk-")
-            {
-                "[redacted]".to_string()
-            } else {
-                line.to_string()
-            }
-        })
+        .map(redact_sensitive_line)
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn redact_sensitive_line(line: &str) -> String {
+    if let Some(redacted) = redact_secret_assignment(line) {
+        return redacted;
+    }
+    if let Some(redacted) = redact_secret_json_value(line) {
+        return redacted;
+    }
+
+    let lower = line.to_ascii_lowercase();
+    if lower.contains("authorization:")
+        || lower.contains("bearer ")
+        || lower.contains("sk-")
+        || secret_url_value_pattern().is_match(line)
+    {
+        return "[redacted]".to_string();
+    }
+
+    line.to_string()
+}
+
+fn redact_secret_assignment(line: &str) -> Option<String> {
+    if let Some(captures) = secret_assignment_pattern().captures(line) {
+        return Some(format!("{}[redacted]", &captures[1]));
+    }
+    if let Some(captures) = assignment_pattern().captures(line) {
+        let value = &captures[2];
+        if secret_url_value_pattern().is_match(value) {
+            return Some(format!("{}[redacted]", &captures[1]));
+        }
+    }
+    None
+}
+
+fn redact_secret_json_value(line: &str) -> Option<String> {
+    if let Some(captures) = secret_json_pattern().captures(line) {
+        return Some(format!(
+            "{}{}[redacted]{}",
+            &captures[1], &captures[2], &captures[3]
+        ));
+    }
+    if let Some(captures) = json_value_pattern().captures(line) {
+        let value = &captures[3];
+        if secret_url_value_pattern().is_match(value) {
+            return Some(format!(
+                "{}{}[redacted]{}",
+                &captures[1], &captures[2], &captures[4]
+            ));
+        }
+    }
+    None
+}
+
+fn pem_block_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"(?s)-----BEGIN [^-]*(?:PRIVATE KEY|CERTIFICATE)-----.*?-----END [^-]*(?:PRIVATE KEY|CERTIFICATE)-----")
+            .expect("valid PEM redaction regex")
+    })
+}
+
+fn secret_assignment_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"(?i)^(\s*(?:export\s+)?[A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|PRIVATE[_-]?KEY|CLIENT[_-]?SECRET|ACCESS[_-]?KEY|REFRESH[_-]?TOKEN|CONNECTION[_-]?STRING|CREDENTIAL|AUTH)[A-Z0-9_]*\s*[:=]\s*)(.+)$")
+            .expect("valid secret assignment redaction regex")
+    })
+}
+
+fn assignment_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"^(\s*(?:export\s+)?[A-Z0-9_]+\s*[:=]\s*)(.+)$")
+            .expect("valid assignment redaction regex")
+    })
+}
+
+fn secret_json_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r#"(?i)^(\s*["'][^"']*(?:api[_-]?key|token|secret|password|passwd|pwd|private[_-]?key|client[_-]?secret|access[_-]?key|refresh[_-]?token|connection[_-]?string|credential|auth)[^"']*["']\s*:\s*)(["']).*?(["']\s*,?\s*)$"#)
+            .expect("valid secret JSON redaction regex")
+    })
+}
+
+fn json_value_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r#"^(\s*["'][^"']+["']\s*:\s*)(["'])(.*?)(["']\s*,?\s*)$"#)
+            .expect("valid JSON value redaction regex")
+    })
+}
+
+fn secret_url_value_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"://[^:/\s]+:[^@\s]+@").expect("valid credential URL redaction regex")
+    })
 }
 
 #[cfg(test)]
@@ -167,8 +257,16 @@ mod tests {
         let redacted = redact_sensitive_text(
             [
                 "SONAR_API_TOKEN=abc123",
+                "ANTHROPIC_API_KEY=anthropic-secret",
+                "HF_TOKEN=hf-secret",
+                "DATABASE_URL=postgres://user:pass@host/db",
                 r#""chatApiKey": "sk-secret""#,
+                r#""databaseUrl": "postgres://json_user:json_pass@host/db","#,
+                r#""clientSecret": "json-secret","#,
                 "Authorization: Bearer token",
+                "-----BEGIN PRIVATE KEY-----",
+                "private-key-body",
+                "-----END PRIVATE KEY-----",
                 "ordinary log line",
             ]
             .join("\n")
@@ -176,8 +274,14 @@ mod tests {
         );
 
         assert!(!redacted.contains("abc123"));
+        assert!(!redacted.contains("anthropic-secret"));
+        assert!(!redacted.contains("hf-secret"));
+        assert!(!redacted.contains("user:pass"));
+        assert!(!redacted.contains("json_user:json_pass"));
+        assert!(!redacted.contains("json-secret"));
         assert!(!redacted.contains("sk-secret"));
         assert!(!redacted.contains("Bearer token"));
+        assert!(!redacted.contains("private-key-body"));
         assert!(redacted.contains("ordinary log line"));
     }
 }

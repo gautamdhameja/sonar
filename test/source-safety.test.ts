@@ -25,6 +25,9 @@ test("isSensitiveRepositoryPath allows ordinary source and manifest files", () =
 test("redactSensitiveText removes common inline secrets while preserving context", () => {
   const text = [
     "API_KEY=sk-test-secret-value",
+    "DATABASE_URL=postgres://user:pass@host/db",
+    '"clientSecret": "json-secret",',
+    '"databaseUrl": "postgres://json_user:json_pass@host/db",',
     "NORMAL_SETTING=enabled",
     "client_secret: abcdefghijklmnopqrstuvwxyz123456",
     "-----BEGIN PRIVATE KEY-----",
@@ -35,8 +38,14 @@ test("redactSensitiveText removes common inline secrets while preserving context
   const redacted = redactSensitiveText(".env", text);
 
   assert.match(redacted, /API_KEY=\[REDACTED\]/);
+  assert.match(redacted, /DATABASE_URL=\[REDACTED\]/);
+  assert.match(redacted, /"clientSecret": "\[REDACTED\]",/);
+  assert.match(redacted, /"databaseUrl": "\[REDACTED\]",/);
   assert.match(redacted, /NORMAL_SETTING=enabled/);
   assert.match(redacted, /client_secret: \[REDACTED\]/);
   assert.match(redacted, /\[REDACTED SECRET BLOCK\]/);
   assert.doesNotMatch(redacted, /private material/);
+  assert.doesNotMatch(redacted, /user:pass/);
+  assert.doesNotMatch(redacted, /json_user:json_pass/);
+  assert.doesNotMatch(redacted, /json-secret/);
 });
