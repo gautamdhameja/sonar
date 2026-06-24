@@ -39,11 +39,31 @@ if (!appleId || !teamId || !password) {
 
 const tempDir = mkdtempSync(join(tmpdir(), "sonar-notary-"));
 const archivePath = join(tempDir, "Sonar.zip");
+const notaryProfile = `sonar-notary-${process.pid}-${Date.now()}`;
 let exitCode = 0;
 
 try {
-  const archive = spawnSync("ditto", ["-c", "-k", "--keepParent", appPath, archivePath], { stdio: "inherit" });
-  exitCode = archive.status ?? 1;
+  const storeCredentials = spawnSync(
+    "xcrun",
+    [
+      "notarytool",
+      "store-credentials",
+      notaryProfile,
+      "--apple-id",
+      appleId,
+      "--team-id",
+      teamId,
+      "--password",
+      password,
+    ],
+    { stdio: "inherit" },
+  );
+  exitCode = storeCredentials.status ?? 1;
+
+  if (exitCode === 0) {
+    const archive = spawnSync("ditto", ["-c", "-k", "--keepParent", appPath, archivePath], { stdio: "inherit" });
+    exitCode = archive.status ?? 1;
+  }
 
   if (exitCode === 0) {
     const notarize = spawnSync(
@@ -52,12 +72,8 @@ try {
         "notarytool",
         "submit",
         archivePath,
-        "--apple-id",
-        appleId,
-        "--team-id",
-        teamId,
-        "--password",
-        password,
+        "--keychain-profile",
+        notaryProfile,
         "--wait",
       ],
       { stdio: "inherit" },
