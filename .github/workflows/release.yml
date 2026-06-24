@@ -1,0 +1,84 @@
+# Required repository secrets for signed public macOS releases:
+# - APPLE_CERTIFICATE_P12_BASE64: base64-encoded Developer ID Application certificate export.
+# - APPLE_CERTIFICATE_PASSWORD: password for the exported .p12 certificate.
+# - KEYCHAIN_PASSWORD: temporary CI keychain password.
+# - SONAR_MAC_SIGN_IDENTITY: Developer ID Application identity name.
+# - APPLE_ID: Apple Developer account email for notarytool.
+# - APPLE_TEAM_ID: Apple Developer Team ID.
+# - APPLE_APP_SPECIFIC_PASSWORD: app-specific password for notarytool.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: macOS signed release
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Import Developer ID certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          keychain-password: ${{ secrets.KEYCHAIN_PASSWORD }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run quality gate
+        run: npm run check
+
+      - name: Build macOS app
+        run: npm run desktop:build
+
+      - name: Sign and notarize app
+        env:
+          SONAR_MAC_SIGN_IDENTITY: ${{ secrets.SONAR_MAC_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: npm run release:mac:sign
+
+      - name: Verify signed app
+        run: npm run release:mac:verify
+
+      - name: Package release artifact
+        run: ditto -c -k --keepParent src-tauri/target/release/bundle/macos/Sonar.app Sonar-macOS-${{ github.ref_name }}.zip
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            "Sonar-macOS-${{ github.ref_name }}.zip" \
+            --title "Sonar ${{ github.ref_name }}" \
+            --notes "Signed and notarized macOS app build."

@@ -84,3 +84,20 @@ SONAR_MAC_SIGN_IDENTITY="Developer ID Application: Your Team Name (TEAMID)" npm 
 ```
 
 After Developer ID signing, notarize and staple the app or installer using your Apple Developer account before distributing it outside your own machine.
+
+Tagged releases are built by `.github/workflows/release.yml` when a `v*` tag is pushed. The workflow runs the full
+quality gate, builds the macOS app, signs it with a Developer ID Application certificate, notarizes and staples it,
+verifies the signature, and attaches a zipped `.app` bundle to the GitHub Release.
+
+The release workflow requires these GitHub Actions secrets:
+
+- `APPLE_CERTIFICATE_P12_BASE64`: base64-encoded Developer ID Application certificate export.
+- `APPLE_CERTIFICATE_PASSWORD`: password for the exported `.p12` certificate.
+- `KEYCHAIN_PASSWORD`: temporary CI keychain password.
+- `SONAR_MAC_SIGN_IDENTITY`: Developer ID Application identity name.
+- `APPLE_ID`: Apple Developer account email for `notarytool`.
+- `APPLE_TEAM_ID`: Apple Developer Team ID.
+- `APPLE_APP_SPECIFIC_PASSWORD`: app-specific password for `notarytool`.
+
+Desktop auto-update is intentionally deferred for the public alpha. Users should install new releases manually from the
+GitHub Release artifact until the Tauri updater is configured with signed update metadata.

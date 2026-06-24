@@ -20,3 +20,5 @@ Initial public alpha for Sonar as a local-first codebase onboarding and explanat
 - Medium local models can still produce incomplete or cautious language; cited line-range claims should be treated as the reliable output.
 - Desktop packaging has been designed for macOS first and needs release-candidate testing on clean machines.
 - Packaged local model sidecars are still an installation-path concern for distribution builds.
+- Desktop builds do not include an automatic updater yet. Install new releases manually from the GitHub Release artifact
+  until the Tauri updater is configured with signed update metadata.
