@@ -63,6 +63,11 @@ When Sonar runs as the desktop app, local repository selection is intentionally 
 roots. This override is only for the desktop-managed localhost engine; the process still binds to `127.0.0.1`, uses the
 runtime token for protected API calls, and enforces the configured CORS allowlist.
 
+Indexed repository content is untrusted input to the model. A repository can include text that attempts to steer the
+briefing, so Sonar treats generated briefings as source-grounded drafts rather than executable instructions. Model output
+is rendered as inert Markdown text in the desktop UI, raw HTML is not enabled, and Sonar does not run tools or code based
+on model output. Use citations and unverifiable-claim flags to check important claims against the listed source files.
+
 ## Local Diagnostics
 
 The settings drawer can create an opt-in diagnostics bundle under `~/.sonar/diagnostics`. The bundle stays on the local
