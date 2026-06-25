@@ -78,6 +78,36 @@ export interface IndexProjectResponse {
   indexWarnings?: string[];
 }
 
+export type PersonaRole =
+  | "product_manager"
+  | "sales"
+  | "customer_success"
+  | "support"
+  | "operations"
+  | "executive"
+  | "engineer"
+  | "other";
+
+export type TechnicalBackground = "none" | "basic" | "some_coding" | "technical";
+
+export type ExplanationDepth = "quick" | "standard" | "deep";
+
+export interface Persona {
+  role: PersonaRole;
+  roleDescription?: string;
+  technicalBackground: TechnicalBackground;
+  businessContext?: string;
+  preferredAnalogies?: string[];
+  avoidJargon: boolean;
+  explanationDepth: ExplanationDepth;
+}
+
+export interface OnboardingSessionRequest {
+  audience?: string;
+  focus?: string[];
+  persona: Persona;
+}
+
 export interface CitationVerification {
   valid: boolean;
   citations: string[];
@@ -109,6 +139,7 @@ export interface OnboardingSessionResponse {
     repoName: string;
     audience: string | null;
     focus: string[];
+    persona: Persona;
     sourceFiles: string[];
     createdAt: string;
   };

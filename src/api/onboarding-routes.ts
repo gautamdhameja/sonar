@@ -18,6 +18,7 @@ function sessionResponse(session: OnboardingSession): {
     repoName: string;
     audience: string | null;
     focus: string[];
+    persona: OnboardingSession["persona"];
     sourceFiles: string[];
     createdAt: string;
   };
@@ -48,6 +49,7 @@ function sessionResponse(session: OnboardingSession): {
       repoName: session.repoName,
       audience: session.audience,
       focus: session.focus,
+      persona: session.persona,
       sourceFiles: session.sourceFiles,
       createdAt: session.createdAt,
     },

@@ -34,6 +34,7 @@ import type {
   DesktopModelConfig,
   FollowupResponse,
   OnboardingSessionResponse,
+  OnboardingSessionRequest,
   Project,
   ServiceSnapshot,
   UnsupportedLanguageSummary,
@@ -61,6 +62,14 @@ function indexingNotice(indexed: {
     (message): message is string => Boolean(message),
   );
   return messages.length ? messages.join(" ") : null;
+}
+
+function briefingRequestFromSession(savedSession: OnboardingSessionResponse): OnboardingSessionRequest {
+  return {
+    audience: savedSession.session.audience ?? undefined,
+    focus: savedSession.session.focus,
+    persona: savedSession.session.persona,
+  };
 }
 
 const ERROR_TOAST_TIMEOUT_MS = 12000;
@@ -407,6 +416,12 @@ export function App() {
       const notice = indexingNotice(indexed);
       if (notice) setNotice(notice);
 
+      const savedSession =
+        session?.session.projectId === selectedProject.id
+          ? session
+          : await getLatestOnboardingSession(selectedProject.id);
+      const briefingRequest = savedSession ? briefingRequestFromSession(savedSession) : briefingRole;
+
       setActiveTask({
         kind: "brief",
         label: "Surveying repository and writing fresh briefing",
@@ -415,7 +430,7 @@ export function App() {
         canStop: true,
       });
       await preflightModelEndpoint();
-      const result = await createOnboardingSession(indexed.projectId, briefingRole, controller.signal);
+      const result = await createOnboardingSession(indexed.projectId, briefingRequest, controller.signal);
       setSession(result);
       setFollowups([]);
       setQuestion(defaultQuestion);

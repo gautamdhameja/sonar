@@ -3,6 +3,7 @@ import type {
   DependencyHealthResponse,
   FollowupResponse,
   IndexProjectResponse,
+  OnboardingSessionRequest,
   OnboardingSessionResponse,
   Project,
 } from "./types";
@@ -114,19 +115,25 @@ export async function indexProject(
 
 export async function createOnboardingSession(
   projectId: string,
-  briefingRole: BriefingRole,
+  briefingRoleOrRequest: BriefingRole | OnboardingSessionRequest,
   signal?: AbortSignal,
 ): Promise<OnboardingSessionResponse> {
-  const profile = briefingRoleProfiles[briefingRole];
+  const payload =
+    typeof briefingRoleOrRequest === "string"
+      ? (() => {
+          const profile = briefingRoleProfiles[briefingRoleOrRequest];
+          return {
+            audience: profile.audience,
+            focus: profile.focus,
+            persona: profile.persona,
+          };
+        })()
+      : briefingRoleOrRequest;
 
   return request<OnboardingSessionResponse>(`/projects/${projectId}/onboarding/sessions`, {
     method: "POST",
     signal,
-    body: JSON.stringify({
-      audience: profile.audience,
-      focus: profile.focus,
-      persona: profile.persona,
-    }),
+    body: JSON.stringify(payload),
   });
 }
 
