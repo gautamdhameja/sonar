@@ -153,7 +153,7 @@ export const suggestedQuestions = [
   "What are the main user workflows?",
   "What is risky or unclear?",
   "What should I ask engineering?",
-  "How does data move through this app?",
+  "How does data move through the system?",
   "What are the main user-facing features?",
   "What are the important systems?",
   "What might break in production?",

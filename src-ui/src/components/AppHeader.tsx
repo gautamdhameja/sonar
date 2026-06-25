@@ -18,7 +18,7 @@ export function AppHeader({ runtime, onRefreshServices, onOpenSettings }: AppHea
         </span>
         <div className="brand-copy">
           <h1>Sonar</h1>
-          <p>Local-first codebase briefings for people who need project context, not implementation detail.</p>
+          <p>Any codebase, explained for your role.</p>
         </div>
       </div>
       <div className="header-actions">

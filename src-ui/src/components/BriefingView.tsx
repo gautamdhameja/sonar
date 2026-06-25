@@ -115,7 +115,7 @@ export function BriefingView({
         <section className="followup-card">
           <div>
             <p className="eyebrow">Ask Next</p>
-            <h3>Ask orientation questions</h3>
+            <h3>Ask a follow-up question</h3>
           </div>
           <div className="answers">
             {followups.map((item) => (

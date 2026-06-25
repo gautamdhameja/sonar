@@ -78,8 +78,8 @@ export function HomeScreen({
             <p className="eyebrow">Get started</p>
             <h2>Analyze a repository</h2>
             <p>
-              Create a cited project briefing for product, business, support, and leadership context. Sonar is tuned for
-              high-level understanding, not deep implementation work.
+              Point Sonar at a repository and get a source-cited briefing: what it does, where the important parts live,
+              and what to ask next. Built for orientation, not line-by-line code review.
             </p>
           </div>
         </div>
@@ -149,8 +149,8 @@ export function HomeScreen({
           <Lock size={15} />
           <span>
             {runtimeReady
-              ? "Sonar reads only the repository you choose. Local models keep generation on this machine; API endpoints use the provider you configure."
-              : "Start the local runtime first. Sonar imports only the repository you choose."}
+              ? "Sonar only reads the repository you pick. With a local model, nothing leaves your machine; with an API endpoint, source goes to the provider you choose."
+              : "Start the local runtime first. Sonar only reads the repository you pick."}
           </span>
         </div>
 

@@ -37,8 +37,8 @@ export function EvidenceDrawer({ citation, sources, onClose }: EvidenceDrawerPro
             {citation.valid ? <CheckCircle2 size={18} /> : <Info size={18} />}
             <span>
               {citation.valid
-                ? "All cited source references match the retrieved context."
-                : `${citation.uncitedClaims.length} generated claims should be reviewed.`}
+                ? "Every citation matches a source Sonar actually read."
+                : `${citation.uncitedClaims.length} claims aren't backed by a citation — worth a quick check.`}
             </span>
           </div>
         )}

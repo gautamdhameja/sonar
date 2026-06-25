@@ -40,8 +40,8 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
           <p className="eyebrow">First run</p>
           <h2 id="setup-title">Choose your model source</h2>
           <p>
-            Sonar uses its embedded project store and an OpenAI-compatible generation endpoint. Choose local mode for a
-            llama.cpp server on this machine, or API mode for a cloud or self-hosted endpoint.
+            Sonar needs a model to write briefings. Run one locally with llama.cpp so nothing leaves your machine, or
+            connect any OpenAI-compatible API endpoint.
           </p>
         </div>
 
@@ -101,7 +101,7 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
         </div>
 
         <div className="setup-actions">
-          <p>Future launches reuse this saved choice and start the Sonar runtime automatically.</p>
+          <p>Sonar remembers this and starts the workspace automatically next time.</p>
           <button className="primary" disabled={isSaving} onClick={onSave} type="button">
             {isSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
             Save and start
