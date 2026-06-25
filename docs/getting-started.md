@@ -67,7 +67,7 @@ After setup, paste a GitHub repository URL or select a local repository folder, 
 
 ## Supported Repositories
 
-Sonar has the best code coverage for repositories written in TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, and C#. Markdown and MDX files are indexed as documentation.
+Sonar has full parser coverage for repositories written in TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C#, Ruby, C++, PHP, Kotlin, and Swift. Markdown and MDX files are indexed as documentation, along with selected JSON and Prisma schema files as text evidence.
 
 If a repository contains other source languages, Sonar shows a warning after indexing with the unsupported language names and file counts. Unsupported source files can still contribute inventory-level signals, but they are not fully parsed into code units. The generated briefing may be incomplete when those languages contain the central product logic.
 

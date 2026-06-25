@@ -139,7 +139,7 @@ If Sonar says the model endpoint is unavailable:
 If Sonar says the workspace engine is unavailable:
 
 - Run the app with `npm run desktop:dev`, not only `npm run dev:ui`.
-- Check `~/.sonar/sonar-api.log`.
+- Check `~/.sonar/api.log`.
 - Make sure port `3001` is available on `127.0.0.1`.
 
 If dependency installation fails, confirm your Node and npm versions match the supported range in `package.json`.
