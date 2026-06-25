@@ -10,7 +10,7 @@ export interface CitationVerification {
   claims: CitationClaimVerification[];
 }
 
-export type CitationClaimStatus = "verified" | "repaired" | "unverifiable";
+export type CitationClaimStatus = "verified" | "repaired" | "unverifiable" | "synthesis";
 
 export interface CitationClaimVerification {
   text: string;
@@ -21,6 +21,10 @@ export interface CitationClaimVerification {
 
 export interface CitationVerificationOptions {
   repairedCitations?: readonly string[];
+  // Sections whose content is a distilled synthesis (e.g. the one-paragraph product
+  // overview). Claims under these headings are allowed without a per-sentence citation:
+  // they are never counted as uncited and are marked "synthesis" rather than "unverifiable".
+  synthesisSections?: readonly string[];
 }
 
 export interface CitationRepairNormalization {
@@ -58,6 +62,33 @@ function isNavigationGuidance(claim: string): boolean {
     /^(?:\*\*)?(?:for|to understand|to find|where to look|review|look at)\b/i.test(claim) ||
     /^(?:this file|these files)\s+(?:shows?|contains?|defines?|explains?)\b/i.test(claim)
   );
+}
+
+// Collect the normalized claim text that appears under any of the given section headings.
+// Used to exempt distilled synthesis sections from the per-claim citation requirement.
+function claimsUnderSections(answer: string, sectionTitles: readonly string[]): Set<string> {
+  const exempt = new Set<string>();
+  if (sectionTitles.length === 0) return exempt;
+  const titles = new Set(sectionTitles.map((title) => title.trim().toLowerCase()));
+  let inExemptSection = false;
+  let buffer: string[] = [];
+  const flush = () => {
+    if (inExemptSection && buffer.length > 0) {
+      for (const claim of splitClaims(buffer.join("\n"))) exempt.add(normalizeClaimText(claim));
+    }
+    buffer = [];
+  };
+  for (const line of answer.split("\n")) {
+    const heading = line.match(/^#{2,6}\s+(.*?)\s*$/);
+    if (heading) {
+      flush();
+      inExemptSection = titles.has(heading[1].trim().toLowerCase());
+      continue;
+    }
+    if (inExemptSection) buffer.push(line);
+  }
+  flush();
+  return exempt;
 }
 
 function normalizeCitation(value: string): string {
@@ -201,8 +232,11 @@ export function verifyCitations(
       return parsed.startLine >= range.startLine && citationEnd <= range.endLine;
     });
   });
+  const exemptClaims = claimsUnderSections(answer, options.synthesisSections ?? []);
   const candidateClaims = splitClaims(answer).filter((claim) => !isNavigationGuidance(claim));
-  const uncitedClaims = candidateClaims.filter((claim) => !hasCitation(claim));
+  const uncitedClaims = candidateClaims.filter(
+    (claim) => !hasCitation(claim) && !exemptClaims.has(normalizeClaimText(claim)),
+  );
   const repairedCitations = new Set((options.repairedCitations ?? []).map(normalizeCitation));
   const claims = candidateClaims.map((claim) => {
     const claimCitations = citations.filter((citation) => claim.includes(citation));
@@ -210,14 +244,19 @@ export function verifyCitations(
     const claimRepairedCitations = claimCitations.filter((citation) =>
       repairedCitations.has(normalizeCitation(citation)),
     );
+    const isExemptSynthesis = !hasCitation(claim) && exemptClaims.has(normalizeClaimText(claim));
     return {
       text: claim,
       status:
-        claimInvalidCitations.length > 0 || !hasCitation(claim)
+        claimInvalidCitations.length > 0
           ? "unverifiable"
-          : claimRepairedCitations.length > 0
-            ? "repaired"
-            : "verified",
+          : !hasCitation(claim)
+            ? isExemptSynthesis
+              ? "synthesis"
+              : "unverifiable"
+            : claimRepairedCitations.length > 0
+              ? "repaired"
+              : "verified",
       citations: claimCitations,
       invalidCitations: claimInvalidCitations,
     } satisfies CitationClaimVerification;

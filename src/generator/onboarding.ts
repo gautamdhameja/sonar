@@ -29,6 +29,7 @@ import { runIterativeRepositorySurvey } from "../survey/iterative-survey";
 import { logger } from "../utils/logger";
 import {
   CitationVerification,
+  CitationVerificationOptions,
   normalizeInvalidCitationsWithMetadata,
   removeInvalidCitationClaims,
   removeUncitedClaims,
@@ -76,32 +77,250 @@ const ONBOARDING_QUERY_PLAN: QueryPlan = {
   reason: "briefing generation should prefer product docs, app/package boundaries, and workflow evidence",
 };
 
-const BRIEFING_PARTS = [
+type SectionFallbackKind =
+  | "Product In One Paragraph"
+  | "Who Uses It And Why"
+  | "Codebase Product Map"
+  | "Top User Workflows"
+  | "Main Systems And Ownership Areas"
+  | "Data, Privacy, And Operational Notes"
+  | "Risks Or Open Questions"
+  | "Glossary For A Non-Deeply-Technical Reader";
+
+interface BriefingSectionSpec {
+  hint: string;
+  fallbackKind: SectionFallbackKind;
+  // Honest, section-appropriate note used when a section is empty and there is no graph or
+  // overview evidence to fall back on. Keeps audience sections (e.g. proof points,
+  // differentiators) from inheriting an engineering-flavored note from their fallbackKind.
+  emptyNote?: string;
+}
+
+// Every briefing section maps to a retrieval hint (what evidence to pull) and a
+// fallbackKind (which built-in fallback writer to reuse when the model leaves it empty).
+// The eight kinds below double as their own sections; audience-specific sections reuse them.
+const SECTION_LIBRARY: Record<string, BriefingSectionSpec> = {
+  "Product In One Paragraph": {
+    hint: "README docs overview purpose product users feature value proposition",
+    fallbackKind: "Product In One Paragraph",
+  },
+  "Who Uses It And Why": {
+    hint: "README docs users customer persona workflow value use case",
+    fallbackKind: "Who Uses It And Why",
+  },
+  "Codebase Product Map": {
+    hint: "app main index package boundary module component route service architecture map",
+    fallbackKind: "Codebase Product Map",
+  },
+  "Top User Workflows": {
+    hint: "workflow lifecycle create upload import process convert share invite access verify authorize view analytics event metric billing limit plan",
+    fallbackKind: "Top User Workflows",
+  },
+  "Main Systems And Ownership Areas": {
+    hint: "architecture subsystem owner module service state manager backend frontend storage api",
+    fallbackKind: "Main Systems And Ownership Areas",
+  },
+  "Data, Privacy, And Operational Notes": {
+    hint: "data flow input editor state buffer render display output save persist disk file storage config environment auth privacy security language server lsp tree-sitter parser grammar integration",
+    fallbackKind: "Data, Privacy, And Operational Notes",
+  },
+  "Risks Or Open Questions": {
+    hint: "risk security privacy persistence error fallback validation configuration dependency operational failure",
+    fallbackKind: "Risks Or Open Questions",
+  },
+  "Glossary For A Non-Deeply-Technical Reader": {
+    hint: "README docs concept terminology glossary domain model workflow component service",
+    fallbackKind: "Glossary For A Non-Deeply-Technical Reader",
+  },
+  "Who It's For And Why They Buy": {
+    hint: "README docs customer buyer user persona value use case audience industry problem job to be done",
+    fallbackKind: "Who Uses It And Why",
+    emptyNote:
+      "The selected evidence does not pin down specific buyers; infer the audience cautiously from the README and core workflows before making buyer claims",
+  },
+  "Capabilities And Differentiators": {
+    hint: "feature capability differentiator advantage unique support option configuration integration mode",
+    fallbackKind: "Codebase Product Map",
+    emptyNote:
+      "The selected evidence did not surface clearly differentiating capabilities for this section; review the cited files for the product's core behavior before making competitive claims",
+  },
+  "Integrations And Data Boundaries": {
+    hint: "integration api adapter endpoint dependency data boundary storage auth network external service provider import export",
+    fallbackKind: "Data, Privacy, And Operational Notes",
+    emptyNote:
+      "The selected evidence does not detail external integrations or data boundaries; treat integration and data-handling claims as unconfirmed until the relevant adapters and config are reviewed",
+  },
+  "Proof Points From The Source": {
+    hint: "feature capability performance limit support test example evidence configuration option",
+    fallbackKind: "Main Systems And Ownership Areas",
+    emptyNote:
+      "No strong source-backed proof points surfaced in the selected evidence for this section; point to the cited files directly rather than making unsupported claims",
+  },
+  "Questions Before You Sell": {
+    hint: "risk limitation dependency validation trust security compliance support boundary maturity",
+    fallbackKind: "Risks Or Open Questions",
+    emptyNote:
+      "Before relying on this for a deal, confirm the product's maturity, data handling, and support boundaries against a broader source review",
+  },
+  "Architecture And Major Systems": {
+    hint: "architecture subsystem module service boundary core engine adapter layer pipeline interface",
+    fallbackKind: "Main Systems And Ownership Areas",
+    emptyNote:
+      "The selected evidence is too thin to map the architecture confidently; start from the cited entry and core files before describing the system boundaries",
+  },
+  "Core Workflows And Data Flow": {
+    hint: "workflow lifecycle data flow input process output state pipeline request response handler dispatch",
+    fallbackKind: "Top User Workflows",
+    emptyNote:
+      "The selected evidence does not trace a complete data flow; follow the cited entry and handler files to confirm how work moves through the system",
+  },
+  "Where To Start Reading": {
+    hint: "entry main index readme module package core start configuration bootstrap",
+    fallbackKind: "Codebase Product Map",
+    emptyNote:
+      "Start from the cited entry, README, and core module files above; the selected evidence is too thin for a fuller reading guide",
+  },
+  "Capabilities, Boundaries, And Assumptions": {
+    hint: "feature capability boundary assumption limit option configuration scope support dependency",
+    fallbackKind: "Codebase Product Map",
+    emptyNote:
+      "The selected evidence is thin on explicit boundaries and assumptions; treat the cited files as the starting point and confirm scope with the team",
+  },
+  "Product Risks, Gaps, And Dependencies": {
+    hint: "risk gap dependency limitation missing fallback validation configuration assumption",
+    fallbackKind: "Risks Or Open Questions",
+    emptyNote:
+      "The selected evidence does not surface concrete risks or gaps; confirm dependencies and failure paths in the cited files before relying on this",
+  },
+  "High-Leverage Questions": {
+    hint: "question decision risk assumption dependency priority workflow boundary",
+    fallbackKind: "Risks Or Open Questions",
+    emptyNote:
+      "Frame questions around the cited files' lifecycle, dependencies, and gaps; the selected evidence is not exhaustive",
+  },
+  "Adoption And Onboarding Workflows": {
+    hint: "onboarding setup install configure getting started workflow adoption first run guide quickstart",
+    fallbackKind: "Top User Workflows",
+    emptyNote:
+      "The selected evidence does not lay out a full onboarding path; review the cited setup and configuration files before guiding new users",
+  },
+  "Support Behavior And Failure Modes": {
+    hint: "error failure fallback retry timeout edge case state config support log validation recovery",
+    fallbackKind: "Data, Privacy, And Operational Notes",
+    emptyNote:
+      "The selected evidence does not detail failure modes; review error handling and configuration in the cited files before advising users",
+  },
+  "Escalation Questions For The Team": {
+    hint: "escalation question risk failure dependency support boundary configuration",
+    fallbackKind: "Risks Or Open Questions",
+    emptyNote:
+      "Frame escalation questions around the cited files' failure paths and dependencies; the selected evidence is not exhaustive",
+  },
+  "What It Enables And Why It Matters": {
+    hint: "README docs purpose value capability outcome impact mission strategy problem",
+    fallbackKind: "Product In One Paragraph",
+    emptyNote:
+      "The selected evidence is thin on stated outcomes; read the value of this project from the cited README and core files before drawing strategic conclusions",
+  },
+  "Capabilities And Constraints": {
+    hint: "capability constraint limit boundary scale dependency tradeoff support maturity",
+    fallbackKind: "Main Systems And Ownership Areas",
+    emptyNote:
+      "The selected evidence is thin on constraints; confirm scale, dependencies, and limits against a broader review before making capability claims",
+  },
+  "Strategic And Operational Risks": {
+    hint: "risk security operational scale maintainability dependency compliance failure ownership",
+    fallbackKind: "Risks Or Open Questions",
+    emptyNote:
+      "The selected evidence does not expose concrete strategic or operational risks; confirm scale, ownership, and dependencies in a broader review",
+  },
+  "Priority Decisions And Questions": {
+    hint: "decision priority risk roadmap tradeoff dependency question investment",
+    fallbackKind: "Risks Or Open Questions",
+    emptyNote:
+      "Frame priority decisions around the cited files' dependencies and gaps; the selected evidence is not exhaustive enough to rank investments on its own",
+  },
+};
+
+const DEFAULT_BRIEFING_PLAN: string[][] = [
   ["Product In One Paragraph", "Who Uses It And Why"],
   ["Codebase Product Map"],
   ["Top User Workflows"],
   ["Main Systems And Ownership Areas", "Data, Privacy, And Operational Notes"],
   ["Risks Or Open Questions", "Glossary For A Non-Deeply-Technical Reader"],
 ];
-const BRIEFING_SECTIONS = [...new Set(BRIEFING_PARTS.flat())];
+
+const CUSTOMER_SUCCESS_PLAN: string[][] = [
+  ["Product In One Paragraph", "Who Uses It And Why"],
+  ["Adoption And Onboarding Workflows"],
+  ["Support Behavior And Failure Modes", "Data, Privacy, And Operational Notes"],
+  ["Escalation Questions For The Team"],
+];
+
+// Each audience gets a section set built for what that reader actually needs, not a
+// reskin of the engineering orientation. Unknown roles fall back to the general plan.
+const AUDIENCE_BRIEFING_PLANS: Partial<Record<Persona["role"], string[][]>> = {
+  product_manager: [
+    ["Product In One Paragraph", "Who Uses It And Why"],
+    ["Top User Workflows"],
+    ["Capabilities, Boundaries, And Assumptions"],
+    ["Product Risks, Gaps, And Dependencies", "High-Leverage Questions"],
+  ],
+  engineer: [
+    ["Product In One Paragraph"],
+    ["Architecture And Major Systems"],
+    ["Core Workflows And Data Flow"],
+    ["Codebase Product Map"],
+    ["Risks Or Open Questions", "Where To Start Reading"],
+  ],
+  sales: [
+    ["Product In One Paragraph", "Who It's For And Why They Buy"],
+    ["Capabilities And Differentiators"],
+    ["Integrations And Data Boundaries"],
+    ["Proof Points From The Source"],
+    ["Questions Before You Sell"],
+  ],
+  customer_success: CUSTOMER_SUCCESS_PLAN,
+  support: CUSTOMER_SUCCESS_PLAN,
+  operations: CUSTOMER_SUCCESS_PLAN,
+  executive: [
+    ["Product In One Paragraph"],
+    ["What It Enables And Why It Matters"],
+    ["Capabilities And Constraints"],
+    ["Strategic And Operational Risks"],
+    ["Priority Decisions And Questions"],
+  ],
+};
+
+export function briefingPlanForPersona(persona: Persona): string[][] {
+  return AUDIENCE_BRIEFING_PLANS[persona.role] ?? DEFAULT_BRIEFING_PLAN;
+}
+
+function sectionRetrievalHint(section: string): string {
+  return SECTION_LIBRARY[section]?.hint ?? "";
+}
+
+function sectionFallbackKind(section: string): string {
+  return SECTION_LIBRARY[section]?.fallbackKind ?? section;
+}
+
+// Distilled synthesis sections: kept even when uncited, never overwritten by the
+// citation scrubbers, and only backfilled when genuinely empty.
+const SYNTHESIS_SECTIONS = ["Product In One Paragraph", "What It Enables And Why It Matters"];
+
+function isSynthesisSection(section: string): boolean {
+  return SYNTHESIS_SECTIONS.includes(section);
+}
+
+function verifyBriefCitations(
+  answer: string,
+  contextUnits: CodeUnit[],
+  extra: CitationVerificationOptions = {},
+): CitationVerification {
+  return verifyCitations(answer, contextUnits, { synthesisSections: SYNTHESIS_SECTIONS, ...extra });
+}
 
 const COMPLETE_LINE_PATTERN = /(?:[.!?)]|]|\|)$/;
-
-const SECTION_RETRIEVAL_HINTS: Record<string, string> = {
-  "Product In One Paragraph": "README docs overview purpose product users feature value proposition",
-  "Who Uses It And Why": "README docs users customer persona workflow value use case",
-  "Codebase Product Map": "app main index package boundary module component route service architecture map",
-  "Top User Workflows":
-    "workflow lifecycle create upload import process convert share invite access verify authorize view analytics event metric billing limit plan",
-  "Main Systems And Ownership Areas":
-    "architecture subsystem owner module service state manager backend frontend storage api",
-  "Data, Privacy, And Operational Notes":
-    "data flow input editor state buffer render display output save persist disk file storage config environment auth privacy security language server lsp tree-sitter parser grammar integration",
-  "Risks Or Open Questions":
-    "risk security privacy persistence error fallback validation configuration dependency operational failure",
-  "Glossary For A Non-Deeply-Technical Reader":
-    "README docs concept terminology glossary domain model workflow component service",
-};
 
 function defaultFocus(): string[] {
   return [
@@ -242,8 +461,35 @@ export function selectOnboardingContext(
   return selected;
 }
 
+// Sections that read best when anchored to the README/overview intro (positioning,
+// "what is this", "who buys it"), so we always seed their context with the top of the README.
+const OVERVIEW_INTRO_SECTIONS = new Set([
+  "Product In One Paragraph",
+  "What It Enables And Why It Matters",
+  "Who Uses It And Why",
+  "Who It's For And Why They Buy",
+  "Capabilities And Differentiators",
+]);
+
+function overviewIntroUnits(store: CodeUnitStore, limit = 2): CodeUnit[] {
+  return store
+    .getAllUnits()
+    .filter((unit) => isProductOverviewDoc(unit.filePath))
+    .sort((a, b) => {
+      const aReadme = /(^|\/)readme\.mdx?$/i.test(a.filePath) ? 0 : 1;
+      const bReadme = /(^|\/)readme\.mdx?$/i.test(b.filePath) ? 0 : 1;
+      if (aReadme !== bReadme) return aReadme - bReadme;
+      return a.startLine - b.startLine;
+    })
+    .slice(0, limit);
+}
+
+function sectionsWantOverviewIntro(sections: string[]): boolean {
+  return sections.some((section) => OVERVIEW_INTRO_SECTIONS.has(section));
+}
+
 function buildSectionQuery(baseQuery: string, sections: string[]): string {
-  const sectionHints = sections.map((section) => SECTION_RETRIEVAL_HINTS[section]).filter(Boolean);
+  const sectionHints = sections.map((section) => sectionRetrievalHint(section)).filter(Boolean);
   return [baseQuery, `Sections: ${sections.join(", ")}.`, `Evidence to retrieve: ${sectionHints.join(" ")}.`].join(" ");
 }
 
@@ -271,7 +517,8 @@ function retrieveContextForSections(
       return !isBriefingNoiseFile(unit.filePath);
     });
   const workflowUnits = selectWorkflowPlanUnits(workflowPlan, sections);
-  const orderedCandidates = uniqueUnits([...workflowUnits, ...planned.units, ...candidateUnits]);
+  const introUnits = sectionsWantOverviewIntro(sections) ? overviewIntroUnits(store) : [];
+  const orderedCandidates = uniqueUnits([...introUnits, ...workflowUnits, ...planned.units, ...candidateUnits]);
   const contextUnits = selectOnboardingContext(
     orderedCandidates,
     Math.max(1200, Math.floor(CONFIG.generator.maxContextTokens * ONBOARDING_QUERY_PLAN.maxContextRatio)),
@@ -457,12 +704,21 @@ function cleanOverviewText(value: string): string {
     .trim();
 }
 
+// Install/setup/meta boilerplate that should never become the product description.
+const OVERVIEW_BOILERPLATE_PATTERN =
+  /\b(npm install|yarn add|pnpm add|git clone|getting started|installation|install the|development guide|run the repository locally|instructions are for installing|please refer to|table of contents|code of conduct|contributing guide|quick start|quickstart)\b/i;
+
 function firstOverviewStatement(unit: CodeUnit): string | null {
   const paragraphs = unit.code
     .split(/\n{2,}/)
     .map(cleanOverviewText)
-    .filter((paragraph) => paragraph.length >= 40 && !/^donate\b/i.test(paragraph));
-  const paragraph = paragraphs[0];
+    .filter(
+      (paragraph) =>
+        paragraph.length >= 40 && !/^donate\b/i.test(paragraph) && !OVERVIEW_BOILERPLATE_PATTERN.test(paragraph),
+    );
+  // Prefer a descriptive "<name> is a/an/the ..." paragraph over the first generic one.
+  const descriptive = paragraphs.find((candidate) => /\bis (?:a|an|the|now)\b/i.test(candidate.slice(0, 140)));
+  const paragraph = descriptive ?? paragraphs[0];
   if (!paragraph) return null;
   const firstSentence = paragraph.match(/^(.+?[.!?])(?:\s|$)/)?.[1];
   if (firstSentence && firstSentence.length >= 40) return firstSentence;
@@ -558,7 +814,7 @@ function buildGraphSectionFallback(
   const primary = top(systems.length > 0 ? systems : graphItems, 3);
   const primaryLabels = primary.map((item) => item.node.label).join(", ");
 
-  switch (section) {
+  switch (sectionFallbackKind(section)) {
     case "Product In One Paragraph":
       return `The inspected evidence shows ${primaryLabels} as central repository responsibilities; treat this as a source-backed orientation, not a complete product description ${primary.map((item) => item.citation).join(" ")}.`;
     case "Who Uses It And Why":
@@ -602,54 +858,53 @@ function buildSectionFallback(section: string, units: CodeUnit[], memoryGraph?: 
   const workflowCitation = joinCitations(evidence.ui, evidence.api, evidence.data, units[0]);
   const riskCitation = joinCitations(evidence.auth, evidence.data, evidence.ops, evidence.api, units[0]);
   const overviewFallback = productOverviewFallback(units);
+  const kind = sectionFallbackKind(section);
 
-  switch (section) {
+  // Overview-backed fallback for synthesis/persona sections when a README/overview exists.
+  if (overviewFallback) {
+    if (kind === "Product In One Paragraph") {
+      return `The project overview states that ${citationReadyStatement(overviewFallback.statement)} ${cite(overviewFallback.unit)}.`;
+    }
+    if (kind === "Who Uses It And Why") {
+      return `The clearest user signal in the selected evidence is the project overview: ${citationReadyStatement(overviewFallback.statement)} ${cite(overviewFallback.unit)}.`;
+    }
+  }
+
+  // Audience sections carry a section-appropriate honest note so they do not inherit an
+  // engineering-flavored fallback from their generic fallbackKind.
+  const emptyNote = SECTION_LIBRARY[section]?.emptyNote;
+  if (emptyNote) return `${emptyNote} ${coreCitation}.`;
+
+  switch (kind) {
     case "Product In One Paragraph":
-      if (overviewFallback) {
-        return `The project overview states that ${citationReadyStatement(overviewFallback.statement)} ${cite(overviewFallback.unit)}.`;
-      }
       return `The selected source evidence shows a repository with identifiable entry, workflow, or configuration code; treat this as a cautious source-backed orientation until broader context is inspected ${coreCitation}.`;
     case "Who Uses It And Why":
-      if (overviewFallback) {
-        return `The clearest user signal in the selected evidence is the project overview: ${citationReadyStatement(overviewFallback.statement)} ${cite(overviewFallback.unit)}.`;
-      }
       return `The provided context does not prove exact user personas, but it does show source-backed workflows or operations that people use, run, configure, or maintain ${workflowCitation}.`;
     case "Codebase Product Map":
-      return [
-        `- **Runtime or entry area**: Startup or top-level code is represented in the selected evidence ${joinCitations(evidence.entry, units[0])}.`,
-        `- **Workflow area**: The selected evidence includes code that coordinates repository behavior ${joinCitations(evidence.ui, evidence.api, evidence.data, units[0])}.`,
-        `- **Configuration or operations area**: Configuration, security, or operational evidence should be reviewed before making broader claims ${riskCitation}.`,
-      ].join("\n");
+      return `Source-backed evidence selected for this section was thin; the cited files above are the most relevant starting points and should be reviewed before drawing broader conclusions ${coreCitation}.`;
     case "Top User Workflows":
       return `1. **Primary repository workflow**: Follow the selected entry, workflow, and state/configuration files before making stronger workflow claims ${workflowCitation}.`;
     case "Main Systems And Ownership Areas":
-      return [
-        `- **Runtime and delivery**: Startup or execution evidence is present ${joinCitations(evidence.entry, evidence.api, units[0])}.`,
-        `- **Workflow coordination**: Selected files appear to coordinate repository behavior ${workflowCitation}.`,
-        `- **State or configuration**: Persistence, configuration, service, or storage files should be reviewed as likely ownership boundaries ${joinCitations(evidence.data, evidence.auth, units[0])}.`,
-      ].join("\n");
+      return `The cited files are the clearest system boundaries in the selected evidence; a broader source pass is needed to confirm ownership and responsibilities ${joinCitations(evidence.entry, evidence.data, evidence.api, units[0])}.`;
     case "Data, Privacy, And Operational Notes":
       return `The selected evidence is enough to flag state, configuration, security, or operational review as important, but not enough to make broad privacy or compliance claims ${riskCitation}.`;
     case "Risks Or Open Questions":
       return `- Confirm the complete lifecycle, configuration model, and operational failure paths with broader source review before treating this briefing as complete ${riskCitation}.`;
     case "Glossary For A Non-Deeply-Technical Reader":
-      return [
-        `- **Entry point**: Code that starts or wires the application ${joinCitations(evidence.entry, units[0])}.`,
-        `- **Workflow code**: Code that coordinates a user, operator, or system task ${workflowCitation}.`,
-        `- **State or configuration**: Files that shape how the project stores data, reads settings, or controls behavior ${joinCitations(evidence.data, evidence.auth, units[0])}.`,
-      ].join("\n");
+      return `Key terms for this project are best read from the cited source and documentation above; the selected evidence is too thin for a full glossary ${coreCitation}.`;
     default:
       return `Not enough source-backed evidence was available for this section ${coreCitation}.`;
   }
 }
 
-function shouldBackfillSection(body: string): boolean {
+function shouldBackfillSection(body: string, requireCitation = true): boolean {
   const normalized = body.trim();
-  return (
-    normalized.length === 0 ||
-    /^not found in provided context\.?$/i.test(normalized) ||
-    !/\[[^\]\n]+:\d+(?:-\d+)?\]/.test(normalized)
-  );
+  if (normalized.length === 0) return true;
+  if (/^not found in provided context\.?$/i.test(normalized)) return true;
+  // Synthesis sections (requireCitation = false) keep their distilled paragraph even
+  // when it has no citation; only empty/"not found" bodies are refilled.
+  if (requireCitation && !/\[[^\]\n]+:\d+(?:-\d+)?\]/.test(normalized)) return true;
+  return false;
 }
 
 export function backfillEmptyBriefingSections(
@@ -669,13 +924,23 @@ export function backfillEmptyBriefingSections(
     const nextHeadingIndex = next.slice(start).search(/^###\s+/m);
     const end = nextHeadingIndex >= 0 ? start + nextHeadingIndex : next.length;
     const body = next.slice(start, end);
-    if (!shouldBackfillSection(body)) continue;
+    if (!shouldBackfillSection(body, !isSynthesisSection(section))) continue;
 
     const fallback = `\n${buildSectionFallback(section, units, memoryGraph)}\n\n`;
     next = `${next.slice(0, start)}${fallback}${next.slice(end).replace(/^\n+/, "")}`;
   }
 
   return next.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// In body-only mode the model returns just the section body; emit the canonical heading
+// ourselves and demote any stray headings the model added, so headings never drift.
+function forceSingleSectionHeading(content: string, section: string): string {
+  let body = content.trim();
+  body = body.replace(/^\s*#{1,6}\s+.*(?:\n|$)/, "");
+  body = body.replace(/^#{1,3}\s+/gm, "#### ");
+  body = body.trim();
+  return body.length > 0 ? `### ${section}\n${body}` : `### ${section}`;
 }
 
 async function generateBriefingPart(
@@ -688,6 +953,7 @@ async function generateBriefingPart(
     sections: string[];
     workflowPlanText?: string;
     memoryGraphText?: string;
+    bodyOnly?: boolean;
     signal?: AbortSignal;
   },
 ): Promise<{ content: string; generationTime: number; truncated: boolean }> {
@@ -697,33 +963,38 @@ async function generateBriefingPart(
   const completion = await generateCompletion(prompt.system, prompt.user, { label, signal: options.signal });
   let generationTime = Date.now() - started;
 
+  let content: string;
+  let truncated: boolean;
   if (!completion.truncated) {
-    return { content: completion.content.trim(), generationTime, truncated: false };
+    content = completion.content.trim();
+    truncated = false;
+  } else {
+    const retryStarted = Date.now();
+    const retry = await generateCompletion(
+      prompt.system,
+      [
+        prompt.user,
+        "",
+        "## Retry Constraint",
+        "The previous answer was too long. Return a shorter version under 140 words total.",
+        "Keep the same requested content and preserve citations.",
+      ].join("\n"),
+      { label: `${label} retry-shorter`, signal: options.signal },
+    );
+    generationTime += Date.now() - retryStarted;
+    if (!retry.truncated) {
+      content = retry.content.trim();
+      truncated = false;
+    } else {
+      content = sanitizeTruncatedBriefingPart(retry.content.trim() || completion.content.trim(), options.sections);
+      truncated = true;
+    }
   }
 
-  const retryStarted = Date.now();
-  const retry = await generateCompletion(
-    prompt.system,
-    [
-      prompt.user,
-      "",
-      "## Retry Constraint",
-      "The previous answer was too long. Return a shorter version under 140 words total.",
-      "Keep the same requested section headings and preserve citations.",
-    ].join("\n"),
-    { label: `${label} retry-shorter`, signal: options.signal },
-  );
-  generationTime += Date.now() - retryStarted;
-
-  if (!retry.truncated) {
-    return { content: retry.content.trim(), generationTime, truncated: false };
+  if (options.bodyOnly && options.sections.length === 1) {
+    content = forceSingleSectionHeading(content, options.sections[0]);
   }
-
-  return {
-    content: sanitizeTruncatedBriefingPart(retry.content.trim() || completion.content.trim(), options.sections),
-    generationTime,
-    truncated: true,
-  };
+  return { content, generationTime, truncated };
 }
 
 export async function generateOnboardingBrief(
@@ -742,6 +1013,8 @@ export async function generateOnboardingBrief(
   const audience = options.audience?.trim() || "A teammate trying to understand this repository";
   const focus = options.focus && options.focus.length > 0 ? options.focus.slice(0, 10) : defaultFocus();
   const persona = options.persona ?? DEFAULT_PERSONA;
+  const briefingParts = briefingPlanForPersona(persona);
+  const briefingSections = [...new Set(briefingParts.flat())];
   const query = [
     "Create a high-level, source-grounded codebase briefing for project orientation.",
     "Prioritize product purpose, users, core workflows, important systems, risks, and source landmarks over low-level implementation detail.",
@@ -780,7 +1053,7 @@ export async function generateOnboardingBrief(
 
   const workflowPlan = buildBriefingWorkflowPlan(store);
   const workflowPlanText = workflowPlanToPrompt(workflowPlan);
-  const compactBriefing = localOptimized;
+  const compactBriefing = localOptimized && !CONFIG.generator.multiPassBriefing;
   const promptGraph =
     memoryGraph && compactBriefing
       ? compactMemoryGraph(memoryGraph, 10, 8)
@@ -789,7 +1062,7 @@ export async function generateOnboardingBrief(
         : undefined;
   const memoryGraphText = promptGraph ? formatMemoryGraphForPrompt(promptGraph, compactBriefing ? 10 : 18) : undefined;
   const graphUnits = memoryGraph && options.repoRoot ? await graphSourceUnits(options.repoRoot, memoryGraph) : [];
-  const sectionContexts = BRIEFING_PARTS.map((sections) => ({
+  const sectionContexts = briefingParts.map((sections) => ({
     sections,
     ...retrieveContextForSections(store, query, sections, workflowPlan),
   }));
@@ -810,14 +1083,18 @@ export async function generateOnboardingBrief(
   const generationContexts = compactBriefing
     ? [
         {
-          sections: BRIEFING_SECTIONS,
+          sections: briefingSections,
           contextUnits,
         },
       ]
-    : sectionContexts.map((sectionContext) => ({
-        sections: sectionContext.sections,
-        contextUnits: uniqueUnits([...graphUnits, ...sectionContext.contextUnits]),
-      }));
+    : // Multi-pass: one section per call with deterministic headings, so the local model
+      // cannot drift section names or restate sections (which produced duplicate headings).
+      sectionContexts.flatMap((sectionContext) =>
+        sectionContext.sections.map((section) => ({
+          sections: [section],
+          contextUnits: uniqueUnits([...graphUnits, ...sectionContext.contextUnits]),
+        })),
+      );
   for (const sectionContext of generationContexts) {
     generatedParts.push(
       await generateBriefingPart(sectionContext.contextUnits, {
@@ -828,6 +1105,7 @@ export async function generateOnboardingBrief(
         sections: sectionContext.sections,
         workflowPlanText,
         memoryGraphText,
+        bodyOnly: !compactBriefing,
         signal: options.signal,
       }),
     );
@@ -835,12 +1113,12 @@ export async function generateOnboardingBrief(
   let brief = [`## ${options.repoName} Codebase Briefing`, ...generatedParts.map((part) => part.content)].join("\n\n");
   let generationTruncated = generatedParts.some((part) => part.truncated);
   let generationTime = Date.now() - generationStart;
-  let citationVerification = verifyCitations(brief, contextUnits);
+  let citationVerification = verifyBriefCitations(brief, contextUnits);
   let repaired = false;
 
   if (citationVerification.invalidCitations.length > 0) {
     const normalized = normalizeInvalidCitationsWithMetadata(brief, contextUnits, citationVerification);
-    const normalizedVerification = verifyCitations(normalized.answer, contextUnits, {
+    const normalizedVerification = verifyBriefCitations(normalized.answer, contextUnits, {
       repairedCitations: normalized.repairedCitations,
     });
     if (normalizedVerification.invalidCitations.length < citationVerification.invalidCitations.length) {
@@ -858,7 +1136,7 @@ export async function generateOnboardingBrief(
       signal: options.signal,
     });
     const repairedBrief = repairedCompletion.content;
-    const repairedVerification = verifyCitations(repairedBrief, contextUnits);
+    const repairedVerification = verifyBriefCitations(repairedBrief, contextUnits);
 
     if (
       !repairedCompletion.truncated &&
@@ -875,7 +1153,7 @@ export async function generateOnboardingBrief(
 
   if (citationVerification.invalidCitations.length > 0) {
     const normalized = normalizeInvalidCitationsWithMetadata(brief, contextUnits, citationVerification);
-    const normalizedVerification = verifyCitations(normalized.answer, contextUnits, {
+    const normalizedVerification = verifyBriefCitations(normalized.answer, contextUnits, {
       repairedCitations: normalized.repairedCitations,
     });
     if (normalizedVerification.invalidCitations.length < citationVerification.invalidCitations.length) {
@@ -887,7 +1165,7 @@ export async function generateOnboardingBrief(
 
   if (citationVerification.invalidCitations.length > 0) {
     const scrubbedBrief = removeInvalidCitationClaims(brief, citationVerification);
-    const scrubbedVerification = verifyCitations(scrubbedBrief, contextUnits);
+    const scrubbedVerification = verifyBriefCitations(scrubbedBrief, contextUnits);
     if (
       scrubbedBrief.length >= Math.max(120, brief.length * 0.25) &&
       scrubbedVerification.invalidCitations.length < citationVerification.invalidCitations.length
@@ -900,7 +1178,7 @@ export async function generateOnboardingBrief(
 
   if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
     const scrubbedBrief = removeUncitedClaims(brief, citationVerification);
-    const scrubbedVerification = verifyCitations(scrubbedBrief, contextUnits);
+    const scrubbedVerification = verifyBriefCitations(scrubbedBrief, contextUnits);
     if (
       scrubbedBrief.length >= Math.max(120, brief.length * 0.35) &&
       scrubbedVerification.uncitedClaims.length < citationVerification.uncitedClaims.length
@@ -926,7 +1204,7 @@ export async function generateOnboardingBrief(
       citationVerification,
     );
     if (scrubbedBrief !== brief) {
-      const scrubbedVerification = verifyCitations(scrubbedBrief, contextUnits);
+      const scrubbedVerification = verifyBriefCitations(scrubbedBrief, contextUnits);
       if (
         scrubbedVerification.valid ||
         scrubbedVerification.uncitedClaims.length <= citationVerification.uncitedClaims.length
@@ -940,7 +1218,7 @@ export async function generateOnboardingBrief(
 
   if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
     const scrubbedBrief = removeUncitedClaims(brief, citationVerification);
-    const scrubbedVerification = verifyCitations(scrubbedBrief, contextUnits);
+    const scrubbedVerification = verifyBriefCitations(scrubbedBrief, contextUnits);
     if (scrubbedBrief !== brief) {
       brief = scrubbedBrief;
       citationVerification = scrubbedVerification;
@@ -948,16 +1226,16 @@ export async function generateOnboardingBrief(
     }
   }
 
-  const backfilledBrief = backfillEmptyBriefingSections(brief, BRIEFING_SECTIONS, contextUnits, memoryGraph);
+  const backfilledBrief = backfillEmptyBriefingSections(brief, briefingSections, contextUnits, memoryGraph);
   if (backfilledBrief !== brief) {
     brief = backfilledBrief;
-    citationVerification = verifyCitations(brief, contextUnits);
+    citationVerification = verifyBriefCitations(brief, contextUnits);
     repaired = true;
   }
 
   if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
     const scrubbedBrief = removeUncitedClaims(brief, citationVerification);
-    const scrubbedVerification = verifyCitations(scrubbedBrief, contextUnits);
+    const scrubbedVerification = verifyBriefCitations(scrubbedBrief, contextUnits);
     if (scrubbedBrief !== brief) {
       brief = scrubbedBrief;
       citationVerification = scrubbedVerification;

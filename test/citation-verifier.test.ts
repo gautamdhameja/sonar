@@ -14,6 +14,25 @@ import {
 } from "../src/generator/citation-verifier";
 import { CodeUnit } from "../src/parser/types";
 
+test("verifyCitations exempts synthesis sections from the citation requirement", () => {
+  const brief = [
+    "### Product In One Paragraph",
+    "Sonar turns any repository into a source-grounded briefing for non-engineers who need orientation fast.",
+    "",
+    "### Capabilities And Differentiators",
+    "It indexes code with tree-sitter and cites real line ranges for every claim it makes here.",
+  ].join("\n");
+
+  const withoutPolicy = verifyCitations(brief, []);
+  assert.ok(withoutPolicy.uncitedClaims.length >= 2);
+
+  const withPolicy = verifyCitations(brief, [], { synthesisSections: ["Product In One Paragraph"] });
+  assert.ok(!withPolicy.uncitedClaims.some((claim) => /turns any repository/i.test(claim)));
+  assert.ok(withPolicy.uncitedClaims.some((claim) => /indexes code with tree-sitter/i.test(claim)));
+  const synthesisClaim = withPolicy.claims.find((claim) => /turns any repository/i.test(claim.text));
+  assert.equal(synthesisClaim?.status, "synthesis");
+});
+
 const unit: CodeUnit = {
   id: "unit-1",
   filePath: "src/llama/config.ts",

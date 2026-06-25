@@ -76,6 +76,20 @@ test("buildOnboardingBriefPartPrompt gives Top User Workflows a lifecycle contra
   assert.match(prompt.user, /Do not say implementation evidence is missing/);
 });
 
+test("buildOnboardingBriefPartPrompt body-only mode suppresses headings for a single section", () => {
+  const prompt = buildOnboardingBriefPartPrompt([unit], {
+    repoName: "Acme",
+    audience: "A technical teammate",
+    focus: ["architecture"],
+    sections: ["Architecture And Major Systems"],
+    bodyOnly: true,
+  });
+
+  assert.match(prompt.user, /Write only the body content for the section "Architecture And Major Systems"/);
+  assert.match(prompt.user, /Do not write the section heading/);
+  assert.doesNotMatch(prompt.user, /Use `###` headings matching the section names exactly/);
+});
+
 test("buildOnboardingBriefPartPrompt places memory graph before raw source context", () => {
   const prompt = buildOnboardingBriefPartPrompt([unit], {
     repoName: "Acme",

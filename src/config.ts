@@ -33,6 +33,7 @@ export interface SonarConfig {
     maxContextTokens: number;
     maxResponseTokens: number;
     temperature: number;
+    multiPassBriefing: boolean;
   };
   storage: {
     dataDir: string;
@@ -199,6 +200,10 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       maxContextTokens: getInteger(env, "SONAR_MAX_CONTEXT_TOKENS", 1800),
       maxResponseTokens: getInteger(env, "SONAR_MAX_RESPONSE_TOKENS", 1800),
       temperature: getNumber(env, "SONAR_TEMPERATURE", 0.1),
+      // When true, generate the briefing one section-group at a time even on local
+      // endpoints. Slower, but each section gets focused attention — far more reliable
+      // section coverage from smaller local models.
+      multiPassBriefing: getBoolean(env, "SONAR_BRIEFING_MULTIPASS", false),
     },
     storage: {
       dataDir,

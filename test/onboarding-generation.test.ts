@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   backfillEmptyBriefingSections,
+  briefingPlanForPersona,
   sanitizeTruncatedBriefingPart,
   selectOnboardingContext,
   sourceListWithCitations,
 } from "../src/generator/onboarding";
+import { DEFAULT_PERSONA } from "../src/persona/types";
+import { CodeUnit } from "../src/parser/types";
 import { normalizeInvalidCitations, verifyCitations } from "../src/generator/citation-verifier";
 import { graphSourceUnits } from "../src/generator/source-fallback";
 import path from "node:path";
@@ -50,6 +53,110 @@ test("sanitizeTruncatedBriefingPart removes incomplete trailing fragments and fi
   assert.doesNotMatch(result, /\[src\/app\.ts:$/);
   assert.match(result, /### Main Systems And Ownership Areas\nNot found in provided context/);
   assert.match(result, /### Risks Or Open Questions\nNot found in provided context/);
+});
+
+test("briefingPlanForPersona tailors sections to each audience", () => {
+  const sales = briefingPlanForPersona({ ...DEFAULT_PERSONA, role: "sales" }).flat();
+  assert.ok(sales.includes("Capabilities And Differentiators"));
+  assert.ok(sales.includes("Integrations And Data Boundaries"));
+  assert.ok(sales.includes("Proof Points From The Source"));
+  assert.ok(!sales.includes("Codebase Product Map"));
+  assert.ok(!sales.includes("Glossary For A Non-Deeply-Technical Reader"));
+
+  const engineer = briefingPlanForPersona({ ...DEFAULT_PERSONA, role: "engineer" }).flat();
+  assert.ok(engineer.includes("Architecture And Major Systems"));
+  assert.ok(engineer.includes("Core Workflows And Data Flow"));
+
+  const executive = briefingPlanForPersona({ ...DEFAULT_PERSONA, role: "executive" }).flat();
+  assert.ok(executive.includes("Priority Decisions And Questions"));
+
+  // Unknown roles keep the original general-purpose plan.
+  const other = briefingPlanForPersona({ ...DEFAULT_PERSONA, role: "other" }).flat();
+  assert.deepEqual(other, [
+    "Product In One Paragraph",
+    "Who Uses It And Why",
+    "Codebase Product Map",
+    "Top User Workflows",
+    "Main Systems And Ownership Areas",
+    "Data, Privacy, And Operational Notes",
+    "Risks Or Open Questions",
+    "Glossary For A Non-Deeply-Technical Reader",
+  ]);
+});
+
+test("product overview fallback skips install boilerplate and uses the description", () => {
+  const readme: CodeUnit = {
+    id: "readme",
+    filePath: "README.md",
+    language: "markdown",
+    kind: "module",
+    name: "README",
+    code: [
+      "# Acme",
+      "",
+      "To get started, run npm install acme and refer to our Development Guide.",
+      "",
+      "Acme is a privacy-first analytics platform for product teams.",
+    ].join("\n"),
+    startLine: 1,
+    endLine: 5,
+    parentName: null,
+    imports: [],
+    docstring: null,
+    exportedNames: [],
+    calledFunctions: [],
+    isVendored: false,
+  };
+  const brief = ["## Acme Codebase Briefing", "", "### Product In One Paragraph", ""].join("\n");
+
+  const filled = backfillEmptyBriefingSections(brief, ["Product In One Paragraph"], [readme]);
+
+  assert.match(filled, /privacy.first analytics platform/i);
+  assert.doesNotMatch(filled, /npm install/i);
+  assert.doesNotMatch(filled, /Development Guide/i);
+});
+
+test("backfillEmptyBriefingSections uses audience-appropriate notes, not engineering fallbacks", () => {
+  const units: CodeUnit[] = [
+    {
+      id: "u1",
+      filePath: "src/index.ts",
+      language: "typescript",
+      kind: "module",
+      name: "index",
+      code: "export const x = 1;",
+      startLine: 1,
+      endLine: 3,
+      parentName: null,
+      imports: [],
+      docstring: null,
+      exportedNames: ["x"],
+      calledFunctions: [],
+      isVendored: false,
+    },
+  ];
+  const brief = [
+    "## demo Codebase Briefing",
+    "",
+    "### Capabilities And Differentiators",
+    "",
+    "### Proof Points From The Source",
+    "",
+  ].join("\n");
+
+  const filled = backfillEmptyBriefingSections(
+    brief,
+    ["Capabilities And Differentiators", "Proof Points From The Source"],
+    units,
+  );
+
+  // No engineering-flavored fallback content under sales headings.
+  assert.doesNotMatch(filled, /Runtime or entry area|Workflow coordination|system boundaries/i);
+  // Section-appropriate notes instead.
+  assert.match(filled, /differentiating capabilities/i);
+  assert.match(filled, /proof points/i);
+  // Still grounded with a citation so it is not re-flagged as empty.
+  assert.match(filled, /\[src\/index\.ts:1-3\]/);
 });
 
 test("backfillEmptyBriefingSections fills empty required sections with cited conservative evidence", () => {

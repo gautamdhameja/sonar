@@ -89,7 +89,7 @@ export interface CitationVerification {
 
 export interface CitationClaimVerification {
   text: string;
-  status: "verified" | "repaired" | "unverifiable";
+  status: "verified" | "repaired" | "unverifiable" | "synthesis";
   citations: string[];
   invalidCitations: string[];
 }
