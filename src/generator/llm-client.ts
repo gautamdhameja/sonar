@@ -20,6 +20,10 @@ export interface LlmCompletion {
 export interface LlmCompletionOptions {
   label?: string;
   signal?: AbortSignal;
+  maxResponseTokens?: number;
+  temperature?: number;
+  responseFormat?: Record<string, unknown>;
+  grammar?: string;
 }
 
 type TokenLimitParam = "max_tokens" | "max_completion_tokens";
@@ -38,6 +42,7 @@ type ChatCompletionCreate = (
 ) => Promise<ChatCompletionResult>;
 
 let preferredTokenLimitParam: TokenLimitParam = defaultTokenLimitParam();
+let loggedConstrainedFallback = false;
 
 let createChatCompletion: ChatCompletionCreate = async (body, options) =>
   (await client.chat.completions.create(body as never, options)) as ChatCompletionResult;
@@ -52,6 +57,7 @@ export function __setChatCompletionCreateForTest(create: ChatCompletionCreate): 
 
 export function __resetPreferredTokenLimitParamForTest(): void {
   preferredTokenLimitParam = defaultTokenLimitParam();
+  loggedConstrainedFallback = false;
 }
 
 function defaultTokenLimitParam(): TokenLimitParam {
@@ -89,6 +95,27 @@ function unsupportedParameter(err: unknown): string | null {
   const message = typeof error.message === "string" ? error.message : "";
   if (code === "unsupported_parameter" || /unsupported parameter/i.test(message)) return param;
   return null;
+}
+
+function constrainedOutputRejected(err: unknown): boolean {
+  const rejectedParam = unsupportedParameter(err);
+  if (rejectedParam && ["grammar", "response_format", "json_schema"].includes(rejectedParam)) return true;
+
+  const status = errorStatus(err);
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    status === 400 &&
+    /(grammar|response[_ -]?format|json[_ -]?schema|unsupported|unknown|unrecognized|invalid request)/i.test(message)
+  );
+}
+
+function stripConstrainedOutputFields(request: Record<string, unknown>): Record<string, unknown> {
+  const { grammar: _grammar, response_format: _responseFormat, json_schema: _jsonSchema, ...rest } = request;
+  return rest;
+}
+
+function hasConstrainedOutputFields(request: Record<string, unknown>): boolean {
+  return request.grammar !== undefined || request.response_format !== undefined || request.json_schema !== undefined;
 }
 
 function roughTokens(text: string): number {
@@ -156,28 +183,43 @@ export function classifyLlmError(err: unknown): LlmGenerationError {
 async function createChatCompletionWithTokenParamFallback(
   request: Record<string, unknown>,
   signal?: AbortSignal,
+  maxResponseTokens = CONFIG.generator.maxResponseTokens,
 ): Promise<ChatCompletionResult> {
   try {
     return await createChatCompletion(
       {
         ...request,
-        [preferredTokenLimitParam]: CONFIG.generator.maxResponseTokens,
+        [preferredTokenLimitParam]: maxResponseTokens,
       },
       { signal },
     );
   } catch (err) {
     const rejectedParam = unsupportedParameter(err);
-    if (rejectedParam !== preferredTokenLimitParam) throw err;
+    if (rejectedParam === preferredTokenLimitParam) {
+      preferredTokenLimitParam = preferredTokenLimitParam === "max_tokens" ? "max_completion_tokens" : "max_tokens";
+      logger.info(`Retrying LLM generation with ${preferredTokenLimitParam}`);
+      return createChatCompletion(
+        {
+          ...request,
+          [preferredTokenLimitParam]: maxResponseTokens,
+        },
+        { signal },
+      );
+    }
 
-    preferredTokenLimitParam = preferredTokenLimitParam === "max_tokens" ? "max_completion_tokens" : "max_tokens";
-    logger.info(`Retrying LLM generation with ${preferredTokenLimitParam}`);
-    return createChatCompletion(
-      {
-        ...request,
-        [preferredTokenLimitParam]: CONFIG.generator.maxResponseTokens,
-      },
-      { signal },
-    );
+    if (hasConstrainedOutputFields(request) && constrainedOutputRejected(err)) {
+      if (!loggedConstrainedFallback) {
+        logger.info("Retrying LLM generation without constrained output fields after model endpoint rejection");
+        loggedConstrainedFallback = true;
+      }
+      return createChatCompletionWithTokenParamFallback(
+        stripConstrainedOutputFields(request),
+        signal,
+        maxResponseTokens,
+      );
+    }
+
+    throw err;
   }
 }
 
@@ -190,11 +232,12 @@ async function createChatCompletionWithRetries(
   request: Record<string, unknown>,
   label: string,
   signal?: AbortSignal,
+  maxResponseTokens?: number,
 ): Promise<ChatCompletionResult> {
   let attempt = 0;
   while (true) {
     try {
-      return await createChatCompletionWithTokenParamFallback(request, signal);
+      return await createChatCompletionWithTokenParamFallback(request, signal, maxResponseTokens);
     } catch (err) {
       if (isOperationAborted(err) || !shouldRetryLlmRequest(err, attempt)) throw err;
       attempt += 1;
@@ -210,12 +253,14 @@ export async function generateCompletion(
 ): Promise<LlmCompletion> {
   const label = options.label ?? defaultLabel(system);
   const disableLocalReasoning = shouldDisableLocalReasoning();
+  const maxResponseTokens = options.maxResponseTokens ?? CONFIG.generator.maxResponseTokens;
+  const temperature = options.temperature ?? CONFIG.generator.temperature;
   const started = Date.now();
   const promptChars = system.length + user.length;
   logger.info(
     `LLM start: ${label}; model=${CONFIG.chat.model}; promptChars=${promptChars}; promptTokens≈${roughTokens(
       `${system}\n${user}`,
-    )}; maxResponseTokens=${CONFIG.generator.maxResponseTokens}; tokenParam=${preferredTokenLimitParam}; reasoningDisabled=${disableLocalReasoning}`,
+    )}; maxResponseTokens=${maxResponseTokens}; tokenParam=${preferredTokenLimitParam}; reasoningDisabled=${disableLocalReasoning}`,
   );
   try {
     const localReasoningOptions = disableLocalReasoning
@@ -231,10 +276,12 @@ export async function generateCompletion(
         { role: "system" as const, content: system },
         { role: "user" as const, content: user },
       ],
-      temperature: CONFIG.generator.temperature,
+      temperature,
+      ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
+      ...(options.grammar ? { grammar: options.grammar } : {}),
       ...localReasoningOptions,
     };
-    const completion = await createChatCompletionWithRetries(request, label, options.signal);
+    const completion = await createChatCompletionWithRetries(request, label, options.signal, maxResponseTokens);
 
     const choice = completion.choices[0];
     const finishReason = choice.finish_reason ?? null;

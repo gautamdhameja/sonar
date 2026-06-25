@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { CodeUnit } from "../src/parser/types";
 import { buildCitationRepairPrompt, buildOnboardingBriefPartPrompt } from "../src/generator/onboarding-prompt";
+import { citationTagForUnit } from "../src/generator/source-context";
 
 const unit: CodeUnit = {
   id: "unit-1",
@@ -57,6 +58,32 @@ test("buildOnboardingBriefPartPrompt scopes output to requested sections", () =>
   assert.match(prompt.user, /Internal Workflow Map/);
   assert.match(prompt.user, /Product hypothesis: Acme shares documents/);
   assert.match(prompt.user, /Return only these requested sections/);
+});
+
+test("buildOnboardingBriefPartPrompt includes an exact allowed citation menu for non-synthesis sections", () => {
+  const prompt = buildOnboardingBriefPartPrompt([unit], {
+    repoName: "Acme",
+    audience: "A product manager joining the team",
+    focus: ["sharing"],
+    sections: ["Top User Workflows"],
+  });
+
+  assert.match(prompt.user, /## Allowed Citations/);
+  assert.match(prompt.user, new RegExp(`\\[${citationTagForUnit(unit).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\]`));
+  assert.match(prompt.system, /Every citation must be copied verbatim from the Allowed Citations list/);
+  assert.ok(prompt.user.indexOf("## Allowed Citations") < prompt.user.indexOf("## Source Context"));
+});
+
+test("buildOnboardingBriefPartPrompt omits the citation menu for synthesis-only parts", () => {
+  const prompt = buildOnboardingBriefPartPrompt([unit], {
+    repoName: "Acme",
+    audience: "An executive",
+    focus: ["overview"],
+    sections: ["Product In One Paragraph", "What It Enables And Why It Matters"],
+  });
+
+  assert.doesNotMatch(prompt.user, /## Allowed Citations/);
+  assert.doesNotMatch(prompt.system, /Every citation must be copied verbatim from the Allowed Citations list/);
 });
 
 test("buildOnboardingBriefPartPrompt gives Top User Workflows a lifecycle contract", () => {

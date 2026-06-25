@@ -34,6 +34,11 @@ export interface SonarConfig {
     maxResponseTokens: number;
     temperature: number;
     multiPassBriefing: boolean;
+    citationMenu: boolean;
+    sectionEvidenceLimit: number;
+    citationRepairSelection: boolean;
+    citationRepairMaxCalls: number;
+    twoStageBriefing: boolean;
   };
   storage: {
     dataDir: string;
@@ -204,6 +209,11 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       // endpoints. Slower, but each section gets focused attention — far more reliable
       // section coverage from smaller local models.
       multiPassBriefing: getBoolean(env, "SONAR_BRIEFING_MULTIPASS", true),
+      citationMenu: getBoolean(env, "SONAR_CITATION_MENU", true),
+      sectionEvidenceLimit: getInteger(env, "SONAR_SECTION_EVIDENCE_LIMIT", 12),
+      citationRepairSelection: getBoolean(env, "SONAR_CITATION_REPAIR_SELECTION", true),
+      citationRepairMaxCalls: getInteger(env, "SONAR_CITATION_REPAIR_MAX_CALLS", 12),
+      twoStageBriefing: getBoolean(env, "SONAR_TWO_STAGE_BRIEFING", false),
     },
     storage: {
       dataDir,

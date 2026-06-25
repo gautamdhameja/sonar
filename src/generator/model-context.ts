@@ -7,6 +7,12 @@ const MAX_CONTEXT_BUDGET_TOKENS = 24_000;
 const MIN_RESPONSE_BUDGET_TOKENS = 1_800;
 const MAX_RESPONSE_BUDGET_TOKENS = 4_000;
 
+let supportsGrammar = false;
+
+export function modelSupportsGrammar(): boolean {
+  return supportsGrammar;
+}
+
 export function responseBudgetFromWindow(contextWindowTokens: number): number {
   // Give the model room to write a full section. Scales with the window but is capped so
   // local generation stays interactive; large windows get the full ceiling.
@@ -62,11 +68,12 @@ export function contextBudgetFromWindow(
 }
 
 export async function configureDynamicContextBudget(): Promise<ModelContextBudget | null> {
+  supportsGrammar = false;
+  const explicitContextBudget = Boolean(process.env.SONAR_MAX_CONTEXT_TOKENS?.trim());
   if (process.env.SONAR_MAX_CONTEXT_TOKENS?.trim()) {
     logger.info(
-      `Using explicit SONAR_MAX_CONTEXT_TOKENS=${CONFIG.generator.maxContextTokens}; skipping model /props context probe`,
+      `Using explicit SONAR_MAX_CONTEXT_TOKENS=${CONFIG.generator.maxContextTokens}; /props probe will not change source context budget`,
     );
-    return null;
   }
 
   for (const propsUrl of propsEndpointCandidates(CONFIG.chat.baseUrl)) {
@@ -77,10 +84,13 @@ export async function configureDynamicContextBudget(): Promise<ModelContextBudge
       const contextWindowTokens = extractContextWindowTokens(props);
       if (!contextWindowTokens) continue;
 
+      supportsGrammar = true;
       if (!process.env.SONAR_MAX_RESPONSE_TOKENS?.trim()) {
         CONFIG.generator.maxResponseTokens = responseBudgetFromWindow(contextWindowTokens);
       }
-      const maxContextTokens = contextBudgetFromWindow(contextWindowTokens, CONFIG.generator.maxResponseTokens);
+      const maxContextTokens = explicitContextBudget
+        ? CONFIG.generator.maxContextTokens
+        : contextBudgetFromWindow(contextWindowTokens, CONFIG.generator.maxResponseTokens);
       CONFIG.generator.maxContextTokens = maxContextTokens;
       logger.info(
         `Model context window detected from ${propsUrl}: n_ctx=${contextWindowTokens}; sourceContextBudget=${maxContextTokens}; responseBudget=${CONFIG.generator.maxResponseTokens}`,

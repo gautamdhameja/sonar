@@ -27,6 +27,7 @@ import {
 } from "../survey/memory-graph";
 import { runIterativeRepositorySurvey } from "../survey/iterative-survey";
 import { logger } from "../utils/logger";
+import { attachCitationsBySelection, CitationSelectionRepairResult } from "./citation-repair-by-selection";
 import {
   CitationVerification,
   CitationVerificationOptions,
@@ -41,7 +42,8 @@ import {
   verifyCitations,
 } from "./citation-verifier";
 import { generateCompletion } from "./llm-client";
-import { buildCitationRepairPrompt, buildOnboardingBriefPartPrompt } from "./onboarding-prompt";
+import { buildCitationRepairPrompt, buildOnboardingBriefPartPrompt, wordLimitForSections } from "./onboarding-prompt";
+import { composeSectionFromEvidence, EvidenceLedger, extractSectionEvidence } from "./section-evidence";
 import { graphSourceUnits } from "./source-fallback";
 
 export interface OnboardingBriefResult {
@@ -434,6 +436,52 @@ function uniqueDiagnostics(diagnostics: OnboardingRetrievalDiagnostic[]): Onboar
     output.push(item);
   }
   return output;
+}
+
+function sectionEvidenceTerms(section: string): string[] {
+  const text = `${section} ${sectionRetrievalHint(section)}`;
+  return Array.from(
+    new Set(
+      text
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .map((term) => term.trim())
+        .filter((term) => term.length >= 3),
+    ),
+  );
+}
+
+function sectionEvidenceScore(unit: CodeUnit, terms: string[]): number {
+  const filePath = unit.filePath.toLowerCase();
+  const name = unit.name.toLowerCase();
+  const code = unit.code.toLowerCase();
+  let score = 0;
+
+  for (const term of terms) {
+    if (name.includes(term)) score += 5;
+    if (filePath.includes(term)) score += 4;
+    if (unit.exportedNames.some((exported) => exported.toLowerCase().includes(term))) score += 3;
+    if (code.includes(term)) score += 1;
+  }
+
+  if (isProductOverviewDoc(unit.filePath)) score += 2;
+  if (classifyBriefingEvidence(unit.filePath).some((bucket) => bucket === "workflow_jobs")) score += 2;
+  return score;
+}
+
+export function selectSectionEvidence(units: CodeUnit[], section: string, limit: number): CodeUnit[] {
+  if (limit <= 0) return [];
+  const terms = sectionEvidenceTerms(section);
+  return [...units]
+    .map((unit, index) => ({
+      unit,
+      index,
+      score: sectionEvidenceScore(unit, terms),
+      tokens: estimateTokens(unit.code),
+    }))
+    .sort((a, b) => b.score - a.score || a.tokens - b.tokens || a.index - b.index)
+    .slice(0, limit)
+    .map((entry) => entry.unit);
 }
 
 export function selectOnboardingContext(
@@ -1004,7 +1052,11 @@ async function generateBriefingPart(
     signal?: AbortSignal;
   },
 ): Promise<{ content: string; generationTime: number; truncated: boolean }> {
-  const prompt = buildOnboardingBriefPartPrompt(contextUnits, options);
+  const promptUnits =
+    options.sections.length === 1 && !isSynthesisSection(options.sections[0])
+      ? selectSectionEvidence(contextUnits, options.sections[0], CONFIG.generator.sectionEvidenceLimit)
+      : contextUnits;
+  const prompt = buildOnboardingBriefPartPrompt(promptUnits, options);
   const label = `briefing-part ${options.repoName}: ${options.sections.join(" + ")}`;
   const started = Date.now();
   const completion = await generateCompletion(prompt.system, prompt.user, { label, signal: options.signal });
@@ -1042,6 +1094,64 @@ async function generateBriefingPart(
     content = forceSingleSectionHeading(content, options.sections[0]);
   }
   return { content, generationTime, truncated };
+}
+
+async function generateBriefingPartWithEvidence(
+  contextUnits: CodeUnit[],
+  options: {
+    repoName: string;
+    audience: string;
+    focus: string[];
+    persona: Persona;
+    sections: string[];
+    workflowPlanText?: string;
+    memoryGraphText?: string;
+    bodyOnly?: boolean;
+    signal?: AbortSignal;
+    evidenceLedger: EvidenceLedger;
+  },
+): Promise<{ content: string; generationTime: number; truncated: boolean }> {
+  if (!CONFIG.generator.twoStageBriefing || options.sections.length !== 1 || isSynthesisSection(options.sections[0])) {
+    return generateBriefingPart(contextUnits, options);
+  }
+
+  const section = options.sections[0];
+  const evidenceUnits = selectSectionEvidence(contextUnits, section, CONFIG.generator.sectionEvidenceLimit);
+  const started = Date.now();
+  const evidence = await extractSectionEvidence(evidenceUnits, section, {
+    focus: options.focus,
+    persona: options.persona,
+    signal: options.signal,
+    ledger: options.evidenceLedger,
+  });
+  if (evidence.length === 0) {
+    const extractionTime = Date.now() - started;
+    const fallback = await generateBriefingPart(contextUnits, options);
+    return {
+      ...fallback,
+      generationTime: fallback.generationTime + extractionTime,
+    };
+  }
+
+  const body = await composeSectionFromEvidence(evidence, section, {
+    persona: options.persona,
+    wordLimit: wordLimitForSections(options.sections),
+    signal: options.signal,
+  });
+  if (!body.trim()) {
+    const extractionAndComposeTime = Date.now() - started;
+    const fallback = await generateBriefingPart(contextUnits, options);
+    return {
+      ...fallback,
+      generationTime: fallback.generationTime + extractionAndComposeTime,
+    };
+  }
+
+  return {
+    content: forceSingleSectionHeading(body, section),
+    generationTime: Date.now() - started,
+    truncated: false,
+  };
 }
 
 export async function generateOnboardingBrief(
@@ -1127,6 +1237,7 @@ export async function generateOnboardingBrief(
 
   const generationStart = Date.now();
   const generatedParts = [];
+  const evidenceLedger: EvidenceLedger = new Map();
   const generationContexts = compactBriefing
     ? [
         {
@@ -1144,7 +1255,7 @@ export async function generateOnboardingBrief(
       );
   for (const sectionContext of generationContexts) {
     generatedParts.push(
-      await generateBriefingPart(sectionContext.contextUnits, {
+      await generateBriefingPartWithEvidence(sectionContext.contextUnits, {
         repoName: options.repoName,
         audience,
         focus,
@@ -1154,6 +1265,7 @@ export async function generateOnboardingBrief(
         memoryGraphText,
         bodyOnly: !compactBriefing,
         signal: options.signal,
+        evidenceLedger,
       }),
     );
   }
@@ -1161,7 +1273,9 @@ export async function generateOnboardingBrief(
   let generationTruncated = generatedParts.some((part) => part.truncated);
   let generationTime = Date.now() - generationStart;
   let citationVerification = verifyBriefCitations(brief, contextUnits);
+  const invalidPreNormalize = citationVerification.invalidCitations.length;
   let repaired = false;
+  let selectionRepair: CitationSelectionRepairResult = { brief, attached: 0, dropped: 0, calls: 0 };
 
   if (citationVerification.invalidCitations.length > 0) {
     const normalized = normalizeInvalidCitationsWithMetadata(brief, contextUnits, citationVerification);
@@ -1224,14 +1338,13 @@ export async function generateOnboardingBrief(
   }
 
   if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
-    const scrubbedBrief = removeUncitedClaims(brief, citationVerification);
-    const scrubbedVerification = verifyBriefCitations(scrubbedBrief, contextUnits);
-    if (
-      scrubbedBrief.length >= Math.max(120, brief.length * 0.35) &&
-      scrubbedVerification.uncitedClaims.length < citationVerification.uncitedClaims.length
-    ) {
-      brief = scrubbedBrief;
-      citationVerification = scrubbedVerification;
+    selectionRepair = await attachCitationsBySelection(brief, contextUnits, citationVerification, {
+      signal: options.signal,
+      maxCalls: CONFIG.generator.citationRepairMaxCalls,
+    });
+    if (selectionRepair.brief !== brief) {
+      brief = selectionRepair.brief;
+      citationVerification = verifyBriefCitations(brief, contextUnits);
       repaired = true;
     }
   }
@@ -1281,6 +1394,27 @@ export async function generateOnboardingBrief(
   }
 
   if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
+    const remainingSelectionCalls = Math.max(0, CONFIG.generator.citationRepairMaxCalls - selectionRepair.calls);
+    if (remainingSelectionCalls > 0) {
+      const backfillSelectionRepair = await attachCitationsBySelection(brief, contextUnits, citationVerification, {
+        signal: options.signal,
+        maxCalls: remainingSelectionCalls,
+      });
+      selectionRepair = {
+        brief: backfillSelectionRepair.brief,
+        attached: selectionRepair.attached + backfillSelectionRepair.attached,
+        dropped: selectionRepair.dropped + backfillSelectionRepair.dropped,
+        calls: selectionRepair.calls + backfillSelectionRepair.calls,
+      };
+      if (backfillSelectionRepair.brief !== brief) {
+        brief = backfillSelectionRepair.brief;
+        citationVerification = verifyBriefCitations(brief, contextUnits);
+        repaired = true;
+      }
+    }
+  }
+
+  if (citationVerification.invalidCitations.length === 0 && citationVerification.uncitedClaims.length > 0) {
     const scrubbedBrief = removeUncitedClaims(brief, citationVerification);
     const scrubbedVerification = verifyBriefCitations(scrubbedBrief, contextUnits);
     if (scrubbedBrief !== brief) {
@@ -1295,6 +1429,12 @@ export async function generateOnboardingBrief(
     brief = tidiedBrief;
     citationVerification = verifyBriefCitations(brief, contextUnits);
   }
+
+  logger.info(
+    `briefing citation coverage: cited=${citationVerification.citations.length} uncited=${citationVerification.uncitedClaims.length} invalidPreNormalize=${invalidPreNormalize} repaired=${Number(
+      repaired,
+    )}; selectionAttached=${selectionRepair.attached}; twoStage=${CONFIG.generator.twoStageBriefing ? "on" : "off"}`,
+  );
 
   return {
     projectId: options.projectId,

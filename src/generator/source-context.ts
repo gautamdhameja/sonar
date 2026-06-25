@@ -9,10 +9,14 @@ function escapeFenceBreakouts(text: string): string {
   return text.replace(/```/g, "``\\`");
 }
 
+export function citationTagForUnit(unit: CodeUnit): string {
+  return `${unit.filePath}:${unit.startLine}-${unit.endLine}`;
+}
+
 export function formatCodeUnitForPrompt(unit: CodeUnit): string {
   const code = escapeFenceBreakouts(redactSensitiveText(unit.filePath, unit.code));
   return [
-    `### ${unit.filePath}:${unit.startLine}-${unit.endLine} - ${unit.kind} ${unit.name}`,
+    `### ${citationTagForUnit(unit)} - ${unit.kind} ${unit.name}`,
     `\`\`\`${safeFenceLanguage(unit.language)}`,
     code,
     "```",

@@ -4,6 +4,7 @@ import {
   backfillEmptyBriefingSections,
   briefingPlanForPersona,
   sanitizeTruncatedBriefingPart,
+  selectSectionEvidence,
   selectOnboardingContext,
   sourceListWithCitations,
   tidyBriefingStructure,
@@ -255,6 +256,19 @@ test("selectOnboardingContext keeps true overview docs before narrow docs", () =
   );
 
   assert.equal(selected[0]?.filePath, "README.md");
+});
+
+test("selectSectionEvidence caps units and ranks section-relevant evidence first", () => {
+  const workflowUnit = unit(
+    "src/workflows/share.ts",
+    1,
+    20,
+    "export function shareWorkflow() { return 'create share access workflow'; }",
+  );
+  const irrelevantUnit = unit("src/theme/colors.ts", 1, 10, "export const palette = ['red', 'blue'];");
+  const selected = selectSectionEvidence([irrelevantUnit, workflowUnit], "Top User Workflows", 1);
+
+  assert.deepEqual(selected, [workflowUnit]);
 });
 
 test("backfillEmptyBriefingSections prefers memory graph evidence over web-app assumptions", () => {

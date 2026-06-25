@@ -84,6 +84,20 @@ name from the first returned model. If you use a different localhost port, enter
 
 If you use a different local runtime or port, keep it running and enter that base URL in Sonar's first-run setup screen.
 
+Sonar's citation harness is enabled by default for local briefings. These optional environment flags are available for
+measurement or rollback when launching the workspace engine:
+
+```text
+SONAR_CITATION_MENU=true
+SONAR_SECTION_EVIDENCE_LIMIT=12
+SONAR_CITATION_REPAIR_SELECTION=true
+SONAR_CITATION_REPAIR_MAX_CALLS=12
+SONAR_TWO_STAGE_BRIEFING=false
+```
+
+The first four settings keep citation generation as a closed-set copy task and repair remaining uncited claims by
+selection. `SONAR_TWO_STAGE_BRIEFING=true` enables the experimental evidence-first path for non-synthesis sections.
+
 ## 3. Build Sonar
 
 ```bash

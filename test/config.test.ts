@@ -21,6 +21,11 @@ test("loadConfig provides local defaults", () => {
   assert.equal(config.generator.maxContextTokens, 1800);
   assert.equal(config.generator.maxResponseTokens, 1800);
   assert.equal(config.generator.multiPassBriefing, true);
+  assert.equal(config.generator.citationMenu, true);
+  assert.equal(config.generator.sectionEvidenceLimit, 12);
+  assert.equal(config.generator.citationRepairSelection, true);
+  assert.equal(config.generator.citationRepairMaxCalls, 12);
+  assert.equal(config.generator.twoStageBriefing, false);
   assert.ok(config.parser.supportedLanguages.includes("ruby"));
   assert.ok(config.parser.supportedLanguages.includes("swift"));
   assert.deepEqual(config.security.allowedRepoRoots, [process.cwd()]);
@@ -43,6 +48,11 @@ test("loadConfig reads environment overrides", () => {
     SONAR_ALLOWED_REPO_ROOTS: "/tmp/repos,/Users/example/repos",
     SONAR_ALLOW_ANY_REPO_ROOT: "true",
     SONAR_BRIEFING_MULTIPASS: "false",
+    SONAR_CITATION_MENU: "false",
+    SONAR_SECTION_EVIDENCE_LIMIT: "8",
+    SONAR_CITATION_REPAIR_SELECTION: "false",
+    SONAR_CITATION_REPAIR_MAX_CALLS: "4",
+    SONAR_TWO_STAGE_BRIEFING: "true",
   });
 
   assert.equal(config.chat.baseUrl, "http://127.0.0.1:9000/v1");
@@ -58,6 +68,11 @@ test("loadConfig reads environment overrides", () => {
   assert.equal(config.security.allowAnyRepoRoot, true);
   assert.equal(config.security.apiToken, "dev-token");
   assert.equal(config.generator.multiPassBriefing, false);
+  assert.equal(config.generator.citationMenu, false);
+  assert.equal(config.generator.sectionEvidenceLimit, 8);
+  assert.equal(config.generator.citationRepairSelection, false);
+  assert.equal(config.generator.citationRepairMaxCalls, 4);
+  assert.equal(config.generator.twoStageBriefing, true);
 });
 
 test("loadConfig rejects invalid numeric values", () => {
