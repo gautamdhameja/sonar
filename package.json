@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "description": "Understand any codebase. Ask what matters.",
   "license": "MIT",
+  "private": true,
+  "author": "Gautam Dhameja",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gautamdhameja/sonar.git"
+  },
   "main": "dist/index.js",
   "packageManager": "npm@11.12.1",
   "engines": {
