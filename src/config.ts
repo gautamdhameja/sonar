@@ -203,7 +203,7 @@ export function loadConfig(env: Env = process.env): SonarConfig {
       // When true, generate the briefing one section-group at a time even on local
       // endpoints. Slower, but each section gets focused attention — far more reliable
       // section coverage from smaller local models.
-      multiPassBriefing: getBoolean(env, "SONAR_BRIEFING_MULTIPASS", false),
+      multiPassBriefing: getBoolean(env, "SONAR_BRIEFING_MULTIPASS", true),
     },
     storage: {
       dataDir,

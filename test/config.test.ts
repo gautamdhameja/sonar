@@ -19,6 +19,7 @@ test("loadConfig provides local defaults", () => {
   assert.equal(config.storage.dbPath, "/tmp/sonar-home/.sonar/projects.db");
   assert.equal(config.api.host, "127.0.0.1");
   assert.equal(config.generator.maxResponseTokens, 1800);
+  assert.equal(config.generator.multiPassBriefing, true);
   assert.ok(config.parser.supportedLanguages.includes("ruby"));
   assert.ok(config.parser.supportedLanguages.includes("swift"));
   assert.deepEqual(config.security.allowedRepoRoots, [process.cwd()]);
@@ -40,6 +41,7 @@ test("loadConfig reads environment overrides", () => {
     SONAR_API_TOKEN: "dev-token",
     SONAR_ALLOWED_REPO_ROOTS: "/tmp/repos,/Users/example/repos",
     SONAR_ALLOW_ANY_REPO_ROOT: "true",
+    SONAR_BRIEFING_MULTIPASS: "false",
   });
 
   assert.equal(config.chat.baseUrl, "http://127.0.0.1:9000/v1");
@@ -54,6 +56,7 @@ test("loadConfig reads environment overrides", () => {
   assert.deepEqual(config.security.allowedRepoRoots, ["/tmp/repos", "/Users/example/repos"]);
   assert.equal(config.security.allowAnyRepoRoot, true);
   assert.equal(config.security.apiToken, "dev-token");
+  assert.equal(config.generator.multiPassBriefing, false);
 });
 
 test("loadConfig rejects invalid numeric values", () => {
