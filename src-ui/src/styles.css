@@ -457,6 +457,18 @@ button:disabled {
   text-transform: uppercase;
 }
 
+.inline-field-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.inline-field-action .compact-button {
+  white-space: nowrap;
+}
+
 input,
 textarea {
   width: 100%;
@@ -2084,6 +2096,10 @@ textarea:focus {
 
   .settings-grid,
   .model-mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-field-action {
     grid-template-columns: 1fr;
   }
 

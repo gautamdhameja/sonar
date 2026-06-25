@@ -56,6 +56,13 @@ export interface DesktopModelConfig {
   chatApiKey: string;
 }
 
+export interface LocalModelDiscovery {
+  found: boolean;
+  chatBaseUrl: string;
+  chatModel?: string | null;
+  message?: string | null;
+}
+
 export interface Project {
   id: string;
   name: string;

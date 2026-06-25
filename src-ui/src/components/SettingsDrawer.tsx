@@ -1,5 +1,5 @@
-import { Bug, Cloud, RefreshCw, Save, Server, Trash2, X } from "lucide-react";
-import { localLlamaConfig, openAiCompatibleConfig } from "../app/constants";
+import { Bug, Cloud, Loader2, RefreshCw, Save, Server, Trash2, X } from "lucide-react";
+import { openAiCompatibleConfig } from "../app/constants";
 import { stateLabel } from "../app/format";
 import type { ActiveTask } from "../app/types";
 import { useDialog } from "../app/useDialog";
@@ -15,15 +15,19 @@ interface SettingsDrawerProps {
   onClearLocalAppState: () => void;
   onClose: () => void;
   onCreateDiagnostics: () => void;
+  onDiscoverLocalModel: () => void;
+  onUseLocalModel: () => void;
   onModelConfigChange: (config: DesktopModelConfig) => void;
   onRefreshProjects: () => void;
   onSaveModelConfig: () => void;
   onSelectProject: (project: Project) => void;
+  modelDiscoveryBusy: boolean;
 }
 
 export function SettingsDrawer({
   activeTask,
   modelConfig,
+  modelDiscoveryBusy,
   projects,
   selectedProjectId,
   snapshot,
@@ -31,13 +35,14 @@ export function SettingsDrawer({
   onClearLocalAppState,
   onClose,
   onCreateDiagnostics,
+  onDiscoverLocalModel,
+  onUseLocalModel,
   onModelConfigChange,
   onRefreshProjects,
   onSaveModelConfig,
   onSelectProject,
 }: SettingsDrawerProps) {
   const updateModelConfig = (patch: Partial<DesktopModelConfig>) => onModelConfigChange({ ...modelConfig, ...patch });
-  const useLocalModel = () => onModelConfigChange(localLlamaConfig);
   const useApiEndpoint = () => onModelConfigChange(openAiCompatibleConfig);
   const runtimeBusy = activeTask?.kind === "bootstrap" || activeTask?.kind === "settings";
   const panelRef = useDialog<HTMLElement>(onClose);
@@ -129,7 +134,7 @@ export function SettingsDrawer({
           <div className="model-mode-grid">
             <button
               className={modelConfig.modelMode === "local" ? "model-mode active" : "model-mode"}
-              onClick={useLocalModel}
+              onClick={onUseLocalModel}
               type="button"
             >
               <Server size={18} />
@@ -165,11 +170,24 @@ export function SettingsDrawer({
             </label>
             <label className="field">
               <span>Generation model</span>
-              <input
-                value={modelConfig.chatModel}
-                onChange={(event) => updateModelConfig({ chatModel: event.target.value })}
-                placeholder={modelConfig.modelMode === "local" ? "local-model" : "gpt-4.1-mini"}
-              />
+              <div className="inline-field-action">
+                <input
+                  value={modelConfig.chatModel}
+                  onChange={(event) => updateModelConfig({ chatModel: event.target.value })}
+                  placeholder={modelConfig.modelMode === "local" ? "Fetch from local server" : "gpt-4.1-mini"}
+                />
+                {modelConfig.modelMode === "local" && (
+                  <button
+                    className="secondary compact-button"
+                    disabled={modelDiscoveryBusy}
+                    onClick={onDiscoverLocalModel}
+                    type="button"
+                  >
+                    {modelDiscoveryBusy ? <Loader2 className="spin" size={15} /> : <RefreshCw size={15} />}
+                    Fetch
+                  </button>
+                )}
+              </div>
             </label>
             {modelConfig.modelMode === "api" && (
               <label className="field">

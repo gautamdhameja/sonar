@@ -272,18 +272,28 @@ export function verifyCitations(
   };
 }
 
+function isListItemLine(line: string): boolean {
+  return /^\s*(?:[-*+]|\d+\.)\s+/.test(line);
+}
+
 export function removeUncitedClaims(answer: string, verification: CitationVerification): string {
   if (verification.uncitedClaims.length === 0) return answer;
 
   let next = answer;
   for (const claim of verification.uncitedClaims) {
     const lines = next.split("\n");
-    const filtered = lines.filter((line) => !line.trim().includes(claim));
+    // Keep uncited list items: the model's enumerated content survives (and stays honestly
+    // flagged by the verifier) instead of being deleted, which left orphaned list numbers.
+    // Uncited prose lines are still removed.
+    const filtered = lines.filter((line) => !(line.trim().includes(claim) && !isListItemLine(line)));
     if (filtered.length !== lines.length) {
       next = filtered.join("\n");
       continue;
     }
-    next = next.replace(claim, "").replace(/[ \t]+\n/g, "\n");
+    const inListItem = lines.some((line) => line.includes(claim) && isListItemLine(line));
+    if (!inListItem) {
+      next = next.replace(claim, "").replace(/[ \t]+\n/g, "\n");
+    }
   }
 
   return next.replace(/\n{3,}/g, "\n\n").trim();

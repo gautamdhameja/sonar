@@ -50,6 +50,17 @@ GET /v1/models
 POST /v1/chat/completions
 ```
 
+If the server also exposes llama.cpp-style props, Sonar uses them to adapt briefing context size:
+
+```text
+GET /props
+```
+
+The `/props` response should include `n_ctx`. Sonar treats this as the model context window and allocates a capped
+fraction to repository evidence, leaving room for instructions and the generated answer while keeping local generation
+interactive. If `/props` is missing, Sonar falls back to its default source-context budget. You can still force a fixed
+budget with `SONAR_MAX_CONTEXT_TOKENS`.
+
 If you use llama.cpp, start `llama-server` with a model that can handle long repository-context prompts. The exact flags
 depend on your local llama.cpp build and model, but the server should listen on `127.0.0.1:8080` and provide the
 OpenAI-compatible API.
@@ -64,7 +75,12 @@ You can verify the model endpoint before launching Sonar:
 
 ```bash
 curl http://127.0.0.1:8080/v1/models
+curl http://127.0.0.1:8080/props
 ```
+
+When you choose **Local llama.cpp**, Sonar tries `http://127.0.0.1:8080/v1/models` automatically and fills the model
+name from the first returned model. If you use a different localhost port, enter it in the endpoint field and use
+**Fetch** to read the model name.
 
 If you use a different local runtime or port, keep it running and enter that base URL in Sonar's first-run setup screen.
 

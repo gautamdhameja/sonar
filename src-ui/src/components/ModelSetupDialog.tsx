@@ -1,23 +1,29 @@
-import { Cloud, Loader2, Save, Server } from "lucide-react";
-import { localLlamaConfig, openAiCompatibleConfig } from "../app/constants";
+import { Cloud, Loader2, RefreshCw, Save, Server } from "lucide-react";
+import { openAiCompatibleConfig } from "../app/constants";
 import type { ActiveTask } from "../app/types";
 import { useDialog } from "../app/useDialog";
 import type { DesktopModelConfig } from "../types";
 
 interface ModelSetupDialogProps {
   activeTask: ActiveTask | null;
+  modelDiscoveryBusy: boolean;
   modelConfig: DesktopModelConfig;
+  onDiscoverLocalModel: () => void;
   onModelConfigChange: (config: DesktopModelConfig) => void;
+  onUseLocalModel: () => void;
   onSave: () => void;
 }
 
-export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange, onSave }: ModelSetupDialogProps) {
+export function ModelSetupDialog({
+  activeTask,
+  modelDiscoveryBusy,
+  modelConfig,
+  onDiscoverLocalModel,
+  onModelConfigChange,
+  onUseLocalModel,
+  onSave,
+}: ModelSetupDialogProps) {
   const updateModelConfig = (patch: Partial<DesktopModelConfig>) => onModelConfigChange({ ...modelConfig, ...patch });
-  const useLocalModel = () =>
-    onModelConfigChange({
-      ...localLlamaConfig,
-      modelSetupComplete: modelConfig.modelSetupComplete,
-    });
   const useApiEndpoint = () =>
     onModelConfigChange({
       ...openAiCompatibleConfig,
@@ -48,7 +54,7 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
         <div className="model-mode-grid">
           <button
             className={modelConfig.modelMode === "local" ? "model-mode active" : "model-mode"}
-            onClick={useLocalModel}
+            onClick={onUseLocalModel}
             type="button"
           >
             <Server size={18} />
@@ -81,11 +87,24 @@ export function ModelSetupDialog({ activeTask, modelConfig, onModelConfigChange,
           </label>
           <label className="field">
             <span>Generation model</span>
-            <input
-              value={modelConfig.chatModel}
-              onChange={(event) => updateModelConfig({ chatModel: event.target.value })}
-              placeholder={modelConfig.modelMode === "local" ? localLlamaConfig.chatModel : "gpt-4.1-mini"}
-            />
+            <div className="inline-field-action">
+              <input
+                value={modelConfig.chatModel}
+                onChange={(event) => updateModelConfig({ chatModel: event.target.value })}
+                placeholder={modelConfig.modelMode === "local" ? "Fetch from local server" : "gpt-4.1-mini"}
+              />
+              {modelConfig.modelMode === "local" && (
+                <button
+                  className="secondary compact-button"
+                  disabled={modelDiscoveryBusy}
+                  onClick={onDiscoverLocalModel}
+                  type="button"
+                >
+                  {modelDiscoveryBusy ? <Loader2 className="spin" size={15} /> : <RefreshCw size={15} />}
+                  Fetch
+                </button>
+              )}
+            </div>
           </label>
           {modelConfig.modelMode === "api" && (
             <label className="field">

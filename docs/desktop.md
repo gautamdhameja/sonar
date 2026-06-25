@@ -56,6 +56,14 @@ To use local generation, start an OpenAI-compatible model server separately, cho
 local endpoint. The default is `http://127.0.0.1:8080/v1`; if you use a different port or local runtime, update the
 endpoint during setup. To use cloud generation or another hosted model, choose **API endpoint**.
 
+When Local llama.cpp is selected, Sonar checks the default localhost endpoint and fills the model name from `/models` if
+one is running. For another localhost port, enter the endpoint and use **Fetch** next to the model field.
+
+At startup, the local workspace engine probes llama.cpp-style `/props` endpoints derived from the configured model URL.
+When the response includes `n_ctx`, Sonar scales its repository context budget to the model's context window. An 8K model
+gets a compact prompt; a long-context model gets more source evidence, capped so local generation stays interactive. If
+`/props` is unavailable, Sonar keeps the default budget, and `SONAR_MAX_CONTEXT_TOKENS` remains the explicit override.
+
 Development builds can also use a llama.cpp sidecar when these paths are set:
 
 ```text
@@ -63,7 +71,8 @@ SONAR_LLAMA_SERVER_PATH=/path/to/llama-server
 SONAR_LLAMA_MODEL_PATH=/path/to/model.gguf
 ```
 
-The model runtime must expose an OpenAI-compatible `/models` endpoint.
+The model runtime must expose an OpenAI-compatible `/models` endpoint. `/props` is optional but recommended for local
+servers that can report their context window.
 
 ## Desktop Configuration
 

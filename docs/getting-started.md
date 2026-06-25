@@ -26,6 +26,8 @@ Use the same supported Node version when installing, building, and running check
 
 Start your model server separately. For the default local setup, Sonar expects an OpenAI-compatible endpoint at
 `http://127.0.0.1:8080/v1` that responds to `/models`.
+If the server also exposes `/props` with `n_ctx`, Sonar automatically scales the repository context budget to the model's
+context window, capped for interactive local generation.
 
 Then build the production desktop app:
 
@@ -69,6 +71,8 @@ SONAR_LLAMA_MODEL_PATH=/path/to/model.gguf
 ```
 
 The configured model endpoint must respond to the OpenAI-compatible `/models` check.
+For llama.cpp-style local servers, `/props` is optional but recommended because it lets Sonar use larger context windows
+for richer briefings.
 
 See [Setup from Source](setup.md) for a complete step-by-step guide and troubleshooting.
 

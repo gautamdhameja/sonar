@@ -10,11 +10,12 @@ use std::{
 
 use crate::{
     config::{
-        chat_base_url, desktop_model_config, desktop_model_setup_complete, runtime_api_token,
-        save_desktop_model_config, DEFAULT_CHAT_BASE_URL,
+        chat_base_url, desktop_model_config, desktop_model_setup_complete,
+        normalize_desktop_model_config, runtime_api_token, save_desktop_model_config,
+        DEFAULT_CHAT_BASE_URL,
     },
     llama_sidecar::{missing_llama_sidecar_message, start_llama_sidecar_if_available},
-    models::{DesktopModelConfig, ServiceSnapshot, ServiceStatus},
+    models::{DesktopModelConfig, LocalModelDiscovery, ServiceSnapshot, ServiceStatus},
     paths::{repo_root, sonar_home},
     process::{command_exists, prepare_managed_child, terminate_managed_process},
 };
@@ -116,9 +117,56 @@ pub fn get_model_config() -> DesktopModelConfig {
 }
 
 #[tauri::command]
+pub async fn discover_local_model(base_url: Option<String>) -> Result<LocalModelDiscovery, String> {
+    let chat_base_url = normalize_local_model_base_url(base_url.as_deref())?;
+    let models_url = format!("{}/models", chat_base_url.trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(2))
+        .build()
+        .map_err(|err| err.to_string())?;
+
+    let response = match client.get(&models_url).send().await {
+        Ok(response) => response,
+        Err(err) => {
+            return Ok(LocalModelDiscovery {
+                found: false,
+                chat_base_url,
+                chat_model: None,
+                message: Some(format!("No local model responded at {models_url}: {err}")),
+            });
+        }
+    };
+    if !response.status().is_success() {
+        return Ok(LocalModelDiscovery {
+            found: false,
+            chat_base_url,
+            chat_model: None,
+            message: Some(format!(
+                "Local model endpoint returned HTTP {}",
+                response.status()
+            )),
+        });
+    }
+    let body = response
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|err| format!("Local model endpoint returned invalid JSON: {err}"))?;
+    let chat_model = first_model_name(&body);
+
+    Ok(LocalModelDiscovery {
+        found: chat_model.is_some(),
+        chat_base_url,
+        chat_model,
+        message: None,
+    })
+}
+
+#[tauri::command]
 pub async fn save_model_config(config: DesktopModelConfig) -> Result<ServiceSnapshot, String> {
     let _guard = RuntimeOperationGuard::acquire()?;
-    save_desktop_model_config(&config)?;
+    let model_config = normalize_desktop_model_config(&config)?;
+    validate_model_runtime(&model_config).await?;
+    save_desktop_model_config(&model_config)?;
     start_api_service(true)?;
     let api_token = runtime_api_token()?;
     wait_for_url(
@@ -128,12 +176,6 @@ pub async fn save_model_config(config: DesktopModelConfig) -> Result<ServiceSnap
     )
     .await
     .map_err(with_api_startup_context)?;
-    let model_config = desktop_model_config();
-    if uses_local_model(&model_config) && uses_default_local_endpoint(&model_config) {
-        ensure_local_model_runtime(&model_config).await?;
-    } else {
-        wait_for_model(&model_config, Duration::from_secs(180)).await?;
-    }
     tokio::time::sleep(Duration::from_millis(500)).await;
     Ok(service_snapshot().await)
 }
@@ -407,6 +449,66 @@ fn uses_default_local_endpoint(model_config: &DesktopModelConfig) -> bool {
     model_config.chat_base_url.trim().trim_end_matches('/') == DEFAULT_CHAT_BASE_URL
 }
 
+fn normalize_local_model_base_url(input: Option<&str>) -> Result<String, String> {
+    let raw = input
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(DEFAULT_CHAT_BASE_URL);
+    let with_scheme = if raw.contains("://") {
+        raw.to_string()
+    } else {
+        format!("http://{raw}")
+    };
+    let mut url = reqwest::Url::parse(&with_scheme)
+        .map_err(|_| "Local model endpoint must be a valid localhost URL.".to_string())?;
+    if url.scheme() != "http" && url.scheme() != "https" {
+        return Err("Local model endpoint must start with http:// or https://.".to_string());
+    }
+    let host = url.host_str().unwrap_or("");
+    if !matches!(host, "localhost" | "127.0.0.1" | "::1") {
+        return Err("Local model discovery only supports localhost endpoints.".to_string());
+    }
+    let path = url.path().trim_end_matches('/');
+    if path.is_empty() || path == "/" {
+        url.set_path("/v1");
+    } else {
+        let normalized = path.to_string();
+        url.set_path(&normalized);
+    }
+    url.set_query(None);
+    url.set_fragment(None);
+    Ok(url.to_string().trim_end_matches('/').to_string())
+}
+
+fn first_model_name(value: &serde_json::Value) -> Option<String> {
+    if let Some(data) = value.get("data").and_then(serde_json::Value::as_array) {
+        return data.iter().find_map(model_name_from_value);
+    }
+    if let Some(models) = value.get("models").and_then(serde_json::Value::as_array) {
+        return models.iter().find_map(model_name_from_value);
+    }
+    if let Some(array) = value.as_array() {
+        return array.iter().find_map(model_name_from_value);
+    }
+    model_name_from_value(value)
+}
+
+fn model_name_from_value(value: &serde_json::Value) -> Option<String> {
+    if let Some(name) = value
+        .as_str()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        return Some(name.to_string());
+    }
+    ["id", "name", "model"]
+        .iter()
+        .filter_map(|key| value.get(key).and_then(serde_json::Value::as_str))
+        .map(str::trim)
+        .find(|name| !name.is_empty())
+        .map(str::to_string)
+}
+
 fn is_api_ready() -> bool {
     let Ok(mut stream) = TcpStream::connect(("127.0.0.1", 3001)) else {
         return false;
@@ -598,6 +700,14 @@ async fn ensure_local_model_runtime(model_config: &DesktopModelConfig) -> Result
     Err(missing_llama_sidecar_message())
 }
 
+async fn validate_model_runtime(model_config: &DesktopModelConfig) -> Result<(), String> {
+    if uses_local_model(model_config) && uses_default_local_endpoint(model_config) {
+        ensure_local_model_runtime(model_config).await
+    } else {
+        wait_for_model(model_config, Duration::from_secs(180)).await
+    }
+}
+
 async fn check_url(
     url: &str,
     api_token: Option<&str>,
@@ -684,8 +794,9 @@ fn health_body_is_ok(body: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        command_line_looks_like_managed_api, health_response_is_sonar, is_supported_node_version,
-        parse_node_version, response_has_success_status,
+        command_line_looks_like_managed_api, first_model_name, health_response_is_sonar,
+        is_supported_node_version, normalize_local_model_base_url, parse_node_version,
+        response_has_success_status,
     };
 
     #[test]
@@ -720,6 +831,44 @@ mod tests {
         assert!(!parse_node_version("v26.3.1")
             .is_some_and(|version| is_supported_node_version(&version)));
         assert_eq!(parse_node_version("not-a-version"), None);
+    }
+
+    #[test]
+    fn local_model_base_url_normalizes_host_and_port_inputs() {
+        assert_eq!(
+            normalize_local_model_base_url(None).unwrap(),
+            "http://127.0.0.1:8080/v1",
+        );
+        assert_eq!(
+            normalize_local_model_base_url(Some("localhost:8080")).unwrap(),
+            "http://localhost:8080/v1",
+        );
+        assert_eq!(
+            normalize_local_model_base_url(Some("http://127.0.0.1:9000/api/v1")).unwrap(),
+            "http://127.0.0.1:9000/api/v1",
+        );
+        assert!(normalize_local_model_base_url(Some("https://example.com/v1")).is_err());
+    }
+
+    #[test]
+    fn first_model_name_reads_openai_compatible_shapes() {
+        assert_eq!(
+            first_model_name(&serde_json::json!({
+                "data": [{ "id": "qwen-local" }]
+            })),
+            Some("qwen-local".to_string()),
+        );
+        assert_eq!(
+            first_model_name(&serde_json::json!({
+                "models": [{ "name": "llama-local" }]
+            })),
+            Some("llama-local".to_string()),
+        );
+        assert_eq!(
+            first_model_name(&serde_json::json!(["model-a", "model-b"])),
+            Some("model-a".to_string()),
+        );
+        assert_eq!(first_model_name(&serde_json::json!({ "data": [] })), None);
     }
 
     #[test]

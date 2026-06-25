@@ -5,6 +5,7 @@ import type {
   ClonedRepository,
   DesktopModelConfig,
   DiagnosticsBundle,
+  LocalModelDiscovery,
   PreparedRepository,
   ServiceSnapshot,
 } from "../types";
@@ -96,6 +97,13 @@ export async function loadModelConfig(): Promise<DesktopModelConfig> {
     return localLlamaConfig;
   }
   return invoke<DesktopModelConfig>("get_model_config");
+}
+
+export async function discoverLocalModel(baseUrl?: string): Promise<LocalModelDiscovery> {
+  if (!isTauriRuntime()) {
+    return { found: false, chatBaseUrl: baseUrl?.trim() || localLlamaConfig.chatBaseUrl };
+  }
+  return invoke<LocalModelDiscovery>("discover_local_model", { baseUrl: baseUrl?.trim() || null });
 }
 
 export async function saveModelConfig(config: DesktopModelConfig): Promise<ServiceSnapshot> {

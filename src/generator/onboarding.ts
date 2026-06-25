@@ -933,6 +933,53 @@ export function backfillEmptyBriefingSections(
   return next.replace(/\n{3,}/g, "\n\n").trim();
 }
 
+function isAnyHeadingLine(line: string): boolean {
+  const trimmed = line.trim();
+  return /^#{1,6}\s/.test(trimmed) || /^\*\*[^*]+\*\*:?\s*$/.test(trimmed);
+}
+
+// Cleans up structure left behind by citation scrubbing or a truncated response:
+// renumbers ordered lists (so a stranded "6." becomes "1.") and removes sub-headings
+// (#### or **bold**) that have no body before the next heading or the end.
+export function tidyBriefingStructure(brief: string): string {
+  let lines = brief.split("\n");
+
+  // Drop empty sub-headings (never the ## / ### section headings, which are required).
+  const keep = lines.map(() => true);
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    const isDroppable = /^#{4,6}\s/.test(trimmed) || /^\*\*[^*]+\*\*:?\s*$/.test(trimmed);
+    if (!isDroppable) continue;
+    let hasBody = false;
+    for (let j = i + 1; j < lines.length; j++) {
+      if (lines[j].trim() === "") continue;
+      if (isAnyHeadingLine(lines[j])) break;
+      hasBody = true;
+      break;
+    }
+    if (!hasBody) keep[i] = false;
+  }
+  lines = lines.filter((_, i) => keep[i]);
+
+  // Renumber ordered-list runs. A run is broken by a heading or a non-indented prose line.
+  let counter = 0;
+  lines = lines.map((line) => {
+    const numbered = line.match(/^(\s*)(\d+)\.(\s+)(.*)$/);
+    if (numbered) {
+      counter += 1;
+      return `${numbered[1]}${counter}.${numbered[3]}${numbered[4]}`;
+    }
+    if (line.trim() === "" || /^\s+\S/.test(line)) return line;
+    counter = 0;
+    return line;
+  });
+
+  return lines
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 // In body-only mode the model returns just the section body; emit the canonical heading
 // ourselves and demote any stray headings the model added, so headings never drift.
 function forceSingleSectionHeading(content: string, section: string): string {
@@ -1241,6 +1288,12 @@ export async function generateOnboardingBrief(
       citationVerification = scrubbedVerification;
       repaired = true;
     }
+  }
+
+  const tidiedBrief = tidyBriefingStructure(brief);
+  if (tidiedBrief !== brief) {
+    brief = tidiedBrief;
+    citationVerification = verifyBriefCitations(brief, contextUnits);
   }
 
   return {

@@ -255,10 +255,10 @@ test("verifyCitations ignores markdown links as citations", () => {
   assert.equal(result.uncitedClaims.length, 1);
 });
 
-test("removeUncitedClaims removes exact unsupported lines", () => {
+test("removeUncitedClaims removes exact unsupported prose lines", () => {
   const answer = [
     "Supported claim [src/llama/config.ts:4-16].",
-    "* **Server:** The server handles authenticated data synchronization.",
+    "The server handles authenticated data synchronization across every connected client.",
   ].join("\n");
   const verification = verifyCitations(answer, [unit]);
 
@@ -497,4 +497,18 @@ test("removeWeaklySupportedPrivacyClaims removes data collection claims without 
 
   assert.doesNotMatch(scrubbed, /collect or transmit user data/i);
   assert.match(scrubbed, /file watching/i);
+});
+
+test("removeUncitedClaims keeps uncited list items but strips uncited prose", () => {
+  const brief = [
+    "### Top User Workflows",
+    "1. Create and upload files so users can share visual content with collaborators.",
+    "",
+    "This standalone paragraph asserts an uncited claim that should be removed entirely here.",
+  ].join("\n");
+  const verification = verifyCitations(brief, []);
+  const cleaned = removeUncitedClaims(brief, verification);
+
+  assert.match(cleaned, /1\. Create and upload files/);
+  assert.doesNotMatch(cleaned, /standalone paragraph asserts an uncited claim/);
 });

@@ -136,7 +136,7 @@ export const localLlamaConfig: DesktopModelConfig = {
   modelSetupComplete: false,
   modelMode: "local",
   chatBaseUrl: "http://127.0.0.1:8080/v1",
-  chatModel: "local-model",
+  chatModel: "",
   chatApiKey: "not-needed",
 };
 

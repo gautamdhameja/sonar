@@ -33,6 +33,15 @@ pub struct DesktopModelConfig {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LocalModelDiscovery {
+    pub found: bool,
+    pub chat_base_url: String,
+    pub chat_model: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ClonedRepository {
     pub owner: String,
     pub repo: String,

@@ -4,7 +4,7 @@ use crate::{models::DesktopModelConfig, paths::sonar_home};
 use serde::Deserialize;
 
 pub(crate) const DEFAULT_CHAT_BASE_URL: &str = "http://127.0.0.1:8080/v1";
-const DEFAULT_CHAT_MODEL: &str = "local-model";
+const DEFAULT_CHAT_MODEL: &str = "";
 const DEFAULT_MODEL_MODE: &str = "local";
 const LEGACY_CHAT_MODEL: &str = "Qwen/Qwen3.5-9B";
 
@@ -88,13 +88,9 @@ pub fn desktop_model_config() -> DesktopModelConfig {
     stored
 }
 
-pub fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), String> {
-    let path = desktop_config_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|err| format!("Unable to create Sonar config directory: {err}"))?;
-    }
-
+pub fn normalize_desktop_model_config(
+    config: &DesktopModelConfig,
+) -> Result<DesktopModelConfig, String> {
     if config.chat_base_url.trim().is_empty() {
         return Err("Generation API URL is required.".to_string());
     }
@@ -106,14 +102,24 @@ pub fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), Stri
     }
     validate_http_url(config.chat_base_url.trim(), "Generation API URL")?;
 
-    let normalized = DesktopModelConfig {
+    Ok(DesktopModelConfig {
         model_setup_complete: true,
         model_mode: config.model_mode.trim().to_string(),
         chat_base_url: normalize_url(&config.chat_base_url),
         chat_model: config.chat_model.trim().to_string(),
         chat_api_key: normalize_api_key(&config.chat_api_key),
         api_token: runtime_api_token()?,
-    };
+    })
+}
+
+pub fn save_desktop_model_config(config: &DesktopModelConfig) -> Result<(), String> {
+    let path = desktop_config_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("Unable to create Sonar config directory: {err}"))?;
+    }
+
+    let normalized = normalize_desktop_model_config(config)?;
     write_desktop_model_config(&path, &normalized)
 }
 

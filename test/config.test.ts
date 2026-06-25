@@ -18,6 +18,7 @@ test("loadConfig provides local defaults", () => {
   assert.equal(config.chat.disableModelReasoning, null);
   assert.equal(config.storage.dbPath, "/tmp/sonar-home/.sonar/projects.db");
   assert.equal(config.api.host, "127.0.0.1");
+  assert.equal(config.generator.maxContextTokens, 1800);
   assert.equal(config.generator.maxResponseTokens, 1800);
   assert.equal(config.generator.multiPassBriefing, true);
   assert.ok(config.parser.supportedLanguages.includes("ruby"));

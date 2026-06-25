@@ -15,6 +15,7 @@ import { friendlyErrorMessage, runtimeState, safeFileName } from "./app/format";
 import {
   cloneGithubRepository,
   createDiagnosticsBundle,
+  discoverLocalModel,
   isTauriRuntime,
   loadModelConfig,
   prepareRepositoryForIndexing,
@@ -94,6 +95,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [modelConfig, setModelConfig] = useState<DesktopModelConfig>(localLlamaConfig);
+  const [modelDiscoveryBusy, setModelDiscoveryBusy] = useState(false);
   const [modelSetupOpen, setModelSetupOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
@@ -197,6 +199,9 @@ export function App() {
       if (!nextConfig.modelSetupComplete) {
         setSnapshot(null);
         setModelSetupOpen(true);
+        if (nextConfig.modelMode === "local" && !nextConfig.chatModel.trim()) {
+          void discoverAndApplyLocalModel(nextConfig, true);
+        }
         return;
       }
 
@@ -244,6 +249,48 @@ export function App() {
       setError(friendlyErrorMessage(err));
     } finally {
       setActiveTask(null);
+    }
+  }
+
+  function handleUseLocalModel() {
+    const nextConfig = {
+      ...localLlamaConfig,
+      modelSetupComplete: modelConfig.modelSetupComplete,
+    };
+    setModelConfig(nextConfig);
+    void discoverAndApplyLocalModel(nextConfig, true);
+  }
+
+  async function discoverAndApplyLocalModel(config: DesktopModelConfig = modelConfig, silent = false) {
+    setModelDiscoveryBusy(true);
+    if (!silent) {
+      setError(null);
+      setNotice(null);
+    }
+    try {
+      const discovery = await discoverLocalModel(config.chatBaseUrl);
+      setModelConfig((current) => {
+        if (current.modelMode !== "local") return current;
+        return {
+          ...current,
+          chatBaseUrl: discovery.chatBaseUrl || current.chatBaseUrl,
+          chatModel: discovery.found && discovery.chatModel ? discovery.chatModel : current.chatModel,
+          chatApiKey: "not-needed",
+        };
+      });
+      if (!silent) {
+        setNotice(
+          discovery.found && discovery.chatModel
+            ? `Detected local model: ${discovery.chatModel}`
+            : `No local model found at ${discovery.chatBaseUrl}.`,
+        );
+      }
+    } catch (err) {
+      if (!silent) {
+        setError(friendlyErrorMessage(err));
+      }
+    } finally {
+      setModelDiscoveryBusy(false);
     }
   }
 
@@ -680,14 +727,17 @@ export function App() {
         <SettingsDrawer
           activeTask={activeTask}
           modelConfig={modelConfig}
+          modelDiscoveryBusy={modelDiscoveryBusy}
           onBootstrap={() => void bootstrap()}
           onClose={() => setAdvancedOpen(false)}
           onClearLocalAppState={() => setClearConfirmOpen(true)}
           onCreateDiagnostics={handleCreateDiagnosticsBundle}
+          onDiscoverLocalModel={() => void discoverAndApplyLocalModel(modelConfig, false)}
           onModelConfigChange={setModelConfig}
           onRefreshProjects={() => void refreshProjects()}
           onSaveModelConfig={() => void handleSaveModelConfig()}
           onSelectProject={handleSelectProjectFromSettings}
+          onUseLocalModel={handleUseLocalModel}
           projects={projects}
           selectedProjectId={selectedProjectId}
           snapshot={snapshot}
@@ -697,8 +747,11 @@ export function App() {
       {modelSetupOpen && !modelConfig.modelSetupComplete && (
         <ModelSetupDialog
           activeTask={activeTask}
+          modelDiscoveryBusy={modelDiscoveryBusy}
           modelConfig={modelConfig}
+          onDiscoverLocalModel={() => void discoverAndApplyLocalModel(modelConfig, false)}
           onModelConfigChange={setModelConfig}
+          onUseLocalModel={handleUseLocalModel}
           onSave={() => void handleSaveModelConfig()}
         />
       )}

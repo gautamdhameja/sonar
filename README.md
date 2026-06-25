@@ -53,6 +53,9 @@ Node versions. Native dependencies such as SQLite are compiled for the active No
 
 Start a model server separately. For local mode, Sonar expects an OpenAI-compatible endpoint such as llama.cpp
 `llama-server` on `http://127.0.0.1:8080/v1`, and the endpoint must respond to `/models`.
+When the server also exposes llama.cpp-style `/props` with `n_ctx`, Sonar sizes its source-context budget dynamically:
+small context windows get compact prompts, while large-context models receive more repository evidence up to Sonar's
+interactive local-generation cap.
 
 Build the production desktop app:
 

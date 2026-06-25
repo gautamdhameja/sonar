@@ -6,6 +6,7 @@ import {
   sanitizeTruncatedBriefingPart,
   selectOnboardingContext,
   sourceListWithCitations,
+  tidyBriefingStructure,
 } from "../src/generator/onboarding";
 import { DEFAULT_PERSONA } from "../src/persona/types";
 import { CodeUnit } from "../src/parser/types";
@@ -406,4 +407,29 @@ test("normalizeInvalidCitations maps broad file citations back to supplied conte
 
   assert.equal(normalized, "Todo owns task display [src/components/Todo.jsx:1-25].");
   assert.deepEqual(verifyCitations(normalized, units).invalidCitations, []);
+});
+
+test("tidyBriefingStructure renumbers stranded lists and drops empty subheadings", () => {
+  const brief = [
+    "### Top User Workflows",
+    "6. **Track usage**: records interactions [a.ts:1-2].",
+    "",
+    "### High-Leverage Questions",
+    "**Design & Strategy**",
+  ].join("\n");
+
+  const tidied = tidyBriefingStructure(brief);
+
+  assert.match(tidied, /1\. \*\*Track usage\*\*/);
+  assert.doesNotMatch(tidied, /6\. \*\*Track usage/);
+  assert.doesNotMatch(tidied, /Design & Strategy/);
+  assert.match(tidied, /### Top User Workflows/);
+  assert.match(tidied, /### High-Leverage Questions/);
+});
+
+test("tidyBriefingStructure keeps a populated subheading and its body", () => {
+  const brief = ["### Capabilities", "**Boundaries**", "- File size is capped [a.ts:1-2]."].join("\n");
+  const tidied = tidyBriefingStructure(brief);
+  assert.match(tidied, /\*\*Boundaries\*\*/);
+  assert.match(tidied, /File size is capped/);
 });

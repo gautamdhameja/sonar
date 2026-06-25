@@ -3,6 +3,7 @@ import { timingSafeEqual } from "crypto";
 import express, { NextFunction, Request, Response } from "express";
 import { CONFIG } from "../config";
 import { ProjectRepo } from "../db/project-repo";
+import { configureDynamicContextBudget } from "../generator/model-context";
 import { logger } from "../utils/logger";
 import { ApiState } from "./api-state";
 import { registerGraphRoutes } from "./graph-routes";
@@ -45,6 +46,7 @@ export interface RunningServer {
 
 export async function startServer(port: number): Promise<RunningServer> {
   assertSafeApiBinding();
+  await configureDynamicContextBudget();
   const state = new ApiState(new ProjectRepo());
   const { repo } = state;
   const app = express();
