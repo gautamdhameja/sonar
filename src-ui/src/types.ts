@@ -65,6 +65,8 @@ export interface Project {
   fileCount: number;
   summary: string | null;
   summaryGeneratedAt: string | null;
+  hasCompletedBriefing: boolean;
+  latestCompletedBriefingAt: string | null;
 }
 
 export interface UnsupportedLanguageSummary {

@@ -99,7 +99,7 @@ export function SettingsDrawer({
         </section>
 
         <section className="drawer-section">
-          <div className="section-title-row local-data-row">
+          <div className="section-title-row">
             <h3>Indexed projects</h3>
             <button className="secondary compact-button" onClick={onRefreshProjects} type="button">
               <RefreshCw size={15} />
@@ -192,7 +192,7 @@ export function SettingsDrawer({
         </section>
 
         <section className="drawer-section">
-          <div className="section-title-row">
+          <div className="section-title-row local-data-row">
             <div>
               <h3>Local data</h3>
               <p className="muted">
@@ -201,7 +201,7 @@ export function SettingsDrawer({
               </p>
             </div>
             <button
-              className="quiet-danger compact-button"
+              className="quiet-danger compact-button local-state-clear-button"
               disabled={activeTask !== null}
               onClick={onClearLocalAppState}
               type="button"

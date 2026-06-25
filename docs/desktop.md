@@ -7,7 +7,7 @@ Sonar is built for high-level codebase briefings. It helps non-technical and sem
 ## Prerequisites
 
 - Git installed locally if you want Sonar to clone GitHub repositories for you
-- Node.js 22.x, 23.x, 24.x, or 25.x when running from source
+- Node.js 22.x, 23.x, 24.x, or 25.x when running from source. Do not use Node 26+.
 - Rust toolchain and platform dependencies for Tauri
 - A local OpenAI-compatible model server or an OpenAI-compatible API endpoint
 
@@ -27,9 +27,30 @@ Sonar is built for high-level codebase briefings. It helps non-technical and sem
 - SQLite project data under `~/.sonar`.
 - No Meilisearch or external database/search service.
 
-When running from source, `npm run desktop:dev` starts the Tauri shell. Tauri starts the Vite UI through
-`npm run dev:ui`, and the desktop service manager starts the Sonar API through `npm run dev`. A packaged build can
-provide a native API sidecar at `~/.sonar/bin/sonar-api` or through `SONAR_API_SERVER_PATH`.
+When running from a local source checkout, build the production desktop app with:
+
+```bash
+nvm use 24
+npm install
+npm run desktop:build
+```
+
+Use the same supported Node version for install, build, and checks. If you switch Node versions, rerun `npm install`
+before rebuilding so native SQLite dependencies match the runtime used by the local API.
+
+On macOS, open:
+
+```bash
+open src-tauri/target/release/bundle/macos/Sonar.app
+```
+
+The current source-built alpha does not yet package a standalone native workspace-engine sidecar inside the app bundle.
+Keep the checkout and `node_modules` in place after building; the desktop service manager uses them to start the Sonar
+API. If the app cannot locate the checkout, set `SONAR_APP_ROOT` to the cloned repository path. A packaged distribution
+can provide a native API sidecar at `~/.sonar/bin/sonar-api` or through `SONAR_API_SERVER_PATH`.
+
+`npm run desktop:dev` is only for contributors working on Sonar itself. It starts the Vite hot-reload UI and Tauri dev
+shell instead of a production app bundle.
 
 To use local generation, start an OpenAI-compatible model server separately, choose **Local llama.cpp**, and configure the
 local endpoint. The default is `http://127.0.0.1:8080/v1`; if you use a different port or local runtime, update the
@@ -62,7 +83,9 @@ The local runtime token is stored at:
 
 This file is generated locally and ignored by git.
 
-The desktop-managed API is intended for localhost use by the Tauri app. It is protected by `X-Sonar-Token` and CORS allowlisting. In source builds, the renderer reads the token so it can call the local API directly; treat the desktop config and runtime files as local secrets.
+The desktop-managed API is intended for localhost use by the Tauri app. It is protected by `X-Sonar-Token` and CORS
+allowlisting. Desktop API calls go through the Tauri command bridge, which attaches the local runtime token; treat the
+desktop config and runtime files as local secrets.
 
 When Sonar runs as the desktop app, local repository selection is intentionally trusted: the API is started with
 `SONAR_ALLOW_ANY_REPO_ROOT=true` so a folder chosen in the native picker can be indexed without pre-registering allowed
@@ -94,7 +117,13 @@ and Swift. Markdown and MDX are indexed as documentation.
 
 ## Release Build
 
-Build and verify a local macOS app bundle:
+Build a local production app bundle:
+
+```bash
+npm run desktop:build
+```
+
+Build, ad-hoc sign, and verify a local macOS app bundle:
 
 ```bash
 npm run release:mac

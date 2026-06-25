@@ -1215,6 +1215,10 @@ textarea:focus {
   flex: 1;
 }
 
+.local-state-clear-button {
+  flex: 0 0 auto;
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;
@@ -2081,6 +2085,10 @@ textarea:focus {
   .settings-grid,
   .model-mode-grid {
     grid-template-columns: 1fr;
+  }
+
+  .local-state-clear-button {
+    width: 100%;
   }
 }
 

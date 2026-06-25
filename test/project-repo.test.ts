@@ -187,13 +187,51 @@ test("ProjectRepo persists onboarding sessions and supports legacy messages", as
   assert.equal(loaded?.generationTime, 34);
   assert.equal(loaded?.generationTruncated, true);
   assert.equal(loaded?.rollingSummary, "User asked about sharing.");
-  assert.equal(repo.getLatestOnboardingSessionForProject(project.id)?.id, session.id);
+  assert.equal(repo.getLatestOnboardingSessionForProject(project.id), undefined);
+  assert.equal(repo.listProjects().find((item) => item.id === project.id)?.hasCompletedBriefing, false);
 
   const messages = repo.listOnboardingMessages(session.id);
   assert.equal(messages.length, 2);
   assert.equal(messages[0].role, "user");
   assert.equal(messages[1].citationVerification?.valid, true);
   assert.equal(messages[1].sources[0].filePath, "src/share.ts");
+});
+
+test("ProjectRepo only marks completed briefings as recent", async () => {
+  const { ProjectRepo } = await import("../src/db/project-repo");
+  const { DEFAULT_PERSONA } = await import("../src/persona/types");
+  const repo = new ProjectRepo();
+
+  const indexedOnly = repo.createProject("indexed only", "/tmp/repo-indexed-only");
+  const partial = repo.createProject("partial briefing", "/tmp/repo-partial-briefing");
+  const complete = repo.createProject("complete briefing", "/tmp/repo-complete-briefing");
+
+  repo.createOnboardingSession({
+    projectId: partial.id,
+    repoName: partial.name,
+    persona: DEFAULT_PERSONA,
+    brief: "A partial briefing.",
+    sourceFiles: ["README.md"],
+    generationTruncated: true,
+  });
+  const completeSession = repo.createOnboardingSession({
+    projectId: complete.id,
+    repoName: complete.name,
+    persona: DEFAULT_PERSONA,
+    brief: "A complete briefing.",
+    sourceFiles: ["README.md"],
+  });
+
+  const projects = repo.listProjects();
+  assert.equal(projects.find((project) => project.id === indexedOnly.id)?.hasCompletedBriefing, false);
+  assert.equal(projects.find((project) => project.id === partial.id)?.hasCompletedBriefing, false);
+  assert.equal(projects.find((project) => project.id === complete.id)?.hasCompletedBriefing, true);
+  assert.equal(
+    projects.find((project) => project.id === complete.id)?.latestCompletedBriefingAt,
+    completeSession.updatedAt,
+  );
+  assert.equal(repo.getLatestOnboardingSessionForProject(partial.id), undefined);
+  assert.equal(repo.getLatestOnboardingSessionForProject(complete.id)?.id, completeSession.id);
 });
 
 test("ProjectRepo tolerates corrupt onboarding JSON fields", async () => {

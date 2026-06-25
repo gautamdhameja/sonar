@@ -8,7 +8,7 @@ The product goal is simple: create a useful, cited briefing from a repository us
 Prerequisites:
 
 - Git, if you want Sonar to clone GitHub repositories for you
-- Node.js 22.x, 23.x, 24.x, or 25.x when running from source
+- Node.js 22.x, 23.x, 24.x, or 25.x when running from source. Do not use Node 26+.
 - Rust toolchain and platform dependencies for Tauri
 - A local OpenAI-compatible model server, or an OpenAI-compatible API endpoint
 
@@ -17,16 +17,26 @@ Clone the repository and install dependencies:
 ```bash
 git clone https://github.com/gautamdhameja/sonar.git
 cd sonar
+nvm use 24
 npm install
 ```
+
+Use the same supported Node version when installing, building, and running checks. If you change Node versions, rerun
+`npm install` so native dependencies are rebuilt for that runtime.
 
 Start your model server separately. For the default local setup, Sonar expects an OpenAI-compatible endpoint at
 `http://127.0.0.1:8080/v1` that responds to `/models`.
 
-Then start the desktop app:
+Then build the production desktop app:
 
 ```bash
-npm run desktop:dev
+npm run desktop:build
+```
+
+On macOS, open the built app:
+
+```bash
+open src-tauri/target/release/bundle/macos/Sonar.app
 ```
 
 On first launch, Sonar asks you to choose a model source:
@@ -48,7 +58,10 @@ If you choose **Local llama.cpp**, Sonar expects:
 - an OpenAI-compatible local model server at the endpoint configured in the app, or
 - for the default endpoint, a future packaged sidecar binary at `~/.sonar/bin/llama-server` and a model at `~/.sonar/models/default.gguf`
 
-For development builds, you can also point Sonar at a local sidecar binary and model with:
+This source-built alpha still uses the checkout to start the local workspace engine, so keep the cloned repository and
+`node_modules` in place after building. `npm run desktop:dev` is only for contributors working on Sonar itself.
+
+For local source builds, you can also point Sonar at a local sidecar binary and model with:
 
 ```bash
 SONAR_LLAMA_SERVER_PATH=/path/to/llama-server

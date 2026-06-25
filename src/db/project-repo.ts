@@ -24,6 +24,8 @@ export interface Project {
   fileCount: number;
   summary: string | null;
   summaryGeneratedAt: string | null;
+  hasCompletedBriefing: boolean;
+  latestCompletedBriefingAt: string | null;
 }
 
 interface ProjectRow {
@@ -35,6 +37,7 @@ interface ProjectRow {
   file_count: number;
   summary: string | null;
   summary_generated_at: string | null;
+  latest_completed_briefing_at?: string | null;
 }
 
 interface CodeUnitRow {
@@ -122,6 +125,7 @@ interface MemoryGraphRow {
 }
 
 function rowToProject(row: ProjectRow): Project {
+  const latestCompletedBriefingAt = row.latest_completed_briefing_at ?? null;
   return {
     id: row.id,
     name: row.name,
@@ -131,8 +135,12 @@ function rowToProject(row: ProjectRow): Project {
     fileCount: row.file_count,
     summary: row.summary,
     summaryGeneratedAt: row.summary_generated_at,
+    hasCompletedBriefing: latestCompletedBriefingAt !== null,
+    latestCompletedBriefingAt,
   };
 }
+
+const completedBriefingWhere = "TRIM(brief) <> '' AND generation_truncated = 0";
 
 function parseJsonArrayField(value: string, fieldName: string, unitId: string): string[] {
   try {
@@ -262,7 +270,18 @@ export class ProjectRepo {
       )
       .run(id, name, repoPath, indexedAt);
 
-    return { id, name, repoPath, indexedAt, unitCount: 0, fileCount: 0, summary: null, summaryGeneratedAt: null };
+    return {
+      id,
+      name,
+      repoPath,
+      indexedAt,
+      unitCount: 0,
+      fileCount: 0,
+      summary: null,
+      summaryGeneratedAt: null,
+      hasCompletedBriefing: false,
+      latestCompletedBriefingAt: null,
+    };
   }
 
   replaceProjectIndex(input: {
@@ -327,6 +346,8 @@ export class ProjectRepo {
       fileCount: filesSet.size,
       summary: null,
       summaryGeneratedAt: null,
+      hasCompletedBriefing: false,
+      latestCompletedBriefingAt: null,
     };
   }
 
@@ -341,7 +362,19 @@ export class ProjectRepo {
   }
 
   listProjects(): Project[] {
-    const rows = this.db.prepare("SELECT * FROM projects ORDER BY indexed_at DESC").all() as ProjectRow[];
+    const rows = this.db
+      .prepare(
+        `SELECT projects.*, latest.latest_completed_briefing_at
+         FROM projects
+         LEFT JOIN (
+           SELECT project_id, MAX(updated_at) AS latest_completed_briefing_at
+           FROM onboarding_sessions
+           WHERE ${completedBriefingWhere}
+           GROUP BY project_id
+         ) latest ON latest.project_id = projects.id
+         ORDER BY projects.indexed_at DESC`,
+      )
+      .all() as ProjectRow[];
     return rows.map(rowToProject);
   }
 
@@ -600,7 +633,7 @@ export class ProjectRepo {
     const row = this.db
       .prepare(
         `SELECT * FROM onboarding_sessions
-         WHERE project_id = ?
+         WHERE project_id = ? AND ${completedBriefingWhere}
          ORDER BY updated_at DESC, created_at DESC
          LIMIT 1`,
       )

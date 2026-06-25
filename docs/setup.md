@@ -1,6 +1,6 @@
 # Setup from Source
 
-This guide is for users who clone Sonar from GitHub and run the desktop app locally.
+This guide is for users who clone Sonar from GitHub, build the production desktop app locally, and run that app.
 
 Sonar has two runtime pieces:
 
@@ -12,7 +12,7 @@ state, indexed source units, generated memory graphs, and briefing sessions in e
 
 ## Requirements
 
-- Node.js 22.x, 23.x, 24.x, or 25.x
+- Node.js 22.x, 23.x, 24.x, or 25.x. Do not use Node 26+ for source builds.
 - npm 10 or newer
 - Git
 - Rust toolchain with `cargo`
@@ -24,8 +24,13 @@ state, indexed source units, generated memory graphs, and briefing sessions in e
 ```bash
 git clone https://github.com/gautamdhameja/sonar.git
 cd sonar
+nvm use 24
 npm install
 ```
+
+Use the same supported Node major version for `npm install`, `npm run desktop:build`, and future `npm run check`
+commands. If you switch Node versions after installing dependencies, run `npm install` again. Sonar uses native SQLite
+dependencies that are compiled for the active Node runtime.
 
 ## 2. Start a Model Endpoint
 
@@ -63,25 +68,65 @@ curl http://127.0.0.1:8080/v1/models
 
 If you use a different local runtime or port, keep it running and enter that base URL in Sonar's first-run setup screen.
 
-## 3. Start Sonar
+## 3. Build Sonar
 
 ```bash
-npm run desktop:dev
+npm run desktop:build
 ```
 
-This starts the Tauri desktop app. In source mode, the desktop service manager starts the local Sonar workspace engine
-for you through `npm run dev`, and Tauri starts the Vite UI through `npm run dev:ui`.
+This creates a production Tauri app bundle for your current platform. On macOS, the app is written to:
+
+```text
+src-tauri/target/release/bundle/macos/Sonar.app
+```
+
+For a local macOS build with ad-hoc code signing and verification, run:
+
+```bash
+npm run release:mac
+```
+
+Public macOS distribution still requires Developer ID signing and notarization. For local testing from a clone,
+`npm run desktop:build` is enough.
+
+This source-built alpha does not yet ship a standalone native workspace-engine sidecar inside the app bundle. Keep the
+checkout and `node_modules` in place after building; the desktop app uses them to start the local workspace engine. If
+you launch the app from somewhere that cannot locate the checkout, set `SONAR_APP_ROOT` to the cloned repository path
+when launching the app executable.
+
+## 4. Open Sonar
+
+On macOS:
+
+```bash
+open src-tauri/target/release/bundle/macos/Sonar.app
+```
+
+If you need to pass environment variables on macOS, launch the app executable directly:
+
+```bash
+SONAR_APP_ROOT=/path/to/sonar src-tauri/target/release/bundle/macos/Sonar.app/Contents/MacOS/Sonar
+```
+
+On other platforms, open the app artifact created under:
+
+```text
+src-tauri/target/release/bundle/
+```
 
 The managed local runtime is:
 
 - Sonar API: `http://127.0.0.1:3001`
-- Project store: `~/.sonar/sonar.db`
+- Project store: `~/.sonar/projects.db`
 - Runtime token: `~/.sonar/runtime.env`
 - Desktop model config: `~/.sonar/desktop-config.json`
 
 Do not start the Sonar API manually for normal desktop use. Run the desktop app, and let it manage the API process.
 
-## 4. First-Run Model Setup
+`npm run desktop:dev` is only for contributors working on Sonar itself. It starts the Vite hot-reload UI and Tauri dev
+shell; normal users should run the production build above.
+
+## 5. First-Run Model Setup
 
 On first launch, choose one model source:
 
@@ -94,7 +139,7 @@ The app checks the configured `/models` endpoint before it marks the runtime rea
 For API endpoint mode, enter the endpoint, model name, and API key. Source excerpts required for generation are sent to
 that provider.
 
-## 5. Analyze a Repository
+## 6. Analyze a Repository
 
 After the runtime is ready:
 
@@ -108,13 +153,13 @@ folders are read directly.
 
 ## Optional llama.cpp Sidecar
 
-For development builds, Sonar can try to start a local llama.cpp sidecar if these environment variables point to a
+For local source builds, Sonar can try to start a local llama.cpp sidecar if these environment variables point to a
 server binary and model:
 
 ```bash
-SONAR_LLAMA_SERVER_PATH=/path/to/llama-server
-SONAR_LLAMA_MODEL_PATH=/path/to/model.gguf
-npm run desktop:dev
+SONAR_LLAMA_SERVER_PATH=/path/to/llama-server \
+SONAR_LLAMA_MODEL_PATH=/path/to/model.gguf \
+src-tauri/target/release/bundle/macos/Sonar.app/Contents/MacOS/Sonar
 ```
 
 If those variables are not set, Sonar also checks:
@@ -138,8 +183,11 @@ If Sonar says the model endpoint is unavailable:
 
 If Sonar says the workspace engine is unavailable:
 
-- Run the app with `npm run desktop:dev`, not only `npm run dev:ui`.
+- Make sure you built the app with `npm run desktop:build` and opened the built desktop app, not only the Vite UI.
+- Keep the cloned checkout and `node_modules` in place, or set `SONAR_APP_ROOT` to the cloned repository path.
 - Check `~/.sonar/api.log`.
 - Make sure port `3001` is available on `127.0.0.1`.
 
 If dependency installation fails, confirm your Node and npm versions match the supported range in `package.json`.
+If the local API fails with a native module error such as `NODE_MODULE_VERSION`, switch back to Node 24 or another
+supported Node version and run `npm install` again before rebuilding.

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { apiBaseUrl } from "../api";
 import type {
   ClearLocalAppStateResult,
@@ -11,7 +11,13 @@ import type {
 import { localLlamaConfig } from "./constants";
 
 export function isTauriRuntime(): boolean {
-  return typeof window !== "undefined" && window.__TAURI_INTERNALS__ !== undefined;
+  return (
+    isTauri() ||
+    (typeof window !== "undefined" &&
+      (window.__TAURI_INTERNALS__ !== undefined ||
+        window.location.protocol === "tauri:" ||
+        window.location.hostname === "tauri.localhost"))
+  );
 }
 
 async function browserServiceSnapshot(): Promise<ServiceSnapshot> {

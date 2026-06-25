@@ -7,6 +7,6 @@ Sonar is not intended to replace a coding agent, debugger, or deep implementatio
 Use these chapters:
 
 - [Getting Started](getting-started.md) for installation, first launch, and model setup.
-- [Setup from Source](setup.md) for the complete clone, model-server, and desktop-run workflow.
+- [Setup from Source](setup.md) for the complete clone, model-server, production build, and desktop-run workflow.
 - [Desktop App](desktop.md) for the app flow, repository import behavior, and model settings.
 - [Language Support and Limits](language-support.md) for supported parser coverage and what happens with unsupported repositories.

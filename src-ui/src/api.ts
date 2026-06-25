@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import type {
   DependencyHealthResponse,
   FollowupResponse,
@@ -11,9 +11,16 @@ import { briefingRoleProfiles } from "./app/constants";
 import type { BriefingRole } from "./app/types";
 
 export const apiBaseUrl = "http://127.0.0.1:3001";
+const browserApiToken = import.meta.env.VITE_SONAR_API_TOKEN?.trim() ?? "";
 
 function isTauriRuntime(): boolean {
-  return typeof window !== "undefined" && window.__TAURI_INTERNALS__ !== undefined;
+  return (
+    isTauri() ||
+    (typeof window !== "undefined" &&
+      (window.__TAURI_INTERNALS__ !== undefined ||
+        window.location.protocol === "tauri:" ||
+        window.location.hostname === "tauri.localhost"))
+  );
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -24,10 +31,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function requestDirect<T>(path: string, init: RequestInit | undefined): Promise<T> {
+  if (!browserApiToken) {
+    throw new Error("Open Sonar as the desktop app, or set VITE_SONAR_API_TOKEN to use the browser-only dev UI.");
+  }
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      "X-Sonar-Token": browserApiToken,
       ...init?.headers,
     },
   });

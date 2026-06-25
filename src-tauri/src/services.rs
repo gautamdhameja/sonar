@@ -2,7 +2,7 @@ use std::{
     fs,
     io::{Read, Write},
     net::TcpStream,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
@@ -21,6 +21,9 @@ use crate::{
 
 const API_BASE_URL: &str = "http://127.0.0.1:3001";
 const API_HEALTH_URL: &str = "http://127.0.0.1:3001/health";
+const API_AUTH_CHECK_URL: &str = "http://127.0.0.1:3001/projects";
+const BUILD_NODE_EXEC_PATH: Option<&str> = option_env!("SONAR_BUILD_NODE_EXEC_PATH");
+const BUILD_NPM_EXEC_PATH: Option<&str> = option_env!("SONAR_BUILD_NPM_EXEC_PATH");
 static RUNTIME_OPERATION_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 struct RuntimeOperationGuard;
@@ -45,13 +48,14 @@ pub async fn service_snapshot() -> ServiceSnapshot {
     let model_config = desktop_model_config();
     let model_setup_complete = desktop_model_setup_complete();
     let chat = chat_base_url();
+    let api_token = runtime_api_token().ok();
     let mut services = vec![
         service(
             "sonar",
             "Workspace engine",
-            API_HEALTH_URL,
+            API_AUTH_CHECK_URL,
             true,
-            None,
+            api_token.as_deref(),
             None,
         )
         .await,
@@ -86,9 +90,13 @@ pub async fn bootstrap_services() -> Result<ServiceSnapshot, String> {
     if sonar_needs_reconcile {
         start_api_service(false)?;
         let api_token = runtime_api_token()?;
-        wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45))
-            .await
-            .map_err(with_api_startup_context)?;
+        wait_for_url(
+            API_AUTH_CHECK_URL,
+            Some(&api_token),
+            Duration::from_secs(45),
+        )
+        .await
+        .map_err(with_api_startup_context)?;
     }
     let model_config = desktop_model_config();
     if desktop_model_setup_complete()
@@ -113,9 +121,13 @@ pub async fn save_model_config(config: DesktopModelConfig) -> Result<ServiceSnap
     save_desktop_model_config(&config)?;
     start_api_service(true)?;
     let api_token = runtime_api_token()?;
-    wait_for_url(API_HEALTH_URL, Some(&api_token), Duration::from_secs(45))
-        .await
-        .map_err(with_api_startup_context)?;
+    wait_for_url(
+        API_AUTH_CHECK_URL,
+        Some(&api_token),
+        Duration::from_secs(45),
+    )
+    .await
+    .map_err(with_api_startup_context)?;
     let model_config = desktop_model_config();
     if uses_local_model(&model_config) && uses_default_local_endpoint(&model_config) {
         ensure_local_model_runtime(&model_config).await?;
@@ -134,8 +146,20 @@ fn start_api_service(force_restart: bool) -> Result<(), String> {
     if force_restart {
         stop_managed_api_service()?;
     }
-    if !force_restart && is_api_ready() {
-        return Ok(());
+    let api_token = runtime_api_token()?;
+    if !force_restart {
+        if is_api_authenticated(&api_token) {
+            return Ok(());
+        }
+        if is_api_ready() {
+            stop_managed_api_service()?;
+            if is_api_ready() {
+                return Err(
+                    "A Sonar API is already running on 127.0.0.1:3001 with a different runtime token. Stop the existing API process, then start Sonar again."
+                        .to_string(),
+                );
+            }
+        }
     }
     let data_dir = sonar_home()?;
     fs::create_dir_all(&data_dir)
@@ -150,7 +174,6 @@ fn start_api_service(force_restart: bool) -> Result<(), String> {
         .try_clone()
         .map_err(|err| format!("Unable to prepare Sonar API log: {err}"))?;
     let model_config = desktop_model_config();
-    let api_token = runtime_api_token()?;
     let mut command = api_command()?;
     prepare_managed_child(&mut command);
     let child = command
@@ -180,35 +203,157 @@ fn api_command() -> Result<Command, String> {
         std::env::var("npm_node_execpath"),
         std::env::var("npm_execpath"),
     ) {
-        let node = node.trim();
-        let npm_cli = npm_cli.trim();
-        if !node.is_empty()
-            && !npm_cli.is_empty()
-            && std::path::Path::new(node).is_file()
-            && std::path::Path::new(npm_cli).is_file()
-        {
+        if let Some((node, npm_cli)) = validated_node_npm_pair(node.trim(), npm_cli.trim()) {
             let root = repo_root()?;
             let mut command = Command::new(node);
             command
                 .current_dir(root)
-                .args([npm_cli, "run", "dev", "--", "--port", "3001"]);
+                .arg(npm_cli)
+                .args(["run", "dev", "--", "--port", "3001"]);
+            configure_node_runtime_env(&mut command);
             return Ok(command);
         }
     }
 
-    if !command_exists("npm") {
+    if let Some((node, npm_cli)) = build_time_node_npm_pair() {
+        let root = repo_root()?;
+        let mut command = Command::new(node);
+        command
+            .current_dir(root)
+            .arg(npm_cli)
+            .args(["run", "dev", "--", "--port", "3001"]);
+        configure_node_runtime_env(&mut command);
+        return Ok(command);
+    }
+
+    if let Some((node, npm_cli)) = discover_supported_node_npm()? {
+        let root = repo_root()?;
+        let mut command = Command::new(node);
+        command
+            .current_dir(root)
+            .arg(npm_cli)
+            .args(["run", "dev", "--", "--port", "3001"]);
+        configure_node_runtime_env(&mut command);
+        return Ok(command);
+    }
+
+    if !command_exists("npm") || !node_command_is_supported("node") {
         return Err(
-            "Sonar API could not start because no bundled API sidecar was found and npm is not available for source development."
+            "Sonar API could not start because no bundled API sidecar was found and no supported Node.js runtime was available. Install Node.js 22, 23, 24, or 25, run npm install in the Sonar checkout, then open the app again."
                 .to_string(),
         );
     }
-
     let root = repo_root()?;
     let mut command = Command::new("npm");
     command
         .current_dir(root)
         .args(["run", "dev", "--", "--port", "3001"]);
     Ok(command)
+}
+
+fn configure_node_runtime_env(command: &mut Command) {
+    let Some(node_path) = command.get_program().to_str().map(PathBuf::from) else {
+        return;
+    };
+    command.env("NODE", &node_path);
+    let Some(node_bin) = node_path.parent() else {
+        return;
+    };
+    let existing_path = std::env::var_os("PATH").unwrap_or_default();
+    let paths =
+        std::iter::once(node_bin.to_path_buf()).chain(std::env::split_paths(&existing_path));
+    if let Ok(joined) = std::env::join_paths(paths) {
+        command.env("PATH", joined);
+    }
+}
+
+fn validated_node_npm_pair(node: &str, npm_cli: &str) -> Option<(PathBuf, PathBuf)> {
+    if node.is_empty() || npm_cli.is_empty() {
+        return None;
+    }
+    let node = PathBuf::from(node);
+    let npm_cli = PathBuf::from(npm_cli);
+    if !node.is_file() || !npm_cli.is_file() {
+        return None;
+    }
+    node_version(&node)
+        .filter(is_supported_node_version)
+        .map(|_| (node, npm_cli))
+}
+
+fn build_time_node_npm_pair() -> Option<(PathBuf, PathBuf)> {
+    validated_node_npm_pair(BUILD_NODE_EXEC_PATH?, BUILD_NPM_EXEC_PATH?)
+}
+
+fn discover_supported_node_npm() -> Result<Option<(PathBuf, PathBuf)>, String> {
+    let Ok(home) = std::env::var("HOME") else {
+        return Ok(None);
+    };
+    let versions_dir = Path::new(&home).join(".nvm").join("versions").join("node");
+    let Ok(entries) = fs::read_dir(versions_dir) else {
+        return Ok(None);
+    };
+
+    let mut candidates = Vec::new();
+    for entry in entries {
+        let entry =
+            entry.map_err(|err| format!("Unable to inspect local Node.js installs: {err}"))?;
+        let version_dir = entry.path();
+        let node = version_dir.join("bin").join("node");
+        let npm_cli = version_dir
+            .join("lib")
+            .join("node_modules")
+            .join("npm")
+            .join("bin")
+            .join("npm-cli.js");
+        if !node.is_file() || !npm_cli.is_file() {
+            continue;
+        }
+        if let Some(version) = node_version(&node).filter(is_supported_node_version) {
+            candidates.push((version, node, npm_cli));
+        }
+    }
+    candidates.sort_by(|left, right| right.0.cmp(&left.0));
+    Ok(candidates
+        .into_iter()
+        .next()
+        .map(|(_version, node, npm_cli)| (node, npm_cli)))
+}
+
+fn node_command_is_supported(command: &str) -> bool {
+    Command::new(command)
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|output| {
+            output
+                .status
+                .success()
+                .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        })
+        .and_then(|version| parse_node_version(&version))
+        .is_some_and(|version| is_supported_node_version(&version))
+}
+
+fn node_version(path: &Path) -> Option<(u32, u32, u32)> {
+    let output = Command::new(path).arg("--version").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    parse_node_version(String::from_utf8_lossy(&output.stdout).trim())
+}
+
+fn parse_node_version(value: &str) -> Option<(u32, u32, u32)> {
+    let version = value.trim().strip_prefix('v').unwrap_or(value.trim());
+    let mut parts = version.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next().unwrap_or("0").parse().ok()?;
+    let patch = parts.next().unwrap_or("0").parse().ok()?;
+    Some((major, minor, patch))
+}
+
+fn is_supported_node_version(version: &(u32, u32, u32)) -> bool {
+    (22..26).contains(&version.0)
 }
 
 fn configured_api_server_path() -> Result<Option<std::path::PathBuf>, String> {
@@ -276,6 +421,24 @@ fn is_api_ready() -> bool {
         return false;
     }
     health_response_is_sonar(&response)
+}
+
+fn is_api_authenticated(api_token: &str) -> bool {
+    let Ok(mut stream) = TcpStream::connect(("127.0.0.1", 3001)) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+    let request = format!(
+        "GET /projects HTTP/1.1\r\nHost: 127.0.0.1:3001\r\nX-Sonar-Token: {api_token}\r\nConnection: close\r\n\r\n"
+    );
+    if stream.write_all(request.as_bytes()).is_err() {
+        return false;
+    }
+    let mut response = String::new();
+    if stream.read_to_string(&mut response).is_err() {
+        return false;
+    }
+    response_has_success_status(&response)
 }
 
 fn managed_api_pid_path() -> Result<std::path::PathBuf, String> {
@@ -454,6 +617,11 @@ async fn check_url(
     let response = request.send().await.map_err(|err| err.to_string())?;
     let status = response.status();
     if !status.is_success() {
+        if status.as_u16() == 401 && bearer_token.is_some() {
+            return Err(
+                "Model endpoint rejected the configured API key with HTTP 401.".to_string(),
+            );
+        }
         return Err(format!("HTTP {status}"));
     }
     if url == API_HEALTH_URL {
@@ -489,6 +657,17 @@ fn health_response_is_sonar(response: &str) -> bool {
     has_signature && health_body_is_ok(body)
 }
 
+fn response_has_success_status(response: &str) -> bool {
+    let Some(status_line) = response.lines().next() else {
+        return false;
+    };
+    status_line
+        .split_whitespace()
+        .nth(1)
+        .and_then(|status| status.parse::<u16>().ok())
+        .is_some_and(|status| (200..300).contains(&status))
+}
+
 fn health_body_is_ok(body: &str) -> bool {
     serde_json::from_str::<serde_json::Value>(body)
         .ok()
@@ -504,7 +683,10 @@ fn health_body_is_ok(body: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{command_line_looks_like_managed_api, health_response_is_sonar};
+    use super::{
+        command_line_looks_like_managed_api, health_response_is_sonar, is_supported_node_version,
+        parse_node_version, response_has_success_status,
+    };
 
     #[test]
     fn health_response_requires_sonar_signature_and_ok_body() {
@@ -517,6 +699,27 @@ mod tests {
         assert!(!health_response_is_sonar(
             "HTTP/1.1 200 OK\r\nX-Sonar-Service: workspace-engine\r\n\r\n{\"status\":\"ready\"}",
         ));
+    }
+
+    #[test]
+    fn authenticated_response_requires_success_status() {
+        assert!(response_has_success_status("HTTP/1.1 200 OK\r\n\r\n[]"));
+        assert!(!response_has_success_status(
+            "HTTP/1.1 401 Unauthorized\r\n\r\n{\"error\":\"Missing or invalid X-Sonar-Token\"}",
+        ));
+        assert!(!response_has_success_status(""));
+    }
+
+    #[test]
+    fn source_runtime_accepts_supported_node_versions_only() {
+        assert!(parse_node_version("v24.17.0")
+            .is_some_and(|version| is_supported_node_version(&version)));
+        assert!(
+            parse_node_version("22.0.0").is_some_and(|version| is_supported_node_version(&version))
+        );
+        assert!(!parse_node_version("v26.3.1")
+            .is_some_and(|version| is_supported_node_version(&version)));
+        assert_eq!(parse_node_version("not-a-version"), None);
     }
 
     #[test]

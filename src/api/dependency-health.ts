@@ -13,6 +13,13 @@ async function checkFetch(name: string, url: string, init?: RequestInit): Promis
     const signal = AbortSignal.timeout(1500);
     const response = await fetch(url, { ...init, signal });
     if (!response.ok) {
+      if (name === "chat" && response.status === 401) {
+        return {
+          name,
+          status: "error",
+          message: "Model endpoint rejected the configured API key with HTTP 401.",
+        };
+      }
       return { name, status: "error", message: `HTTP ${response.status}` };
     }
     return { name, status: "ok" };

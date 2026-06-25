@@ -79,7 +79,7 @@ export function HomeScreen({
             <h2>Analyze a repository</h2>
             <p>
               Point Sonar at a repository and get a source-cited briefing: what it does, where the important parts live,
-              and what to ask next. Built for orientation, not line-by-line code review.
+              and what to ask next.
             </p>
           </div>
         </div>

@@ -32,9 +32,9 @@ See [Language Support and Limits](docs/language-support.md) for the current pars
 
 ## Quick Start
 
-Sonar is currently distributed as a source-run desktop app. The expected local setup is:
+Sonar is currently distributed as a source-built desktop app. The expected local setup is:
 
-- Node.js 22.x, 23.x, 24.x, or 25.x
+- Node.js 22.x, 23.x, 24.x, or 25.x. Do not use Node 26+ for source builds.
 - Rust toolchain and platform dependencies for Tauri
 - Git, if you want Sonar to clone GitHub repositories
 - A local OpenAI-compatible model server, or an OpenAI-compatible API endpoint you explicitly configure
@@ -44,21 +44,35 @@ Clone the repository and install dependencies:
 ```bash
 git clone https://github.com/gautamdhameja/sonar.git
 cd sonar
+nvm use 24
 npm install
 ```
+
+If you previously installed dependencies with a different Node major version, run `npm install` again after switching
+Node versions. Native dependencies such as SQLite are compiled for the active Node runtime.
 
 Start a model server separately. For local mode, Sonar expects an OpenAI-compatible endpoint such as llama.cpp
 `llama-server` on `http://127.0.0.1:8080/v1`, and the endpoint must respond to `/models`.
 
-Then run the desktop app:
+Build the production desktop app:
 
 ```bash
-npm run desktop:dev
+npm run desktop:build
+```
+
+On macOS, open the built app:
+
+```bash
+open src-tauri/target/release/bundle/macos/Sonar.app
 ```
 
 On first launch, Sonar starts its local workspace engine, asks whether you want a local model endpoint or an
 OpenAI-compatible API endpoint, and stores project data in embedded SQLite under `~/.sonar`. It does not require
 Meilisearch or any other external database/search service.
+
+This source-built alpha still uses the checked-out repository to run the local workspace engine, so keep the checkout and
+`node_modules` in place after building. `npm run desktop:dev` is for contributors who need the hot-reload development
+shell, not for normal local use.
 
 For detailed setup steps, see [Setup from Source](docs/setup.md).
 

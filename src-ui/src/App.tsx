@@ -105,6 +105,15 @@ export function App() {
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
   );
+  const recentBriefingProjects = useMemo(
+    () =>
+      [...projects]
+        .filter((project) => project.hasCompletedBriefing)
+        .sort((left, right) =>
+          (right.latestCompletedBriefingAt ?? "").localeCompare(left.latestCompletedBriefingAt ?? ""),
+        ),
+    [projects],
+  );
   const latestSources = followups.at(-1)?.sources ?? session?.brief.sources ?? [];
   const citation = followups.at(-1)?.citationVerification ?? session?.brief.citationVerification;
   const sourceFileCount = new Set(latestSources.map((source) => source.filePath)).size;
@@ -650,7 +659,7 @@ export function App() {
             onSelectProject={handleSelectProject}
             onStartRuntime={() => void bootstrap()}
             projectName={projectName}
-            projects={projects}
+            projects={recentBriefingProjects}
             repositorySource={repositorySource}
             repoPath={repoPath}
             runtime={runtime}
