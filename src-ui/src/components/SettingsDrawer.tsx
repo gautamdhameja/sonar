@@ -1,4 +1,4 @@
-import { Bug, Cloud, RefreshCw, Save, Server, X } from "lucide-react";
+import { Bug, Cloud, RefreshCw, Save, Server, Trash2, X } from "lucide-react";
 import { localLlamaConfig, openAiCompatibleConfig } from "../app/constants";
 import { stateLabel } from "../app/format";
 import type { ActiveTask } from "../app/types";
@@ -12,6 +12,7 @@ interface SettingsDrawerProps {
   selectedProjectId: string;
   snapshot: ServiceSnapshot | null;
   onBootstrap: () => void;
+  onClearLocalAppState: () => void;
   onClose: () => void;
   onCreateDiagnostics: () => void;
   onModelConfigChange: (config: DesktopModelConfig) => void;
@@ -27,6 +28,7 @@ export function SettingsDrawer({
   selectedProjectId,
   snapshot,
   onBootstrap,
+  onClearLocalAppState,
   onClose,
   onCreateDiagnostics,
   onModelConfigChange,
@@ -97,7 +99,7 @@ export function SettingsDrawer({
         </section>
 
         <section className="drawer-section">
-          <div className="section-title-row">
+          <div className="section-title-row local-data-row">
             <h3>Indexed projects</h3>
             <button className="secondary compact-button" onClick={onRefreshProjects} type="button">
               <RefreshCw size={15} />
@@ -185,6 +187,27 @@ export function SettingsDrawer({
             <button className="primary" disabled={runtimeBusy} onClick={onSaveModelConfig} type="button">
               <Save size={16} />
               Save and restart runtime
+            </button>
+          </div>
+        </section>
+
+        <section className="drawer-section">
+          <div className="section-title-row">
+            <div>
+              <h3>Local data</h3>
+              <p className="muted">
+                Remove saved briefings, indexed projects, cached GitHub clones, runtime settings, and logs from this
+                machine.
+              </p>
+            </div>
+            <button
+              className="quiet-danger compact-button"
+              disabled={activeTask !== null}
+              onClick={onClearLocalAppState}
+              type="button"
+            >
+              <Trash2 size={15} />
+              Clear local app state
             </button>
           </div>
         </section>

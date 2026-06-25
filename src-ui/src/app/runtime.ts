@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { apiBaseUrl } from "../api";
 import type {
+  ClearLocalAppStateResult,
   ClonedRepository,
   DesktopModelConfig,
   DiagnosticsBundle,
@@ -104,4 +105,11 @@ export async function createDiagnosticsBundle(): Promise<DiagnosticsBundle> {
     throw new Error("Open Sonar as a desktop app to create a local diagnostics bundle.");
   }
   return invoke<DiagnosticsBundle>("create_diagnostics_bundle");
+}
+
+export async function clearLocalAppState(): Promise<ClearLocalAppStateResult> {
+  if (!isTauriRuntime()) {
+    throw new Error("Open Sonar as a desktop app to clear local app state.");
+  }
+  return invoke<ClearLocalAppStateResult>("clear_local_app_state");
 }

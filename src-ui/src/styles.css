@@ -1205,6 +1205,16 @@ textarea:focus {
   justify-content: space-between;
 }
 
+.local-data-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.local-data-row > div {
+  min-width: min(100%, 340px);
+  flex: 1;
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;
@@ -1910,7 +1920,7 @@ textarea:focus {
   background: var(--accent);
 }
 
-@media (max-width: 1040px) {
+@media (max-width: 1080px) {
   .start-card {
     grid-template-columns: 1fr;
   }
@@ -2236,4 +2246,32 @@ textarea:focus {
   .primary:hover:not(:disabled) {
     transform: none;
   }
+}
+
+.confirm-dialog {
+  width: min(460px, calc(100vw - 48px));
+}
+
+.confirm-body {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.confirm-body p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.confirm-body p.muted {
+  color: var(--muted);
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
 }

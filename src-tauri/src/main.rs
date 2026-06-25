@@ -8,6 +8,7 @@ mod paths;
 mod process;
 mod repositories;
 mod services;
+mod state;
 
 use api_proxy::sonar_api_request;
 use diagnostics::create_diagnostics_bundle;
@@ -17,6 +18,7 @@ use services::{
     bootstrap_services, get_model_config, save_model_config, service_snapshot,
     shutdown_managed_services,
 };
+use state::clear_local_app_state;
 
 fn main() {
     let app = tauri::Builder::default()
@@ -31,6 +33,7 @@ fn main() {
             create_diagnostics_bundle,
             export_markdown,
             sonar_api_request,
+            clear_local_app_state,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonar desktop app");

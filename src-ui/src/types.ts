@@ -44,6 +44,10 @@ export interface DiagnosticsBundle {
   manifestPath: string;
 }
 
+export interface ClearLocalAppStateResult {
+  dataDir: string;
+}
+
 export interface DesktopModelConfig {
   modelSetupComplete: boolean;
   modelMode: "local" | "api";

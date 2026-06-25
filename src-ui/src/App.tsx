@@ -20,10 +20,12 @@ import {
   prepareRepositoryForIndexing,
   saveModelConfig,
   serviceCommand,
+  clearLocalAppState,
 } from "./app/runtime";
 import type { ActiveTask, BriefingRole, RepositorySource } from "./app/types";
 import { AppHeader } from "./components/AppHeader";
 import { BriefingView } from "./components/BriefingView";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { EvidenceDrawer } from "./components/EvidenceDrawer";
 import { HomeScreen } from "./components/HomeScreen";
 import { ModelSetupDialog } from "./components/ModelSetupDialog";
@@ -95,6 +97,7 @@ export function App() {
   const [modelSetupOpen, setModelSetupOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const analysisAbortController = useRef<AbortController | null>(null);
   const followupInFlight = useRef(false);
 
@@ -242,6 +245,40 @@ export function App() {
     try {
       const bundle = await createDiagnosticsBundle();
       setNotice(`Diagnostics bundle created locally: ${bundle.directoryPath}`);
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    } finally {
+      setActiveTask(null);
+    }
+  }
+
+  async function handleClearLocalAppState() {
+    setClearConfirmOpen(false);
+    setError(null);
+    setNotice(null);
+    setActiveTask({
+      kind: "settings",
+      label: "Clearing local app state",
+      detail: "Stopping managed services and deleting Sonar's local data directory.",
+      progress: 40,
+    });
+    try {
+      const cleared = await clearLocalAppState();
+      setSnapshot(null);
+      setProjects([]);
+      setSelectedProjectId("");
+      setSession(null);
+      setFollowups([]);
+      setQuestion(defaultQuestion);
+      setGithubRepository("");
+      setRepoPath("");
+      setProjectName("");
+      setRepositorySource("github");
+      setModelConfig(localLlamaConfig);
+      setEvidenceOpen(false);
+      setAdvancedOpen(false);
+      setModelSetupOpen(true);
+      setNotice(`Local app state cleared from ${cleared.dataDir}.`);
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {
@@ -636,6 +673,7 @@ export function App() {
           modelConfig={modelConfig}
           onBootstrap={() => void bootstrap()}
           onClose={() => setAdvancedOpen(false)}
+          onClearLocalAppState={() => setClearConfirmOpen(true)}
           onCreateDiagnostics={handleCreateDiagnosticsBundle}
           onModelConfigChange={setModelConfig}
           onRefreshProjects={() => void refreshProjects()}
@@ -654,6 +692,24 @@ export function App() {
           onModelConfigChange={setModelConfig}
           onSave={() => void handleSaveModelConfig()}
         />
+      )}
+
+      {clearConfirmOpen && (
+        <ConfirmDialog
+          confirmLabel="Clear local app state"
+          onCancel={() => setClearConfirmOpen(false)}
+          onConfirm={() => void handleClearLocalAppState()}
+          title="Clear local app state?"
+          tone="danger"
+        >
+          <p>
+            This permanently deletes saved briefings, indexed projects, cached GitHub clones, runtime settings, and logs
+            from this machine.
+          </p>
+          <p className="muted">
+            It does not touch the app itself, repositories you selected, or any local model server you run.
+          </p>
+        </ConfirmDialog>
       )}
     </main>
   );

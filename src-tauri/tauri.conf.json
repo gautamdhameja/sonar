@@ -15,8 +15,8 @@
         "title": "Sonar",
         "width": 1360,
         "height": 920,
-        "minWidth": 1100,
-        "minHeight": 760
+        "minWidth": 960,
+        "minHeight": 700
       }
     ],
     "security": {
