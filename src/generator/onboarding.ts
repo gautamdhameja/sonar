@@ -245,7 +245,8 @@ const SECTION_LIBRARY: Record<string, BriefingSectionSpec> = {
 };
 
 const DEFAULT_BRIEFING_PLAN: string[][] = [
-  ["Product In One Paragraph", "Who Uses It And Why"],
+  ["Product In One Paragraph"],
+  ["Who Uses It And Why"],
   ["Codebase Product Map"],
   ["Top User Workflows"],
   ["Main Systems And Ownership Areas", "Data, Privacy, And Operational Notes"],
@@ -253,7 +254,8 @@ const DEFAULT_BRIEFING_PLAN: string[][] = [
 ];
 
 const CUSTOMER_SUCCESS_PLAN: string[][] = [
-  ["Product In One Paragraph", "Who Uses It And Why"],
+  ["Product In One Paragraph"],
+  ["Who Uses It And Why"],
   ["Adoption And Onboarding Workflows"],
   ["Support Behavior And Failure Modes", "Data, Privacy, And Operational Notes"],
   ["Escalation Questions For The Team"],
@@ -263,7 +265,8 @@ const CUSTOMER_SUCCESS_PLAN: string[][] = [
 // reskin of the engineering orientation. Unknown roles fall back to the general plan.
 const AUDIENCE_BRIEFING_PLANS: Partial<Record<Persona["role"], string[][]>> = {
   product_manager: [
-    ["Product In One Paragraph", "Who Uses It And Why"],
+    ["Product In One Paragraph"],
+    ["Who Uses It And Why"],
     ["Top User Workflows"],
     ["Capabilities, Boundaries, And Assumptions"],
     ["Product Risks, Gaps, And Dependencies", "High-Leverage Questions"],
@@ -276,7 +279,8 @@ const AUDIENCE_BRIEFING_PLANS: Partial<Record<Persona["role"], string[][]>> = {
     ["Risks Or Open Questions", "Where To Start Reading"],
   ],
   sales: [
-    ["Product In One Paragraph", "Who It's For And Why They Buy"],
+    ["Product In One Paragraph"],
+    ["Who It's For And Why They Buy"],
     ["Capabilities And Differentiators"],
     ["Integrations And Data Boundaries"],
     ["Proof Points From The Source"],
@@ -747,7 +751,8 @@ function cleanOverviewText(value: string): string {
     .replace(/<[^>]+>/g, " ")
     .replace(/!\[[^\]]*]\([^)]*\)/g, " ")
     .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
-    .replace(/[`*_>#-]/g, " ")
+    .replace(/[`*_>#]/g, " ")
+    .replace(/(?:^|\s)-\s+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -756,7 +761,24 @@ function cleanOverviewText(value: string): string {
 const OVERVIEW_BOILERPLATE_PATTERN =
   /\b(npm install|yarn add|pnpm add|git clone|getting started|installation|install the|development guide|run the repository locally|instructions are for installing|please refer to|table of contents|code of conduct|contributing guide|quick start|quickstart)\b/i;
 
-function firstOverviewStatement(unit: CodeUnit): string | null {
+const OVERVIEW_META_NOISE_PATTERN =
+  /\b(hosted at|showcase|demo|try it (?:out|live)|available here|\.com\b|badges?|sponsors?|sponsorship|sponsorlist|backers?|funding|open collective)\b/i;
+const OVERVIEW_DEFINITION_OPENER_PATTERN = /^[A-Z][\w.+-]*\s+(?:is|are)\b/;
+const OVERVIEW_PRODUCT_TAGLINE_PATTERN =
+  /\b(open source|open-source|whiteboard|hand-drawn|diagram|collaborative|end-to-end encrypted|http client)\b/i;
+
+function overviewStatementScore(candidate: string): number {
+  let score = 0;
+  if (OVERVIEW_DEFINITION_OPENER_PATTERN.test(candidate)) score += 10;
+  if (/^(?:a|an)\s+open[-\s]source\b/i.test(candidate)) score += 8;
+  if (OVERVIEW_PRODUCT_TAGLINE_PATTERN.test(candidate)) score += 6;
+  if (/\b(?:is|are) (?:a|an|the)\b/i.test(candidate.slice(0, 160))) score += 4;
+  if (/^(?:the|a|an)\b/i.test(candidate)) score -= 2;
+  if (OVERVIEW_META_NOISE_PATTERN.test(candidate)) score -= 10;
+  return score;
+}
+
+export function firstOverviewStatement(unit: CodeUnit): string | null {
   const paragraphs = unit.code
     .split(/\n{2,}/)
     .map(cleanOverviewText)
@@ -764,9 +786,18 @@ function firstOverviewStatement(unit: CodeUnit): string | null {
       (paragraph) =>
         paragraph.length >= 40 && !/^donate\b/i.test(paragraph) && !OVERVIEW_BOILERPLATE_PATTERN.test(paragraph),
     );
-  // Prefer a descriptive "<name> is a/an/the ..." paragraph over the first generic one.
-  const descriptive = paragraphs.find((candidate) => /\bis (?:a|an|the|now)\b/i.test(candidate.slice(0, 140)));
-  const paragraph = descriptive ?? paragraphs[0];
+  const scored = paragraphs
+    .map((paragraph, index) => ({ paragraph, index, score: overviewStatementScore(paragraph) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+  const best = scored[0];
+  // Prefer strong product definitions, but preserve the old descriptive-first fallback
+  // when every candidate is weak.
+  const descriptive = paragraphs.find(
+    (candidate) =>
+      /\bis (?:a|an|the|now)\b/i.test(candidate.slice(0, 140)) && !OVERVIEW_META_NOISE_PATTERN.test(candidate),
+  );
+  const firstNonMeta = paragraphs.find((candidate) => !OVERVIEW_META_NOISE_PATTERN.test(candidate));
+  const paragraph = best && best.score > 0 ? best.paragraph : (descriptive ?? firstNonMeta);
   if (!paragraph) return null;
   const firstSentence = paragraph.match(/^(.+?[.!?])(?:\s|$)/)?.[1];
   if (firstSentence && firstSentence.length >= 40) return firstSentence;
@@ -780,7 +811,26 @@ function firstOverviewStatement(unit: CodeUnit): string | null {
 }
 
 function citationReadyStatement(statement: string): string {
-  return statement.replace(/[.!?]\s*$/, "");
+  const trimmed = statement
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.!?]\s*$/, "");
+  if (!trimmed) return trimmed;
+  return /^[A-Z]/.test(trimmed) ? trimmed : `${trimmed[0].toUpperCase()}${trimmed.slice(1)}`;
+}
+
+const WEAK_PRODUCT_SYNTHESIS_OPENER_PATTERN =
+  /^(?:the\s+)?(?:product|project|repository|codebase|app|application)\s+(?:provides|offers|contains|includes|shows|serves|is)\b/i;
+
+function isWeakProductSynthesisBody(body: string): boolean {
+  const firstParagraph = body.split(/\n{2,}/)[0]?.trim() ?? "";
+  if (!firstParagraph) return true;
+  if (OVERVIEW_META_NOISE_PATTERN.test(firstParagraph)) return true;
+  if (/\[[^\]\n]+:\d+(?:-\d+)?\]/.test(firstParagraph)) return false;
+  if (OVERVIEW_DEFINITION_OPENER_PATTERN.test(firstParagraph)) return false;
+  if (/:$/.test(firstParagraph) && firstParagraph.length < 160) return true;
+  if (WEAK_PRODUCT_SYNTHESIS_OPENER_PATTERN.test(firstParagraph) && firstParagraph.length < 140) return true;
+  return firstParagraph.length < 80 && !/[.!?]$/.test(firstParagraph);
 }
 
 function productOverviewFallback(units: CodeUnit[]): { unit: CodeUnit; statement: string } | null {
@@ -911,7 +961,7 @@ function buildSectionFallback(section: string, units: CodeUnit[], memoryGraph?: 
   // Overview-backed fallback for synthesis/persona sections when a README/overview exists.
   if (overviewFallback) {
     if (kind === "Product In One Paragraph") {
-      return `The project overview states that ${citationReadyStatement(overviewFallback.statement)} ${cite(overviewFallback.unit)}.`;
+      return `${citationReadyStatement(overviewFallback.statement)} ${cite(overviewFallback.unit)}.`;
     }
     if (kind === "Who Uses It And Why") {
       return `The clearest user signal in the selected evidence is the project overview: ${citationReadyStatement(overviewFallback.statement)} ${cite(overviewFallback.unit)}.`;
@@ -945,12 +995,15 @@ function buildSectionFallback(section: string, units: CodeUnit[], memoryGraph?: 
   }
 }
 
-function shouldBackfillSection(body: string, requireCitation = true): boolean {
+function shouldBackfillSection(section: string, body: string, requireCitation = true): boolean {
   const normalized = body.trim();
   if (normalized.length === 0) return true;
   if (/^not found in provided context\.?$/i.test(normalized)) return true;
+  if (sectionFallbackKind(section) === "Product In One Paragraph" && isWeakProductSynthesisBody(normalized)) {
+    return true;
+  }
   // Synthesis sections (requireCitation = false) keep their distilled paragraph even
-  // when it has no citation; only empty/"not found" bodies are refilled.
+  // when it has no citation; only empty/stub bodies are refilled.
   if (requireCitation && !/\[[^\]\n]+:\d+(?:-\d+)?\]/.test(normalized)) return true;
   return false;
 }
@@ -972,7 +1025,7 @@ export function backfillEmptyBriefingSections(
     const nextHeadingIndex = next.slice(start).search(/^###\s+/m);
     const end = nextHeadingIndex >= 0 ? start + nextHeadingIndex : next.length;
     const body = next.slice(start, end);
-    if (!shouldBackfillSection(body, !isSynthesisSection(section))) continue;
+    if (!shouldBackfillSection(section, body, !isSynthesisSection(section))) continue;
 
     const fallback = `\n${buildSectionFallback(section, units, memoryGraph)}\n\n`;
     next = `${next.slice(0, start)}${fallback}${next.slice(end).replace(/^\n+/, "")}`;

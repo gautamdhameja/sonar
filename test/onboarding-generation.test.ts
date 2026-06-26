@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   backfillEmptyBriefingSections,
   briefingPlanForPersona,
+  firstOverviewStatement,
   sanitizeTruncatedBriefingPart,
   selectSectionEvidence,
   selectOnboardingContext,
@@ -86,6 +87,86 @@ test("briefingPlanForPersona tailors sections to each audience", () => {
   ]);
 });
 
+test("briefingPlanForPersona writes the product paragraph as a solo part for non-technical audiences", () => {
+  const defaultPlan = briefingPlanForPersona({ ...DEFAULT_PERSONA, role: "other" });
+  assert.deepEqual(defaultPlan[0], ["Product In One Paragraph"]);
+  assert.deepEqual(defaultPlan[1], ["Who Uses It And Why"]);
+
+  const productManagerPlan = briefingPlanForPersona({ ...DEFAULT_PERSONA, role: "product_manager" });
+  assert.deepEqual(productManagerPlan[0], ["Product In One Paragraph"]);
+  assert.deepEqual(productManagerPlan[1], ["Who Uses It And Why"]);
+
+  const salesPlan = briefingPlanForPersona({ ...DEFAULT_PERSONA, role: "sales" });
+  assert.deepEqual(salesPlan[0], ["Product In One Paragraph"]);
+  assert.deepEqual(salesPlan[1], ["Who It's For And Why They Buy"]);
+});
+
+test("firstOverviewStatement prefers product definitions over demo-site overview noise", () => {
+  const readme = unit(
+    "README.md",
+    1,
+    125,
+    [
+      "# Excalidraw",
+      "",
+      "The app hosted at excalidraw.com is a minimal showcase of what you can build with Excalidraw.",
+      "",
+      "Excalidraw is an open-source virtual hand-drawn whiteboard for sketching hand-drawn like diagrams.",
+    ].join("\n"),
+  );
+
+  assert.equal(
+    firstOverviewStatement(readme),
+    "Excalidraw is an open-source virtual hand-drawn whiteboard for sketching hand-drawn like diagrams.",
+  );
+});
+
+test("firstOverviewStatement prefers product taglines over later demo-site sections", () => {
+  const readme = unit(
+    "README.md",
+    1,
+    125,
+    [
+      '<h4 align="center">',
+      '  <a href="https://excalidraw.com">Excalidraw Editor</a> |',
+      '  <a href="https://docs.excalidraw.com">Documentation</a>',
+      "</h4>",
+      "",
+      '<div align="center">',
+      "  <h2>",
+      "    An open source virtual hand-drawn style whiteboard. </br>",
+      "    Collaborative and end-to-end encrypted. </br>",
+      "  </h2>",
+      "</div>",
+      "",
+      "## Excalidraw.com",
+      "",
+      "The app hosted at [excalidraw.com](https://excalidraw.com) is a minimal showcase of what you can build with Excalidraw.",
+    ].join("\n"),
+  );
+
+  assert.equal(firstOverviewStatement(readme), "An open source virtual hand-drawn style whiteboard.");
+});
+
+test("firstOverviewStatement skips sponsor blocks before product taglines", () => {
+  const readme = unit(
+    "README.md",
+    1,
+    420,
+    [
+      '<h3 align="center">Platinum sponsors</h3>',
+      "",
+      "We're passionate about making open source sustainable. Scan your dependency tree to better understand which open source projects need funding.",
+      "",
+      "Become a sponsor",
+      "",
+      '<p align="center">Promise based HTTP client for the browser and node.js</p>',
+    ].join("\n"),
+  );
+
+  assert.equal(firstOverviewStatement(readme), "Promise based HTTP client for the browser and node.js");
+});
+
 test("product overview fallback skips install boilerplate and uses the description", () => {
   const readme: CodeUnit = {
     id: "readme",
@@ -116,6 +197,110 @@ test("product overview fallback skips install boilerplate and uses the descripti
   assert.match(filled, /privacy.first analytics platform/i);
   assert.doesNotMatch(filled, /npm install/i);
   assert.doesNotMatch(filled, /Development Guide/i);
+});
+
+test("product overview fallback emits a direct cited statement without clumsy framing", () => {
+  const readme = unit(
+    "README.md",
+    1,
+    125,
+    [
+      "# Excalidraw",
+      "",
+      "The app hosted at excalidraw.com is a minimal showcase of what you can build with Excalidraw.",
+      "",
+      "Excalidraw is an open-source virtual hand-drawn whiteboard for sketching hand-drawn like diagrams.",
+    ].join("\n"),
+  );
+  const brief = ["## Excalidraw Codebase Briefing", "", "### Product In One Paragraph", ""].join("\n");
+
+  const filled = backfillEmptyBriefingSections(brief, ["Product In One Paragraph"], [readme]);
+
+  assert.match(
+    filled,
+    /### Product In One Paragraph\n+\s*Excalidraw is an open-source virtual hand-drawn whiteboard for sketching hand-drawn like diagrams \[README\.md:1-125\]\./,
+  );
+  assert.doesNotMatch(filled, /The project overview states that/);
+  assert.doesNotMatch(filled, /excalidraw\.com is a minimal showcase/i);
+  assert.doesNotMatch(filled, /\s+\./);
+  assert.doesNotMatch(filled, /\.\s+\[README\.md:1-125\]\./);
+});
+
+test("product overview fallback replaces collapsed generic synthesis stubs", () => {
+  const readme = unit(
+    "README.md",
+    1,
+    125,
+    [
+      "# Excalidraw",
+      "",
+      "The app hosted at excalidraw.com is a minimal showcase of what you can build with Excalidraw.",
+      "",
+      "Excalidraw is an open-source virtual hand-drawn whiteboard for sketching hand-drawn like diagrams.",
+    ].join("\n"),
+  );
+  const brief = [
+    "## Excalidraw Codebase Briefing",
+    "",
+    "### Product In One Paragraph",
+    "",
+    "The product provides a suite of core capabilities:",
+  ].join("\n");
+
+  const filled = backfillEmptyBriefingSections(brief, ["Product In One Paragraph"], [readme]);
+
+  assert.match(
+    filled,
+    /### Product In One Paragraph\n+\s*Excalidraw is an open-source virtual hand-drawn whiteboard for sketching hand-drawn like diagrams \[README\.md:1-125\]\./,
+  );
+  assert.doesNotMatch(filled, /The product provides a suite of core capabilities/);
+});
+
+test("product overview fallback replaces cited demo-site synthesis", () => {
+  const readme = unit(
+    "README.md",
+    1,
+    125,
+    [
+      "# Excalidraw",
+      "",
+      "The app hosted at excalidraw.com is a minimal showcase of what you can build with Excalidraw.",
+      "",
+      "Excalidraw is an open-source virtual hand-drawn whiteboard for sketching hand-drawn like diagrams.",
+    ].join("\n"),
+  );
+  const brief = [
+    "## Excalidraw Codebase Briefing",
+    "",
+    "### Product In One Paragraph",
+    "",
+    "The app hosted at excalidraw.com is a minimal showcase of what you can build with Excalidraw [README.md:1-125].",
+  ].join("\n");
+
+  const filled = backfillEmptyBriefingSections(brief, ["Product In One Paragraph"], [readme]);
+
+  assert.match(
+    filled,
+    /### Product In One Paragraph\n+\s*Excalidraw is an open-source virtual hand-drawn whiteboard for sketching hand-drawn like diagrams \[README\.md:1-125\]\./,
+  );
+  assert.doesNotMatch(filled, /excalidraw\.com is a minimal showcase/i);
+});
+
+test("product overview fallback preserves real model-written synthesis without a citation", () => {
+  const readme = unit(
+    "README.md",
+    1,
+    125,
+    "Excalidraw is an open-source virtual hand-drawn whiteboard for sketching hand-drawn like diagrams.",
+  );
+  const modelParagraph =
+    "Excalidraw is an open-source virtual whiteboard for sketching diagrams and collaborating visually.";
+  const brief = ["## Excalidraw Codebase Briefing", "", "### Product In One Paragraph", "", modelParagraph].join("\n");
+
+  const filled = backfillEmptyBriefingSections(brief, ["Product In One Paragraph"], [readme]);
+
+  assert.match(filled, new RegExp(modelParagraph));
+  assert.doesNotMatch(filled, /\[README\.md:1-125\]/);
 });
 
 test("backfillEmptyBriefingSections uses audience-appropriate notes, not engineering fallbacks", () => {

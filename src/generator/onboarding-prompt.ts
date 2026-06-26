@@ -53,11 +53,13 @@ export function wordLimitForSections(sections: string[]): number {
 const SECTION_CONTRACTS: Record<string, string[]> = {
   "Product In One Paragraph": [
     "For `Product In One Paragraph`:",
+    "- Begin with the project's name and state plainly what it is in one sentence (for example, '<Name> is a ...'), then one sentence on who it is for or what it enables. Draw from the README/overview. Do not describe the demo site, badges, or installation.",
     "- Write 2-4 sentences that synthesize what the product is, what it does, and who it is for.",
     "- Anchor to the README or overview with a citation when one is available; a citation is not required for this synthesis, but do not invent specific facts.",
   ],
   "What It Enables And Why It Matters": [
     "For `What It Enables And Why It Matters`:",
+    "- Begin with the project's name and state plainly what it is in one sentence (for example, '<Name> is a ...'), then one sentence on who it is for or what it enables. Draw from the README/overview. Do not describe the demo site, badges, or installation.",
     "- Synthesize, in 2-4 sentences, the business outcome the system enables and why it matters for a decision-maker.",
     "- Anchor to the README or overview with a citation when available; a citation is not required here, but do not invent specifics.",
   ],

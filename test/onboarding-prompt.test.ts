@@ -86,6 +86,20 @@ test("buildOnboardingBriefPartPrompt omits the citation menu for synthesis-only 
   assert.doesNotMatch(prompt.system, /Every citation must be copied verbatim from the Allowed Citations list/);
 });
 
+test("buildOnboardingBriefPartPrompt nudges product paragraph toward a product definition", () => {
+  const prompt = buildOnboardingBriefPartPrompt([unit], {
+    repoName: "Acme",
+    audience: "A product manager",
+    focus: ["overview"],
+    sections: ["Product In One Paragraph"],
+    bodyOnly: true,
+  });
+
+  assert.match(prompt.user, /For `Product In One Paragraph`/);
+  assert.match(prompt.user, /Begin with the project's name and state plainly what it is in one sentence/);
+  assert.match(prompt.user, /Do not describe the demo site, badges, or installation/);
+});
+
 test("buildOnboardingBriefPartPrompt gives Top User Workflows a lifecycle contract", () => {
   const prompt = buildOnboardingBriefPartPrompt([unit], {
     repoName: "Acme",
