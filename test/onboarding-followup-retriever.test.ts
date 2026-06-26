@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { estimateTokens } from "../src/context/token-budget";
 import { CodeUnit } from "../src/parser/types";
 import { CodeUnitStore } from "../src/retriever/unit-store";
 import { classifyOnboardingFollowup, retrieveOnboardingFollowup } from "../src/retriever/onboarding-followup-retriever";
-import { followupContextUnits } from "../src/generator/onboarding-followup";
+import { followupContextUnits, packFollowupContextUnits } from "../src/generator/onboarding-followup";
 import type { OnboardingSession } from "../src/db/project-repo";
 import { DEFAULT_PERSONA } from "../src/persona/types";
 
@@ -127,4 +128,66 @@ test("followupContextUnits keeps saved briefing sources valid for follow-up cita
     context[0]?.code,
     "Click is a Python package for creating command line interfaces.\nThis line is inside the cited range.",
   );
+});
+
+test("packFollowupContextUnits bounds saved briefing sources after merging", async () => {
+  const longText = Array.from(
+    { length: 420 },
+    (_, index) => `Line ${index + 1}: collaboration persistence sharing detail.`,
+  ).join("\n");
+  const readme = unit("readme", {
+    id: "readme",
+    filePath: "README.md",
+    name: "Readme",
+    code: longText,
+    startLine: 1,
+    endLine: 420,
+  });
+  const guide = unit("guide", {
+    id: "guide",
+    filePath: "docs/guide.md",
+    name: "Guide",
+    code: longText,
+    startLine: 1,
+    endLine: 420,
+  });
+  const core = unit("core", {
+    id: "core",
+    filePath: "src/collab/core.ts",
+    name: "core",
+    code: "export function share() { return 'collaboration persistence'; }",
+    startLine: 1,
+    endLine: 12,
+  });
+  const store = await storeWithUnits([readme, guide, core]);
+  const session = {
+    id: "session-1",
+    projectId: "project-1",
+    repoName: "demo",
+    audience: null,
+    focus: [],
+    persona: DEFAULT_PERSONA,
+    brief: "Demo briefing [README.md:1-420] [docs/guide.md:1-420].",
+    sourceFiles: ["README.md", "docs/guide.md"],
+    sources: [
+      { filePath: "README.md", name: "Readme", kind: "module", lines: "1-420" },
+      { filePath: "docs/guide.md", name: "Guide", kind: "module", lines: "1-420" },
+    ],
+    citationVerification: null,
+    retrievalTime: 0,
+    generationTime: 0,
+    generationTruncated: false,
+    rollingSummary: null,
+    createdAt: "2026-06-22T00:00:00.000Z",
+    updatedAt: "2026-06-22T00:00:00.000Z",
+  } as OnboardingSession;
+
+  const context = packFollowupContextUnits(session, [core], store, {
+    query: "How does collaboration sharing work?",
+    maxTokens: 320,
+  });
+
+  assert.ok(context.some((item) => item.filePath === "README.md"));
+  assert.ok(context.some((item) => item.filePath === "src/collab/core.ts"));
+  assert.ok(estimateTokens(context.map((item) => item.code).join("\n\n")) <= 320);
 });

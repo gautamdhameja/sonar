@@ -1,8 +1,11 @@
 import { CodeUnit } from "../parser/types";
 import { CONFIG } from "../config";
+import { packContext } from "../context/packer";
 import { OnboardingSession, ProjectRepo } from "../db/project-repo";
 import { CodeUnitStore } from "../retriever/unit-store";
 import { OnboardingFollowupIntent, retrieveOnboardingFollowup } from "../retriever/onboarding-followup-retriever";
+import { QueryPlan } from "../retriever/query-router";
+import { RetrievedUnit } from "../retriever/retrieved-unit";
 import { formatMemoryGraphForPrompt } from "../survey/memory-graph";
 import { buildPersonaGuidance } from "./persona-guidance";
 import { generateCompletionWithLengthRetry, generateResponse } from "./llm-client";
@@ -115,6 +118,33 @@ export function followupContextUnits(
   store: CodeUnitStore,
 ): CodeUnit[] {
   return uniqueCodeUnits([...unitsForSessionSources(session, store), ...retrievedUnits]);
+}
+
+function followupContextBudget(): number {
+  return Math.min(2400, Math.max(500, Math.floor(CONFIG.generator.maxContextTokens * 0.12)));
+}
+
+export function packFollowupContextUnits(
+  session: OnboardingSession,
+  retrievedUnits: CodeUnit[],
+  store: CodeUnitStore,
+  options: { query: string; queryPlan?: QueryPlan; maxTokens?: number },
+): CodeUnit[] {
+  const merged = followupContextUnits(session, retrievedUnits, store);
+  const retrievedForPacking: RetrievedUnit[] = merged.map((unit, index) => ({
+    unitId: unit.id,
+    rrfScore: Math.max(1, merged.length - index) + (unit.id.startsWith("session-source:") ? 1000 : 500),
+    keywordRank: index + 1,
+    semanticRank: null,
+    isVendored: unit.isVendored,
+  }));
+
+  return packContext(merged, retrievedForPacking, {
+    query: options.query,
+    maxTokens: options.maxTokens ?? followupContextBudget(),
+    maxUnitsPerFile: 2,
+    queryPlan: options.queryPlan,
+  });
 }
 
 function buildFollowupPrompt(input: {
@@ -232,7 +262,10 @@ export async function answerOnboardingFollowup(input: {
     repo: input.repo,
     maxContextRatio: 0.16,
   });
-  const contextUnits = followupContextUnits(input.session, retrieval.contextUnits, input.store);
+  const contextUnits = packFollowupContextUnits(input.session, retrieval.contextUnits, input.store, {
+    query: input.question,
+    queryPlan: retrieval.queryPlan,
+  });
 
   const { system, user } = buildFollowupPrompt({
     session: input.session,
