@@ -101,7 +101,3 @@ Detailed documentation lives in [docs/](docs/README.md).
 - [Setup from Source](docs/setup.md)
 - [Desktop App](docs/desktop.md)
 - [Language Support and Limits](docs/language-support.md)
-
-For a local macOS release build, run `npm run release:mac`. Public macOS distribution still requires Apple Developer ID signing and notarization.
-
-Release notes live in [CHANGELOG.md](CHANGELOG.md).

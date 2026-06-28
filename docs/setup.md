@@ -110,15 +110,6 @@ This creates a production Tauri app bundle for your current platform. On macOS, 
 src-tauri/target/release/bundle/macos/Sonar.app
 ```
 
-For a local macOS build with ad-hoc code signing and verification, run:
-
-```bash
-npm run release:mac
-```
-
-Public macOS distribution still requires Developer ID signing and notarization. For local testing from a clone,
-`npm run desktop:build` is enough.
-
 This source-built alpha does not yet ship a standalone native workspace-engine sidecar inside the app bundle. Keep the
 checkout and `node_modules` in place after building; the desktop app uses them to start the local workspace engine. If
 you launch the app from somewhere that cannot locate the checkout, set `SONAR_APP_ROOT` to the cloned repository path
